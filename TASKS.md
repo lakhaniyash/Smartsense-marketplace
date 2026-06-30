@@ -190,3 +190,57 @@
 - [ ] Add `test` job to GitHub Actions CI
 - [ ] Write deployment runbook
 - [ ] Tag v1.0.0 release
+
+---
+
+## Milestone 4 — Backend Foundation
+
+- [x] Initialize NestJS 11 project in `apps/backend/`
+- [x] Configure strict TypeScript (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`, `emitDecoratorMetadata`)
+- [x] Configure ESLint v9 flat config (`eslint.config.js`) with `typescript-eslint/recommended`
+- [x] Configure Prettier (`.prettierrc`)
+- [x] Configure lint-staged in `apps/backend/package.json`
+- [x] Integrate backend lint-staged into root Husky pre-commit hook
+- [x] Configure GraphQL code-first (`@nestjs/graphql` + `@nestjs/apollo` + Apollo Server 4)
+- [x] Configure Prisma with PostgreSQL (`prisma/schema.prisma` — no models yet)
+- [x] Configure environment management (`@nestjs/config` + Joi validation schema)
+- [x] Create `GlobalExceptionFilter` — handles HTTP and GraphQL errors uniformly
+- [x] Create `LoggingService` — injectable logger wrapping NestJS built-in `Logger`
+- [x] Create `AppValidationPipe` — configured `class-validator` + `class-transformer`
+- [x] Create `CommonModule` (global) — exports `LoggingService`
+- [x] Create `PrismaModule` (global) — exports `PrismaService` with connect/disconnect lifecycle
+- [x] Create `HealthModule` — `GET /health` via `@nestjs/terminus`
+- [x] Create `AuthModule` — boilerplate (resolver + service, no business logic)
+- [x] Create `UsersModule` — boilerplate (resolver + service, no business logic)
+- [x] Create `CatalogModule` — boilerplate (resolver + service, no business logic)
+- [x] Create `OrdersModule` — boilerplate (resolver + service, no business logic)
+- [x] Create `BillingModule` — boilerplate (resolver + service, no business logic)
+- [x] Configure Docker — multi-stage `Dockerfile` + `docker-compose.yml` (API + PostgreSQL)
+- [x] Write `apps/backend/README.md`
+
+---
+
+## Milestone 5 — Turborepo Monorepo
+
+- [x] Convert repo to Turborepo monorepo with npm workspaces
+- [x] Move React frontend from root to `apps/web/`
+- [x] Rename `apps/backend/` to `apps/api/`
+- [x] Configure `turbo.json` task pipeline (build, dev, lint, typecheck, test, test:e2e)
+- [x] Create `packages/tsconfig/` — `base.json`, `react-app.json`, `node.json`
+- [x] Create `packages/eslint-config/` — `web.js` (ESM) + `api.cjs` (CJS)
+- [x] Update `apps/web/tsconfig.app.json` and `tsconfig.node.json` to extend shared configs
+- [x] Update `apps/api/tsconfig.json` to extend `@smartsense/tsconfig/node`
+- [x] Update `apps/web/eslint.config.js` to use `@smartsense/eslint-config/web`
+- [x] Update `apps/api/eslint.config.js` to use `@smartsense/eslint-config/api`
+- [x] Scaffold `packages/ui/` — shared React component library
+- [x] Scaffold `packages/shared-types/` — shared TypeScript interfaces
+- [x] Scaffold `packages/graphql/` — shared GraphQL schema and fragments
+- [x] Scaffold `packages/config/` — shared runtime config utilities
+- [x] Create `database/prisma/schema.prisma` (centralized schema)
+- [x] Configure `apps/api/package.json` prisma schema path to `database/prisma/schema.prisma`
+- [x] Create `infrastructure/docker/docker-compose.yml` (full-stack compose)
+- [x] Update root `.husky/pre-commit` — runs lint-staged per workspace
+- [x] Update root `.gitignore` for monorepo paths and `.turbo/`
+- [x] Update root `.prettierignore` for monorepo paths
+- [x] Update `.github/workflows/ci.yml` to use `turbo run` commands
+- [x] Update root `README.md` with monorepo documentation

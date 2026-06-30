@@ -1,0 +1,16 @@
+{
+  "extends": "../../packages/tsconfig/react-app.json",
+  "compilerOptions": {
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@app/*": ["./src/app/*"],
+      "@features/*": ["./src/features/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@lib/*": ["./src/lib/*"],
+      "@assets/*": ["./src/assets/*"]
+    }
+  },
+  "include": ["src"]
+}

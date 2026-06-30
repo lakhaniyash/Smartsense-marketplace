@@ -1,6 +1,18 @@
-dist
 node_modules
-src/lib/graphql/__generated__
-playwright-report
-test-results
+**/node_modules
+dist
+**/dist
+.turbo
+
+# GraphQL generated
+apps/web/src/lib/graphql/__generated__
+apps/api/src/schema.gql
+
+# Test artifacts
+apps/web/playwright-report
+apps/web/test-results
+apps/api/coverage
+
+# Lock files
 *.lock
+package-lock.json

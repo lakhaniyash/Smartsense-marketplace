@@ -1,0 +1,6 @@
+dist
+node_modules
+src/lib/graphql/__generated__
+playwright-report
+test-results
+*.lock

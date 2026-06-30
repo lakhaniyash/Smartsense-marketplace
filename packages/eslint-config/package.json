@@ -1,0 +1,17 @@
+{
+  "name": "@smartsense/eslint-config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./web": "./web.js",
+    "./api": "./api.cjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.19.0"
+  }
+}
