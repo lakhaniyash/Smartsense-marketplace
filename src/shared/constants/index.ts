@@ -8,6 +8,7 @@ export const ROUTES = {
   BILLING: '/billing',
   UNAUTHORIZED: '/unauthorized',
   FORBIDDEN: '/forbidden',
+  NOT_FOUND: '/404',
 } as const
 
 export const USER_ROLES = {

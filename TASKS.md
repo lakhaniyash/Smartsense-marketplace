@@ -31,14 +31,18 @@
 
 ## Phase 2 — Routing
 
-- [ ] Define route constants in `shared/constants`
-- [ ] Create public layout component
-- [ ] Create private layout component
-- [ ] Configure public routes (`/login`, `/unauthorized`, `/forbidden`, `/404`)
-- [ ] Configure private routes (`/dashboard`, `/catalog`, `/orders`, `/billing`)
-- [ ] Implement lazy loading for all route-level pages
-- [ ] Implement route guard skeleton (`app/guards/`)
-- [ ] Add 404 not-found fallback route
+- [x] Define route constants in `shared/constants`
+- [x] Create public layout component
+- [x] Create private layout component
+- [x] Configure public routes (`/login`, `/unauthorized`, `/forbidden`, `/404`)
+- [x] Configure private routes (`/dashboard`, `/catalog`, `/orders`, `/billing`)
+- [x] Implement lazy loading for all route-level pages
+- [x] Implement route guard skeleton (`app/guards/`) — `PublicGuard`, `PrivateGuard`, `RoleGuard`
+- [x] Add 404 not-found fallback route
+- [x] Separate route configuration from router setup (`app/router/routes.tsx`)
+- [x] Create navigation configuration (`app/config/navigation.ts`)
+- [x] Create breadcrumb configuration (`app/config/breadcrumbs.ts`)
+- [x] Create placeholder pages for all features (Dashboard, Catalog, Orders, Billing)
 
 ---
 
@@ -100,9 +104,9 @@
 - [ ] Empty state component
 - [ ] Error state component
 - [ ] Breadcrumb component
-- [ ] App shell layout (sidebar + header + content)
-- [ ] Sidebar navigation component
-- [ ] Header component
+- [x] App shell layout (sidebar + header + content)
+- [x] Sidebar navigation component
+- [x] Header component
 
 ---
 

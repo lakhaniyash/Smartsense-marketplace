@@ -1,10 +1,10 @@
-import { Providers } from '@app/providers'
-import { AppRouter } from '@app/router'
+import { ErrorBoundary } from '@shared/components'
+import { AppProviders } from '@shared/providers'
 
 export function App() {
   return (
-    <Providers>
-      <AppRouter />
-    </Providers>
+    <ErrorBoundary>
+      <AppProviders />
+    </ErrorBoundary>
   )
 }
