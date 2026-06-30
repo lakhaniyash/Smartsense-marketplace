@@ -10,7 +10,7 @@ Enterprise marketplace platform for partners to manage products, inventory, orde
 | ------------ | -------------------------------------- |
 | UI Framework | React 19 + TypeScript 5.8              |
 | Build Tool   | Vite 6                                 |
-| Routing      | React Router v6                        |
+| Routing      | React Router v7                        |
 | API Client   | Apollo Client 3 + GraphQL              |
 | Codegen      | GraphQL Code Generator (client-preset) |
 | Styling      | Tailwind CSS v4                        |

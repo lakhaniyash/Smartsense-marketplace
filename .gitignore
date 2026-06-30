@@ -18,7 +18,9 @@ playwright-report/
 test-results/
 
 # Editor
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 *.suo
 *.ntvs*
