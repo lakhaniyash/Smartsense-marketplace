@@ -27,8 +27,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@app/*": ["./src/app/*"],
-      "@public/*": ["./src/app/public/*"],
-      "@private/*": ["./src/app/private/*"],
+      "@features/*": ["./src/features/*"],
       "@shared/*": ["./src/shared/*"],
       "@lib/*": ["./src/lib/*"],
       "@assets/*": ["./src/assets/*"]
