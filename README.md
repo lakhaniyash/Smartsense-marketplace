@@ -1,182 +1,166 @@
 # SmartSense Marketplace
 
-Enterprise marketplace platform for partners to manage products, inventory, orders, billing, and reports.
+Enterprise marketplace platform — Turborepo monorepo.
+
+---
+
+## Repository Structure
+
+```
+apps/
+  web/            React frontend (Vite, Apollo Client, Tailwind CSS)
+  api/            NestJS GraphQL API (Apollo Server, Prisma)
+
+packages/
+  ui/             Shared React component library (scaffold)
+  shared-types/   Shared TypeScript interfaces (scaffold)
+  graphql/        Shared GraphQL schema and fragments (scaffold)
+  config/         Shared runtime config utilities (scaffold)
+  eslint-config/  Shared ESLint configurations
+  tsconfig/       Shared TypeScript configurations
+
+database/
+  prisma/         Prisma schema (single source of truth)
+
+infrastructure/
+  docker/         Full-stack Docker Compose
+
+docs/             Architecture and conventions
+```
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                             |
-| ------------ | -------------------------------------- |
-| UI Framework | React 19 + TypeScript 5.8              |
-| Build Tool   | Vite 6                                 |
-| Routing      | React Router v7                        |
-| API Client   | Apollo Client 3 + GraphQL              |
-| Codegen      | GraphQL Code Generator (client-preset) |
-| Styling      | Tailwind CSS v4                        |
-| Forms        | React Hook Form + Zod                  |
-| Auth         | Keycloak                               |
-| Testing      | Playwright                             |
-| CI           | GitHub Actions                         |
+| Layer    | Technology                          |
+| -------- | ----------------------------------- |
+| Monorepo | Turborepo + npm workspaces          |
+| Frontend | React 19, Vite 6, TypeScript 5.8    |
+| API      | NestJS 11, Apollo Server 5, GraphQL |
+| Database | PostgreSQL 17 + Prisma 6            |
+| Styling  | Tailwind CSS v4                     |
+| Auth     | Keycloak (Phase 3)                  |
+| Testing  | Jest (API) + Playwright (Web)       |
+| CI       | GitHub Actions                      |
 
 ---
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - npm 10+
+- Docker (for local database)
 
 ---
 
 ## Getting Started
 
 ```bash
-# 1. Install dependencies
+# 1. Install all workspace dependencies
 npm install
 
-# 2. Copy env file and fill in values
-cp .env.example .env.local
+# 2. Set up environment variables
+cp apps/web/.env.example apps/web/.env.local
+cp apps/api/.env.example apps/api/.env
 
-# 3. Start development server
+# 3. Generate Prisma client
+npm run -w @smartsense/api prisma:generate
+
+# 4. Start all apps in dev mode
 npm run dev
 ```
 
 ---
 
-## Scripts
+## Root Scripts
 
-| Script                  | Description                        |
-| ----------------------- | ---------------------------------- |
-| `npm run dev`           | Start Vite development server      |
-| `npm run build`         | Type-check + production build      |
-| `npm run preview`       | Preview production build locally   |
-| `npm run lint`          | Run ESLint                         |
-| `npm run lint:fix`      | Run ESLint with auto-fix           |
-| `npm run format`        | Format all files with Prettier     |
-| `npm run format:check`  | Check formatting without writing   |
-| `npm run typecheck`     | Run TypeScript compiler check      |
-| `npm run codegen`       | Generate GraphQL types from schema |
-| `npm run codegen:watch` | Watch mode GraphQL codegen         |
-| `npm run test`          | Run Playwright e2e tests           |
-| `npm run test:ui`       | Run Playwright with interactive UI |
+| Script              | Description                              |
+| ------------------- | ---------------------------------------- |
+| `npm run dev`       | Start all apps in watch mode (Turborepo) |
+| `npm run build`     | Build all packages and apps              |
+| `npm run lint`      | Lint all workspaces                      |
+| `npm run lint:fix`  | Lint + auto-fix all workspaces           |
+| `npm run typecheck` | Type-check all workspaces                |
+| `npm run test`      | Run all unit tests                       |
+| `npm run test:e2e`  | Run all end-to-end tests                 |
+| `npm run format`    | Format the entire repo with Prettier     |
 
 ---
 
-## Folder Structure
+## Individual App Scripts
 
-```
-src/
-├── app/
-│   ├── providers/       # React provider tree (Apollo, auth, …)
-│   └── router/          # Route definitions with lazy loading
-├── features/
-│   ├── auth/            # Keycloak authentication
-│   ├── dashboard/       # Overview, stats, analytics
-│   ├── catalog/         # Products, categories, inventory
-│   ├── orders/          # Order list, details, status
-│   └── billing/         # Invoices, payments, reports
-├── shared/
-│   ├── components/
-│   │   ├── ui/          # Button, Input, Modal, Table, …
-│   │   └── layout/      # Shell, Sidebar, Header, …
-│   ├── hooks/           # Shared custom hooks
-│   ├── types/           # Global TypeScript types
-│   ├── utils/           # Pure utility functions
-│   ├── constants/       # ROUTES, USER_ROLES, …
-│   └── config/          # Env-var–backed app config
-├── lib/
-│   ├── apollo/          # ApolloClient setup
-│   └── graphql/
-│       └── __generated__/  # Auto-generated by codegen
-└── assets/              # Static files
-```
-
-Every feature follows the same internal structure:
-
-```
-features/<name>/
-  components/    UI components owned by this feature
-  hooks/         Feature-scoped hooks
-  graphql/       .graphql query/mutation/subscription files
-  services/      Non-hook business logic
-  pages/         Route-level page components
-  types/         Feature TypeScript types
-  utils/         Feature utility functions
-  index.ts       Barrel export
-```
-
----
-
-## Path Aliases
-
-| Alias         | Resolves to      |
-| ------------- | ---------------- |
-| `@/*`         | `src/*`          |
-| `@app/*`      | `src/app/*`      |
-| `@features/*` | `src/features/*` |
-| `@shared/*`   | `src/shared/*`   |
-| `@lib/*`      | `src/lib/*`      |
-| `@assets/*`   | `src/assets/*`   |
-
----
-
-## GraphQL Codegen
-
-After adding `.graphql` files under any feature, regenerate types:
+Run a script in a specific workspace:
 
 ```bash
-npm run codegen
-```
+# Frontend
+npm run dev -w @smartsense/web
 
-Import from the generated barrel:
-
-```ts
-import { gql } from '@lib/graphql/__generated__'
+# API
+npm run dev -w @smartsense/api
 ```
 
 ---
 
-## Environment Variables
+## Workspace Packages
 
-Copy `.env.example` to `.env.local` and set the following:
+| Package                     | Purpose                                |
+| --------------------------- | -------------------------------------- |
+| `@smartsense/tsconfig`      | Shared TypeScript base configs         |
+| `@smartsense/eslint-config` | Shared ESLint configs (web + api)      |
+| `@smartsense/ui`            | Shared React component library         |
+| `@smartsense/shared-types`  | Shared TypeScript interfaces           |
+| `@smartsense/graphql`       | Shared GraphQL schema and fragments    |
+| `@smartsense/config`        | Shared runtime configuration utilities |
 
-| Variable                  | Description          |
-| ------------------------- | -------------------- |
-| `VITE_GRAPHQL_URL`        | GraphQL endpoint URL |
-| `VITE_KEYCLOAK_URL`       | Keycloak server URL  |
-| `VITE_KEYCLOAK_REALM`     | Keycloak realm name  |
-| `VITE_KEYCLOAK_CLIENT_ID` | Keycloak client ID   |
+---
+
+## Docker
+
+Start the full stack:
+
+```bash
+docker compose -f infrastructure/docker/docker-compose.yml up --build
+```
+
+Start only the database for local development:
+
+```bash
+docker compose -f apps/api/docker-compose.yml up db
+```
+
+---
+
+## Turborepo
+
+Tasks are defined in `turbo.json`. The dependency graph ensures packages build before the apps that depend on them.
+
+```
+build   → waits for ^build (upstream packages first)
+typecheck → waits for ^typecheck
+test    → waits for ^build
+dev     → persistent, uncached
+lint    → parallel, no dependencies
+```
+
+Remote caching can be enabled via `npx turbo login`.
 
 ---
 
 ## Code Quality
 
-- **TypeScript strict mode** — `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`
-- **No `any`** — enforced by ESLint (`@typescript-eslint/no-explicit-any: error`)
-- **Consistent type imports** — `import type { … }` enforced
-- **Conventional Commits** — enforced by `commitlint` on every commit
-- **Pre-commit hook** — `lint-staged` runs ESLint + Prettier on staged files only
-- **Tailwind class sorting** — `prettier-plugin-tailwindcss` auto-sorts classes
-
----
-
-## CI/CD
-
-GitHub Actions runs on every push and pull request to `main` / `develop`:
-
-1. **Lint** — ESLint across all TypeScript files
-2. **Type Check** — `tsc -b` (parallel with lint)
-3. **Build** — Vite production build (runs only if lint + typecheck pass)
-
-Stale PR runs are auto-cancelled via `concurrency` groups.
+- **TypeScript strict mode** across all packages
+- **No `any`** enforced by ESLint
+- **Shared ESLint configs** via `@smartsense/eslint-config`
+- **Shared TypeScript configs** via `@smartsense/tsconfig`
+- **Shared Prettier config** via root `.prettierrc`
+- **Conventional Commits** enforced by commitlint
+- **Pre-commit hooks** — lint-staged runs per workspace
 
 ---
 
 ## Contributing
 
 1. Branch from `main` — `git checkout -b feat/my-feature`
-2. Follow the [Conventional Commits](https://www.conventionalcommits.org/) format
-3. Keep components under 250 lines
-4. Prefer named exports
-5. Use lazy loading for all route-level pages
-6. Add tests for critical functionality
+2. Follow [Conventional Commits](https://www.conventionalcommits.org/)
+3. Run `npm run lint && npm run typecheck` before pushing
+4. Keep components under 250 lines

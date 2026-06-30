@@ -1,4 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+  "references": [
+    { "path": "./apps/web" },
+    { "path": "./apps/api" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/shared-types" }
+  ]
 }
