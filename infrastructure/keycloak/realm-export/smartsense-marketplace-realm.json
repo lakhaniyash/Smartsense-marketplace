@@ -1,0 +1,123 @@
+{
+  "realm": "smartsense-marketplace",
+  "displayName": "SmartSense Marketplace",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "roles": {
+    "realm": [
+      {
+        "name": "Admin",
+        "description": "Platform administrator — full access to all modules"
+      },
+      {
+        "name": "Partner",
+        "description": "Vendor organization staff — manages catalog, orders, billing for their own Partner"
+      },
+      {
+        "name": "Customer",
+        "description": "Buyer — read-mostly access to their own orders"
+      }
+    ]
+  },
+
+  "groups": [
+    {
+      "name": "Admins",
+      "path": "/Admins",
+      "realmRoles": ["Admin"]
+    },
+    {
+      "name": "Partners",
+      "path": "/Partners",
+      "realmRoles": ["Partner"]
+    },
+    {
+      "name": "Customers",
+      "path": "/Customers",
+      "realmRoles": ["Customer"]
+    }
+  ],
+
+  "clients": [
+    {
+      "clientId": "smartsense-web",
+      "name": "SmartSense Marketplace Web (SPA)",
+      "description": "React SPA — public client, Authorization Code + PKCE. No client secret.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "frontchannelLogout": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173", "+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      }
+    },
+    {
+      "clientId": "smartsense-api",
+      "name": "SmartSense Marketplace API",
+      "description": "NestJS GraphQL API — confidential, bearer-only client. Never initiates a login; only validates tokens issued for smartsense-web. Matches docs/authentication.md's approved backend client posture.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "smartsense-api-dev-secret-change-me"
+    }
+  ],
+
+  "users": [
+    {
+      "username": "admin@smartsense.local",
+      "email": "admin@smartsense.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Platform",
+      "lastName": "Admin",
+      "groups": ["/Admins"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@12345",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "partner.test@smartsense.local",
+      "email": "partner.test@smartsense.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Partner",
+      "lastName": "Test",
+      "groups": ["/Partners"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Partner@12345",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

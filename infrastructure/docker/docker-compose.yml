@@ -12,8 +12,14 @@ services:
       GRAPHQL_INTROSPECTION: 'true'
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: smartsense-marketplace
+      KEYCLOAK_API_CLIENT_ID: smartsense-api
+      KEYCLOAK_API_CLIENT_SECRET: smartsense-api-dev-secret-change-me
     depends_on:
       db:
+        condition: service_healthy
+      keycloak:
         condition: service_healthy
     restart: unless-stopped
 
@@ -34,5 +40,50 @@ services:
       retries: 5
     restart: unless-stopped
 
+  keycloak-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U keycloak']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ['start-dev', '--import-realm']
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_HEALTH_ENABLED: 'true'
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - '8080:8080'
+    volumes:
+      - ../keycloak/realm-export:/opt/keycloak/data/import:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'exec 3<>/dev/tcp/127.0.0.1/8080 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  keycloak_db_data:
