@@ -1,3 +1,22 @@
+// SmartSense Marketplace — Database Schema
+// Source of truth for the PostgreSQL data model. Every model traces back to
+// docs/domain-model.md — see docs/database-schema.md for the full relationship
+// explanations, ERD, and design rationale.
+//
+// Conventions used throughout this file:
+// - Primary keys: UUID, `@default(uuid())`.
+// - Every mutable model has `createdAt` / `updatedAt`. Append-only or
+//   snapshot-at-creation models (OrderItem, AuditLog) intentionally omit
+//   `updatedAt` because rows are never modified after insert.
+// - Soft delete: models a human can "remove" from the UI carry a nullable
+//   `deletedAt`. Ledger/financial models (Order, Invoice, Payment,
+//   BillingReport) are never soft-deleted — they use their own status state
+//   machine instead, per docs/domain-model.md.
+// - Table and column names are mapped to snake_case (`@@map` / `@map`) for
+//   idiomatic PostgreSQL; the Prisma Client API remains camelCase.
+// - Every relation declares `onDelete` / `onUpdate` explicitly (no implicit
+//   defaults).
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,4 +26,553 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Models will be added in future milestones
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+
+  @@map("user_status")
+}
+
+enum UserOwnerType {
+  NONE
+  PARTNER
+  CUSTOMER
+
+  @@map("user_owner_type")
+}
+
+enum PartnerStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+
+  @@map("partner_status")
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  ORGANIZATION
+
+  @@map("customer_type")
+}
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+
+  @@map("customer_status")
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+
+  @@map("product_status")
+}
+
+enum ProductVariantStatus {
+  ACTIVE
+  OUT_OF_STOCK
+  DISCONTINUED
+
+  @@map("product_variant_status")
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  RETURN_REQUESTED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+
+  @@map("order_status")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+
+  @@map("invoice_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  OTHER
+
+  @@map("payment_method")
+}
+
+enum BillingReportStatus {
+  GENERATED
+  FINALIZED
+  PAID_OUT
+
+  @@map("billing_report_status")
+}
+
+enum AddressOwnerType {
+  PARTNER
+  CUSTOMER
+
+  @@map("address_owner_type")
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
+  REGISTERED
+
+  @@map("address_type")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Access (RBAC)
+// ---------------------------------------------------------------------------
+
+model Role {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @unique
+  description  String?
+  isSystemRole Boolean   @default(false) @map("is_system_role")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@index([deletedAt])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  description String?
+  domain      String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+
+  @@index([domain])
+  @@map("permissions")
+}
+
+// Explicit join model (rather than an implicit Prisma m2m) so onDelete
+// behavior is declared and `assignedAt` is available for future auditing.
+model RolePermission {
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// Explicit join model for the same reason as RolePermission above.
+model UserRole {
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model User {
+  id                String        @id @default(uuid()) @db.Uuid
+  keycloakSubjectId String        @unique @map("keycloak_subject_id")
+  email             String        @unique
+  fullName          String        @map("full_name")
+  status            UserStatus    @default(INVITED)
+  ownerType         UserOwnerType @default(NONE) @map("owner_type")
+  partnerId         String?       @map("partner_id") @db.Uuid
+  customerId        String?       @map("customer_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  deletedAt         DateTime?     @map("deleted_at")
+
+  partner   Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customer  Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userRoles UserRole[]
+  auditLogs AuditLog[]
+
+  @@index([partnerId])
+  @@index([customerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Organizations
+// ---------------------------------------------------------------------------
+
+model Partner {
+  id                 String        @id @default(uuid()) @db.Uuid
+  legalName          String        @map("legal_name")
+  displayName        String        @map("display_name")
+  status             PartnerStatus @default(PENDING_APPROVAL)
+  contactEmail       String        @map("contact_email")
+  taxId              String?       @map("tax_id")
+  registrationNumber String?       @map("registration_number")
+  // A percentage (0–100). Not enforceable in Prisma's schema language —
+  // add `CHECK (commission_rate BETWEEN 0 AND 100)` by hand to the initial
+  // migration before applying it.
+  commissionRate     Decimal       @map("commission_rate") @db.Decimal(5, 2)
+  approvedAt         DateTime?     @map("approved_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  deletedAt          DateTime?     @map("deleted_at")
+
+  users           User[]
+  addresses       Address[]
+  products        Product[]
+  productVariants ProductVariant[]
+  orders          Order[]
+  invoices        Invoice[]
+  billingReports  BillingReport[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("partners")
+}
+
+model Customer {
+  id           String         @id @default(uuid()) @db.Uuid
+  displayName  String         @map("display_name")
+  type         CustomerType
+  status       CustomerStatus @default(ACTIVE)
+  billingEmail String         @unique @map("billing_email")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  users     User[]
+  addresses Address[]
+  orders    Order[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+model Category {
+  id               String    @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String    @unique
+  parentCategoryId String?   @map("parent_category_id") @db.Uuid
+  displayOrder     Int       @default(0) @map("display_order")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@index([parentCategoryId, isActive])
+  @@index([deletedAt])
+  @@map("categories")
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  partnerId   String        @map("partner_id") @db.Uuid
+  categoryId  String        @map("category_id") @db.Uuid
+  title       String
+  description String?
+  brand       String?
+  status      ProductStatus @default(DRAFT)
+  publishedAt DateTime?     @map("published_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+
+  partner  Partner          @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  variants ProductVariant[]
+
+  @@index([partnerId, status])
+  @@index([categoryId, status])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+// `partnerId` is denormalized from `product.partnerId` — same pattern as
+// `Invoice.partnerId` — so SKU uniqueness can be enforced per Partner at the
+// database level with `@@unique([partnerId, sku])` without a cross-table
+// lookup. Kept in sync by the service layer whenever a Product's owning
+// Partner would change (in practice, never: Products are not reassigned
+// across Partners).
+model ProductVariant {
+  id         String               @id @default(uuid()) @db.Uuid
+  productId  String               @map("product_id") @db.Uuid
+  partnerId  String               @map("partner_id") @db.Uuid
+  sku        String
+  attributes Json                 @default("{}") @db.JsonB
+  price      Decimal              @db.Decimal(12, 2)
+  status     ProductVariantStatus @default(ACTIVE)
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+  deletedAt  DateTime?            @map("deleted_at")
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  partner    Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  inventory  Inventory?
+  orderItems OrderItem[]
+
+  @@unique([partnerId, sku])
+  @@index([productId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("product_variants")
+}
+
+// `quantityOnHand >= 0`, `quantityReserved >= 0`, and
+// `quantityReserved <= quantityOnHand` (domain-model.md) are not
+// enforceable in Prisma's schema language — add the equivalent `CHECK`
+// constraints by hand to the initial migration before applying it.
+model Inventory {
+  id               String   @id @default(uuid()) @db.Uuid
+  productVariantId String   @unique @map("product_variant_id") @db.Uuid
+  quantityOnHand   Int      @default(0) @map("quantity_on_hand")
+  quantityReserved Int      @default(0) @map("quantity_reserved")
+  reorderThreshold Int?     @map("reorder_threshold")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("inventory")
+}
+
+// ---------------------------------------------------------------------------
+// Orders & Fulfillment
+// ---------------------------------------------------------------------------
+
+model Order {
+  id                String      @id @default(uuid()) @db.Uuid
+  orderNumber       String      @unique @map("order_number")
+  customerId        String      @map("customer_id") @db.Uuid
+  partnerId         String      @map("partner_id") @db.Uuid
+  shippingAddressId String?     @map("shipping_address_id") @db.Uuid
+  status            OrderStatus @default(DRAFT)
+  subtotal          Decimal     @db.Decimal(12, 2)
+  tax               Decimal     @db.Decimal(12, 2)
+  shippingCost      Decimal     @map("shipping_cost") @db.Decimal(12, 2)
+  total             Decimal     @db.Decimal(12, 2)
+  placedAt          DateTime?   @map("placed_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner         Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  // `Restrict` here is permanent by design: Addresses are never hard-deleted
+  // (they're soft-deactivated via `Address.isActive`, see the Address model),
+  // so this constraint should never actually block a real deletion attempt.
+  shippingAddress Address?    @relation(fields: [shippingAddressId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items           OrderItem[]
+  invoice         Invoice?
+
+  @@index([customerId, status])
+  @@index([partnerId, status])
+  @@index([shippingAddressId])
+  @@index([status, placedAt])
+  @@map("orders")
+}
+
+// Immutable after creation (cancel-and-reorder instead of mutating a placed
+// line item) — no `updatedAt` by design.
+model OrderItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  orderId           String   @map("order_id") @db.Uuid
+  productVariantId  String   @map("product_variant_id") @db.Uuid
+  // Must be > 0 (domain-model.md). Not enforceable in Prisma's schema
+  // language — add `CHECK (quantity > 0)` by hand to the initial migration
+  // before applying it.
+  quantity          Int
+  unitPriceSnapshot Decimal  @map("unit_price_snapshot") @db.Decimal(12, 2)
+  lineTotal         Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([orderId])
+  @@index([productVariantId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+// `status` transitions (e.g. Void ⇒ zero Payments; sum(Succeeded Payments)
+// == amountDue ⇒ Paid) are cross-row invariants spanning Invoice and
+// Payment. Postgres CHECK constraints can't express aggregates across
+// rows, so these are service-layer-only guarantees, never DB-enforced.
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  invoiceNumber String        @unique @map("invoice_number")
+  orderId       String        @unique @map("order_id") @db.Uuid
+  partnerId     String        @map("partner_id") @db.Uuid
+  amountDue     Decimal       @map("amount_due") @db.Decimal(12, 2)
+  status        InvoiceStatus @default(DRAFT)
+  issuedAt      DateTime?     @map("issued_at")
+  dueAt         DateTime?     @map("due_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner  Partner   @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payments Payment[]
+
+  @@index([partnerId, status])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id                    String        @id @default(uuid()) @db.Uuid
+  invoiceId             String        @map("invoice_id") @db.Uuid
+  amount                Decimal       @db.Decimal(12, 2)
+  method                PaymentMethod
+  externalTransactionId String        @unique @map("external_transaction_id")
+  status                PaymentStatus @default(PENDING)
+  processedAt           DateTime?     @map("processed_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([invoiceId, status])
+  @@index([status])
+  @@map("payments")
+}
+
+model BillingReport {
+  id               String              @id @default(uuid()) @db.Uuid
+  partnerId        String              @map("partner_id") @db.Uuid
+  // `@db.Date`, not a timestamp: periods are day-granular ("monthly
+  // statement"), and a future Postgres exclusion constraint for
+  // non-overlapping periods needs `daterange`, which requires `date` inputs.
+  periodStart      DateTime            @map("period_start") @db.Date
+  periodEnd        DateTime            @map("period_end") @db.Date
+  grossRevenue     Decimal             @map("gross_revenue") @db.Decimal(12, 2)
+  commissionAmount Decimal             @map("commission_amount") @db.Decimal(12, 2)
+  netPayout        Decimal             @map("net_payout") @db.Decimal(12, 2)
+  status           BillingReportStatus @default(GENERATED)
+  generatedAt      DateTime            @default(now()) @map("generated_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Prevents an exact-duplicate period for the same Partner. Does NOT
+  // prevent overlapping-but-not-identical ranges — true non-overlap
+  // enforcement needs a Postgres exclusion constraint
+  // (`EXCLUDE USING gist (partner_id WITH =, daterange(period_start, period_end) WITH &&)`),
+  // which Prisma cannot express and must be added by hand in a migration.
+  @@unique([partnerId, periodStart, periodEnd])
+  @@index([partnerId, periodStart])
+  @@map("billing_reports")
+}
+
+// ---------------------------------------------------------------------------
+// Shared
+// ---------------------------------------------------------------------------
+
+// `ownerType` + exactly-one-of (partnerId, customerId) is a business rule
+// enforced at the service layer (see docs/database-schema.md). A future
+// migration may add a raw-SQL CHECK constraint for defense in depth.
+model Address {
+  id         String           @id @default(uuid()) @db.Uuid
+  ownerType  AddressOwnerType @map("owner_type")
+  partnerId  String?          @map("partner_id") @db.Uuid
+  customerId String?          @map("customer_id") @db.Uuid
+  type       AddressType
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String           @map("postal_code")
+  country    String
+  isDefault  Boolean          @default(false) @map("is_default")
+  isActive   Boolean          @default(true) @map("is_active")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  partner  Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orders   Order[]
+
+  // Plain (not composite-with-ownerType) indexes: `ownerType` is always
+  // implied by which FK is non-null, so a composite leading with
+  // `ownerType` wouldn't serve a "find this Partner's addresses" lookup
+  // via its leftmost-prefix rule.
+  @@index([partnerId])
+  @@index([customerId])
+  @@index([isActive])
+  @@map("addresses")
+}
+
+// Append-only and immutable — no `updatedAt`, no `deletedAt`, no update or
+// delete code path should ever touch this table.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  metadata    Json?    @db.JsonB
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([occurredAt])
+  @@map("audit_logs")
+}
