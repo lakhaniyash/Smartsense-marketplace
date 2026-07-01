@@ -5,7 +5,8 @@
   "description": "SmartSense Marketplace GraphQL API",
   "license": "UNLICENSED",
   "prisma": {
-    "schema": "../../database/prisma/schema.prisma"
+    "schema": "../../database/prisma/schema.prisma",
+    "seed": "ts-node --transpile-only ../../database/prisma/seed.ts"
   },
   "scripts": {
     "build": "nest build",
@@ -24,7 +25,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "prisma db seed"
   },
   "dependencies": {
     "@apollo/server": "^5.0.0",

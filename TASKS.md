@@ -244,3 +244,28 @@
 - [x] Update root `.prettierignore` for monorepo paths
 - [x] Update `.github/workflows/ci.yml` to use `turbo run` commands
 - [x] Update root `README.md` with monorepo documentation
+
+---
+
+## Milestone 6 — Database Design
+
+- [x] Read `docs/domain-model.md`
+- [x] Create Entity-Relationship Diagram (Mermaid) — `docs/database-schema.md`
+- [x] Design a normalized PostgreSQL schema
+- [x] Create `database/prisma/schema.prisma`
+- [x] Configure UUID primary keys
+- [x] Configure `createdAt` / `updatedAt`
+- [x] Configure soft delete strategy
+- [x] Configure indexes
+- [x] Configure foreign keys (with explicit `onDelete`/`onUpdate`)
+- [x] Configure unique constraints
+- [x] Explain every relationship — `docs/database-schema.md`
+- [x] Validate the schema (`prisma format` + `prisma validate`)
+- [x] Create seed data script — `database/prisma/seed.ts` (Roles, Permissions, Admin User, Sample Partner, Categories)
+- [x] Wire up `prisma db seed` in `apps/api/package.json`
+- [x] Update documentation — `docs/database-schema.md`, this file
+- [x] Generate initial Prisma migration (`prisma migrate dev --create-only`) — `database/prisma/migrations/20260701110512_init/migration.sql`, **not applied**
+- [x] Hand-add raw-SQL `CHECK`/exclusion constraints documented in `docs/database-schema.md` to the generated migration
+- [x] Verify hand-written constraints against a scratch database (all 5 correctly reject invalid data; valid rows still succeed)
+- [ ] **Approval checkpoint** — apply migration to local PostgreSQL 17 — **on hold pending review**
+- [ ] Run seed script
