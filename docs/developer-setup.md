@@ -58,15 +58,7 @@ cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-> **⚠️ Known pitfall — fix one value immediately:** `apps/web/.env.example` currently ships `VITE_GRAPHQL_URL=http://localhost:4000/graphql`, but the API listens on **port 3000** (`apps/api/.env.example` → `PORT=3000`). Edit `apps/web/.env.local` to:
->
-> ```
-> VITE_GRAPHQL_URL=http://localhost:3000/graphql
-> ```
->
-> The same mismatch affects GraphQL codegen's fallback URL ([Troubleshooting](#troubleshooting)).
-
-The dev defaults in both example files work as-is against the Docker services below (dev-only placeholder secrets — see [deployment.md § Environment Configuration](./deployment.md#environment-configuration)). Variable meanings: [authentication.md § Required Environment Variables](./authentication.md#required-environment-variables).
+The dev defaults in both example files work as-is against the Docker services below — in particular, `VITE_GRAPHQL_URL=http://localhost:3000/graphql` matches the API's default `PORT=3000`; if you change one, change the other (dev-only placeholder secrets — see [deployment.md § Environment Configuration](./deployment.md#environment-configuration)). Variable meanings: [authentication.md § Required Environment Variables](./authentication.md#required-environment-variables).
 
 ## Docker Services
 
@@ -152,7 +144,7 @@ npm run codegen -w @smartsense/web             # regenerates src/lib/graphql/__g
 npm run codegen:watch -w @smartsense/web       # watch mode while writing .graphql documents
 ```
 
-Codegen falls back to `http://localhost:4000/graphql` when `VITE_GRAPHQL_URL` is unset (`apps/web/codegen.ts`) — another reason the `.env.local` port fix above matters. Workflow and generated-file rules: [graphql.md § 10](./graphql.md#10-graphql-code-generator).
+Codegen reads `VITE_GRAPHQL_URL` and falls back to `http://localhost:3000/graphql` when unset (`apps/web/codegen.ts`) — both match the API's default port. Workflow and generated-file rules: [graphql.md § 10](./graphql.md#10-graphql-code-generator).
 
 ## Playwright
 
@@ -185,7 +177,7 @@ All from the repository root:
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `typecheck`/`dev` fails with missing `@prisma/client` types                                 | Run `npm run prisma:generate -w @smartsense/api` — required after clone and after every schema change (CI does the same).                                                                                                           |
 | API exits at boot with a Joi validation error                                               | A required variable is missing/malformed in `apps/api/.env` — the error names it. Working as designed ([deployment.md § Troubleshooting](./deployment.md#troubleshooting)).                                                         |
-| Frontend GraphQL calls fail / codegen can't reach the schema                                | The port-4000 mismatch ([Environment Variables](#environment-variables)) — set `VITE_GRAPHQL_URL=http://localhost:3000/graphql` in `.env.local`.                                                                                    |
+| Frontend GraphQL calls fail / codegen can't reach the schema                                | Confirm the API is running on the port `VITE_GRAPHQL_URL` points at (default `3000` on both sides) and that `.env.local` exists.                                                                                                    |
 | `docker compose up --build` fails at `prisma:generate`                                      | Known broken on `development` (TD-1) — don't build the `api` image locally; run infra-only + `npm run dev` ([Docker Services](#docker-services)).                                                                                   |
 | Keycloak container "unhealthy" for the first ~30 seconds                                    | Normal slow boot (30s healthcheck `start_period`). Investigate only if it stays unhealthy: `docker compose ... logs keycloak`.                                                                                                      |
 | Realm edits in `infrastructure/keycloak/realm-export/` don't appear                         | Import only runs on a fresh instance — `down -v` then `up` ([Keycloak](#keycloak)).                                                                                                                                                 |
