@@ -119,12 +119,15 @@ async function seedCategories() {
 async function seedAdminUser() {
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
 
+  // Email matches the admin user seeded in the Keycloak realm export
+  // (infrastructure/keycloak/realm-export/) so first login attaches this
+  // pending row's placeholder keycloakSubjectId to the real one.
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@smartsense.example' },
+    where: { email: 'admin@smartsense.local' },
     update: { status: 'ACTIVE' },
     create: {
       keycloakSubjectId: 'seed-admin-0000-0000-0000',
-      email: 'admin@smartsense.example',
+      email: 'admin@smartsense.local',
       fullName: 'Platform Admin',
       status: 'ACTIVE',
       ownerType: 'NONE',

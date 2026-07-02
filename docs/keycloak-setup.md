@@ -1,19 +1,23 @@
 # SmartSense Marketplace — Keycloak Setup
 
-Version: 1.0
-Status: Infrastructure provisioned and verified locally (2026-07-01) — **not yet integrated** with the NestJS API or React app
+Version: 1.1
+Status: Infrastructure provisioned and verified locally (2026-07-01). Backend
+integration (NestJS validating these tokens) shipped 2026-07-02 — see
+`apps/api/README.md`'s Authentication & Authorization section. Frontend
+integration is still pending.
 
 ## Purpose
 
 This document is the operational counterpart to [`docs/authentication.md`](./authentication.md). Where that document designs _how_ authentication and authorization work, this document sets up the actual local Keycloak environment those flows will run against: the realm, clients, roles, groups, and a starter user, all running in Docker.
 
-Per the milestone brief, this is infrastructure only:
+This milestone was originally infrastructure only:
 
-- No NestJS module reads these tokens yet (`apps/api/src/modules/auth/` remains the boilerplate described in `apps/api/README.md`).
-- No React code talks to Keycloak yet (`apps/web/src/features/auth/` remains scaffolding).
-- No authentication/authorization code was written as part of this milestone.
+- ~~No NestJS module reads these tokens yet~~ — superseded: `apps/api/src/modules/auth/` now validates Keycloak-issued JWTs (signature via JWKS, `exp`, `iss`, `aud`/`azp`), resolves roles/permissions, and enforces them via global GraphQL guards. See `apps/api/README.md`.
+- No React code talks to Keycloak yet (`apps/web/src/features/auth/` remains scaffolding) — still true.
 
-That integration work is Phase 3 of `docs/roadmap.md` / `TASKS.md`, and follows the design already recorded in `docs/authentication.md`.
+**Known gap surfaced by the backend integration**: this realm export does not configure an audience mapper adding `smartsense-api` to tokens issued to the `smartsense-web` client. The backend checks `aud` OR `azp` against `smartsense-api` (per `docs/authentication.md`'s claims table), but neither claim will match on a real `smartsense-web` login today — `azp` will be `smartsense-web`, and `aud` defaults to Keycloak's built-in `account` audience. Real end-to-end login will fail the audience check until this realm is updated with an audience mapper (or dedicated client scope) for `smartsense-api`. This is a realm/client configuration change to this same infrastructure, not a backend code change.
+
+The remaining frontend integration work is Phase 3 of `docs/roadmap.md` / `TASKS.md`, and follows the design already recorded in `docs/authentication.md`.
 
 ---
 
@@ -319,12 +323,13 @@ partner.test@smartsense.local | enabled=True | emailVerified=True | groups=['/Pa
 
 ## Explicitly Out of Scope (This Milestone)
 
-- NestJS `AuthModule` reading/validating any Keycloak-issued token.
-- React `features/auth` calling Keycloak or handling redirects.
+- ~~NestJS `AuthModule` reading/validating any Keycloak-issued token~~ — done, see `apps/api/README.md`.
+- React `features/auth` calling Keycloak or handling redirects — still pending.
+- Adding an audience mapper so `smartsense-web`-issued tokens carry `smartsense-api` in `aud` — needed for real end-to-end login once the frontend lands; see the Known Gap note above.
 - Realm/client provisioning for staging or production (separate Keycloak deployment, per `docs/authentication.md`'s environment table).
 - Rotating the placeholder `smartsense-api` client secret or the seeded user passwords — required before this configuration is ever used outside a local machine.
 
-These are addressed in Phase 3 of `docs/roadmap.md` / `TASKS.md`, building directly on the design in `docs/authentication.md` and the infrastructure provisioned here.
+The frontend integration and the audience mapper are addressed in Phase 3 of `docs/roadmap.md` / `TASKS.md`, building directly on the design in `docs/authentication.md` and the infrastructure provisioned here.
 
 ---
 

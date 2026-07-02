@@ -7,4 +7,11 @@ export const validationSchema = Joi.object({
   GRAPHQL_DEBUG: Joi.boolean().default(false),
   GRAPHQL_INTROSPECTION: Joi.boolean().default(true),
   GRAPHQL_PLAYGROUND: Joi.boolean().default(false),
+  KEYCLOAK_URL: Joi.string().uri().required(),
+  KEYCLOAK_REALM: Joi.string().required(),
+  KEYCLOAK_API_CLIENT_ID: Joi.string().required(),
+  KEYCLOAK_API_CLIENT_SECRET: Joi.string().allow('').default(''),
+  KEYCLOAK_JWKS_URI: Joi.string().uri().optional(),
+  KEYCLOAK_JWKS_CACHE_TTL_SECONDS: Joi.number().integer().min(1).default(600),
+  JWT_CLOCK_TOLERANCE_SECONDS: Joi.number().integer().min(0).default(5),
 })
