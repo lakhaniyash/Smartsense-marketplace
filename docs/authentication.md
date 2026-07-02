@@ -1,7 +1,9 @@
 # SmartSense Marketplace — Authentication & Authorization
 
-Version: 1.0
-Status: Architecture design (pre-implementation — no application code exists yet)
+Version: 1.1
+Status: Backend implemented (2026-07-02) — JWT validation, guards, decorators,
+role/permission resolution. Frontend (`apps/web/src/features/auth/`) is still
+unimplemented; see [Open Questions](#open-questions) and the note below.
 
 ## Purpose
 
@@ -13,10 +15,10 @@ It builds directly on decisions already made elsewhere in the repo rather than r
 - **RBAC is permission-based, not role-string-based** (`canViewOrders()`, never `role === "Admin"`) — `docs/architecture.md`.
 - **The `User`/`Role`/`Permission`/`UserRole`/`RolePermission` schema already exists** in `database/prisma/schema.prisma` and is documented in `docs/database-schema.md`. `User.keycloakSubjectId` is the join key between Keycloak identity and the application's authorization data — it is _not_ a placeholder to design around, it's already there waiting to be populated by a real login.
 - **Frontend feature-based architecture**: auth UI/state lives in `apps/web/src/features/auth/`, route guards in `apps/web/src/app/guards/`, Apollo Client wiring in `apps/web/src/lib/apollo/` — `docs/folder-structure.md` conventions, folders already scaffolded.
-- **Backend module structure**: `apps/api/src/modules/auth/` already exists as boilerplate (`AuthModule`, `AuthResolver`, `AuthService`) with no business logic — this document defines what fills it in.
-- **Roadmap**: this is Phase 3 (frontend) of `docs/roadmap.md` / `TASKS.md`, alongside the equivalent backend guard work.
+- **Backend module structure**: `apps/api/src/modules/auth/` implements this document's [Backend Auth Module Responsibilities](#backend-auth-module-responsibilities) — see `apps/api/README.md`'s Authentication & Authorization section for the concrete guard/decorator API and known gaps (notably: the local Keycloak realm doesn't yet configure an audience mapper for `smartsense-api`, so real `smartsense-web`-issued tokens will fail the audience check until that realm change ships).
+- **Roadmap**: the frontend half (`apps/web/src/features/auth/`) of Phase 3 in `docs/roadmap.md` / `TASKS.md` remains unimplemented.
 
-Per the task brief, this document contains **no application/implementation code** — only flows, diagrams, configuration contracts, and folder-level responsibilities.
+This document was originally written as architecture-only (no code); it has since been implemented on the backend as described above. The flows, diagrams, and configuration contracts below remain the source of truth for behavior — this file was not rewritten around the implementation, only its status header and cross-references were updated.
 
 ---
 
