@@ -162,5 +162,6 @@ Remote caching can be enabled via `npx turbo login`.
 
 1. Branch from `main` — `git checkout -b feat/my-feature`
 2. Follow [Conventional Commits](https://www.conventionalcommits.org/)
-3. Run `npm run lint && npm run typecheck` before pushing
-4. Keep components under 250 lines
+3. Reference the Jira issue key in every commit — e.g. `feat(SM-235): ...` or a footer line `Jira: SM-235` (enforced by commitlint)
+4. Run `npm run lint && npm run typecheck` before pushing
+5. Keep components under 250 lines
