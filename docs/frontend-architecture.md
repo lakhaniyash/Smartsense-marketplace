@@ -25,7 +25,7 @@ This document covers **how the frontend's pieces connect and execute at runtime*
 | Login/session/token flows and route-protection semantics                                  | [authentication.md](./authentication.md#route-protection-frontend) |
 | Permission model, `canX()` helpers, navigation visibility rules                           | [authorization.md](./authorization.md#frontend-authorization)      |
 
-**Assumption made explicit.** The application shell is real but young: `main.tsx` → `App` → `Providers` (Apollo only) → `AppRouter` (placeholder routes) exists and runs; `app/bootstrap`, `app/guards`, `app/layouts`, and all feature folders are scaffolds (`export {}`) pending milestones M8–M11 ([milestones.md](./milestones.md#milestone-details)). This document defines the architecture those milestones fill in — sections describing not-yet-built behavior name the milestone that builds it.
+**Assumption made explicit.** The application shell is real but young: `main.tsx` → `App` → `Providers` (Apollo only) → `AppRouter` (placeholder routes) exists and runs; `app/bootstrap`, `app/guards`, `app/layouts`, and the feature folders are scaffolds (mostly `export {}`; a few placeholder types exist under `features/*/types`) pending milestones M8–M11 ([milestones.md](./milestones.md#milestone-details)). This document defines the architecture those milestones fill in — sections describing not-yet-built behavior name the milestone that builds it.
 
 ---
 

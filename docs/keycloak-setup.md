@@ -15,7 +15,7 @@ This milestone was originally infrastructure only:
 - ~~No NestJS module reads these tokens yet~~ — superseded: `apps/api/src/modules/auth/` now validates Keycloak-issued JWTs (signature via JWKS, `exp`, `iss`, `aud`/`azp`), resolves roles/permissions, and enforces them via global GraphQL guards. See `apps/api/README.md`.
 - No React code talks to Keycloak yet (`apps/web/src/features/auth/` remains scaffolding) — still true.
 
-**Known gap surfaced by the backend integration**: this realm export does not configure an audience mapper adding `smartsense-api` to tokens issued to the `smartsense-web` client. The backend checks `aud` OR `azp` against `smartsense-api` (per `docs/authentication.md`'s claims table), but neither claim will match on a real `smartsense-web` login today — `azp` will be `smartsense-web`, and `aud` defaults to Keycloak's built-in `account` audience. Real end-to-end login will fail the audience check until this realm is updated with an audience mapper (or dedicated client scope) for `smartsense-api`. This is a realm/client configuration change to this same infrastructure, not a backend code change.
+~~**Known gap surfaced by the backend integration**: this realm export does not configure an audience mapper adding `smartsense-api` to tokens issued to the `smartsense-web` client~~ — **resolved (M7-T4)**: the realm export now includes an `oidc-audience-mapper` protocol mapper on `smartsense-web` that adds `smartsense-api` to the access token's `aud` claim, satisfying the backend's `aud`/`azp` check (`docs/authentication.md`'s claims table). Tokens from a real `smartsense-web` login pass audience validation.
 
 The remaining frontend integration work is Phase 3 of `docs/roadmap.md` / `TASKS.md`, and follows the design already recorded in `docs/authentication.md`.
 
@@ -117,10 +117,10 @@ Both match the client posture already designed in `docs/authentication.md`'s "Ke
 
 Two users are seeded for verification purposes:
 
-| Username                        | Password (dev only) | Group       | Purpose                                                                                                                                                                            |
-| ------------------------------- | ------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `admin@smartsense.local`        | `Admin@12345`       | `/Admins`   | The one admin user requested (requirement #8) — used to verify Admin login.                                                                                                        |
-| `partner.test@smartsense.local` | `Partner@12345`     | `/Partners` | Additional test user (beyond the explicit admin requirement) so role/group mapping can be verified end-to-end for a non-admin role, per requirement #11's "test user login works". |
+| Username                                       | Password (dev only) | Group       | Purpose                                                                                                                                                                            |
+| ---------------------------------------------- | ------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yash.lakhani+admin@smartsensesolutions.com`   | `Admin@12345`       | `/Admins`   | The one admin user requested (requirement #8) — used to verify Admin login.                                                                                                        |
+| `yash.lakhani+partner@smartsensesolutions.com` | `Partner@12345`     | `/Partners` | Additional test user (beyond the explicit admin requirement) so role/group mapping can be verified end-to-end for a non-admin role, per requirement #11's "test user login works". |
 
 **These credentials are committed in plaintext in the realm export file and are for local development only.** They must never be reused in any shared or internet-reachable environment. Staging/production Keycloak provisioning is out of scope for this milestone (see `docs/authentication.md`'s environment table) and would use a proper admin-created account, not a checked-in password.
 
@@ -267,17 +267,17 @@ Verified via the Resource Owner Password Credentials grant against the built-in 
 ```bash
 $ curl -s -X POST http://localhost:8080/realms/smartsense-marketplace/protocol/openid-connect/token \
     -d grant_type=password -d client_id=admin-cli \
-    -d username=admin@smartsense.local -d password='Admin@12345'
+    -d username=yash.lakhani+admin@smartsensesolutions.com -d password='Admin@12345'
 # → 200 OK, valid access_token returned
 ```
 
 Cross-checked via the Admin REST API that the authenticated identity resolves to the expected group/role:
 
 ```
-admin@smartsense.local | enabled=True | emailVerified=True | groups=['/Admins'] | effective realm roles=['Admin']
+yash.lakhani+admin@smartsensesolutions.com | enabled=True | emailVerified=True | groups=['/Admins'] | effective realm roles=['Admin']
 ```
 
-Also verified that the Keycloak **admin console** itself is reachable using the bootstrap admin credentials (`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`, both `admin` — master realm, separate from the application realm's `admin@smartsense.local` user):
+Also verified that the Keycloak **admin console** itself is reachable using the bootstrap admin credentials (`KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD`, both `admin` — master realm, separate from the application realm's `yash.lakhani+admin@smartsensesolutions.com` user):
 
 ```bash
 $ curl -s -X POST http://localhost:8080/realms/master/protocol/openid-connect/token \
@@ -290,12 +290,12 @@ $ curl -s -X POST http://localhost:8080/realms/master/protocol/openid-connect/to
 ```bash
 $ curl -s -X POST http://localhost:8080/realms/smartsense-marketplace/protocol/openid-connect/token \
     -d grant_type=password -d client_id=admin-cli \
-    -d username=partner.test@smartsense.local -d password='Partner@12345'
+    -d username=yash.lakhani+partner@smartsensesolutions.com -d password='Partner@12345'
 # → 200 OK, valid access_token returned
 ```
 
 ```
-partner.test@smartsense.local | enabled=True | emailVerified=True | groups=['/Partners'] | effective realm roles=['Partner']
+yash.lakhani+partner@smartsensesolutions.com | enabled=True | emailVerified=True | groups=['/Partners'] | effective realm roles=['Partner']
 ```
 
 > **Note on token content:** tokens issued to the built-in `admin-cli` client carry a minimal scope (`profile email`) in this realm and don't include `sub`/`realm_access` claims in the JWT body itself — that's a property of `admin-cli`'s own default client scopes, not of `smartsense-web`/`smartsense-api` or of the users/roles/groups themselves (confirmed independently and correctly via the Admin REST API above). This does not affect Phase 3 integration, which will use `smartsense-web` (full standard flow, full default scopes) for real logins.
@@ -312,11 +312,11 @@ partner.test@smartsense.local | enabled=True | emailVerified=True | groups=['/Pa
 - [x] Client `smartsense-api` exists as a confidential, bearer-only client.
 - [x] Realm roles `Admin`, `Partner`, `Customer` exist.
 - [x] Groups `/Admins`, `/Partners`, `/Customers` exist, each granting the matching realm role.
-- [x] One admin user (`admin@smartsense.local`) exists, enabled, in `/Admins`.
+- [x] One admin user (`yash.lakhani+admin@smartsensesolutions.com`) exists, enabled, in `/Admins`.
 - [x] Environment variables documented and added to `apps/api/.env.example` and `apps/web/.env.example`.
 - [x] Keycloak admin console login works (master realm, bootstrap admin).
 - [x] Admin user login works (`smartsense-marketplace` realm, password grant).
-- [x] Test user login works (`partner.test@smartsense.local`, `/Partners` group, `Partner` role resolved correctly).
+- [x] Test user login works (`yash.lakhani+partner@smartsensesolutions.com`, `/Partners` group, `Partner` role resolved correctly).
 - [x] No NestJS or React authentication code was added.
 
 ---
@@ -325,11 +325,11 @@ partner.test@smartsense.local | enabled=True | emailVerified=True | groups=['/Pa
 
 - ~~NestJS `AuthModule` reading/validating any Keycloak-issued token~~ — done, see `apps/api/README.md`.
 - React `features/auth` calling Keycloak or handling redirects — still pending.
-- Adding an audience mapper so `smartsense-web`-issued tokens carry `smartsense-api` in `aud` — needed for real end-to-end login once the frontend lands; see the Known Gap note above.
+- ~~Adding an audience mapper so `smartsense-web`-issued tokens carry `smartsense-api` in `aud`~~ — done with M7-T4; the realm export now configures it (see the resolved note above).
 - Realm/client provisioning for staging or production (separate Keycloak deployment, per `docs/authentication.md`'s environment table).
 - Rotating the placeholder `smartsense-api` client secret or the seeded user passwords — required before this configuration is ever used outside a local machine.
 
-The frontend integration and the audience mapper are addressed in Phase 3 of `docs/roadmap.md` / `TASKS.md`, building directly on the design in `docs/authentication.md` and the infrastructure provisioned here.
+The frontend integration is addressed in Phase 3 of `docs/roadmap.md` / `TASKS.md`, building directly on the design in `docs/authentication.md` and the infrastructure provisioned here.
 
 ---
 

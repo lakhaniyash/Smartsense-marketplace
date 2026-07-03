@@ -25,7 +25,7 @@ describe('RolesGuard', () => {
   const adminUser: AuthenticatedUser = {
     id: 'user-1',
     keycloakSubjectId: 'kc-1',
-    email: 'admin@smartsense.example',
+    email: 'yash.lakhani+admin@smartsensesolutions.com',
     fullName: 'Admin',
     status: UserStatus.ACTIVE,
     roles: ['Admin'],

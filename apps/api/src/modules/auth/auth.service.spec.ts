@@ -17,7 +17,7 @@ describe('AuthService', () => {
   const activeUser = {
     id: 'user-1',
     keycloakSubjectId: 'kc-sub-1',
-    email: 'admin@smartsense.example',
+    email: 'yash.lakhani+admin@smartsensesolutions.com',
     fullName: 'Admin User',
     status: UserStatus.ACTIVE,
   }
@@ -25,7 +25,7 @@ describe('AuthService', () => {
   const payload: KeycloakJwtPayload = {
     sub: 'kc-sub-1',
     iss: 'http://localhost:8080/realms/smartsense-marketplace',
-    email: 'admin@smartsense.example',
+    email: 'yash.lakhani+admin@smartsensesolutions.com',
     realm_access: { roles: ['Admin'] },
     exp: Math.floor(Date.now() / 1000) + 900,
     iat: Math.floor(Date.now() / 1000),
@@ -69,7 +69,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         id: 'user-1',
         keycloakSubjectId: 'kc-sub-1',
-        email: 'admin@smartsense.example',
+        email: 'yash.lakhani+admin@smartsensesolutions.com',
         fullName: 'Admin User',
         status: UserStatus.ACTIVE,
         roles: ['Admin'],

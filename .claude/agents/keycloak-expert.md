@@ -25,9 +25,9 @@ Keycloak↔Postgres role sync, and the deny-by-default permission model on both 
 - Design frontend auth (M8): auth service as sole `keycloak-js` importer, in-memory tokens,
   proactive + reactive silent refresh, Apollo auth/error links, logout with cache reset and
   Keycloak end-session.
-- Track known gaps: the realm export lacks an audience mapper adding `smartsense-api` to
-  `smartsense-web` tokens — real end-to-end login fails the audience check until fixed
-  (`docs/keycloak-setup.md`, Known Gap).
+- Know the realm's implemented wiring: an `oidc-audience-mapper` on `smartsense-web` adds
+  `smartsense-api` to token `aud` (M7-T4 — resolved, no longer a gap); seeded test users use
+  plus-addressed `yash.lakhani+<label>@smartsensesolutions.com` emails.
 
 ## Inputs
 

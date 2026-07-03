@@ -131,7 +131,7 @@ apps/web/
 │   │   ├── services/
 │   │   ├── types/
 │   │   └── utils/
-│   ├── styles/                        # Global Tailwind entry (index.css)
+│   ├── styles/                        # Reserved for global styles (Tailwind entry lives at src/index.css)
 │   ├── types/                          # Global ambient/module-level types
 │   ├── App.tsx                          # Composes Providers + AppRouter
 │   ├── main.tsx                          # React root mount

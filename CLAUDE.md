@@ -95,6 +95,9 @@ Full mechanics: `docs/git-workflow.md`, `docs/developer-setup.md`, `.claude/cont
 - Generate only the requested scope; avoid unrelated drive-by changes.
 - Fail closed: missing config aborts boot; unknown roles are ignored; deny by default.
 - Never log or commit secrets, tokens, or PII; `.env` files stay untracked.
+- Every email anywhere in the project (test data, seeds, Keycloak users, fixtures, docs) is
+  `yash.lakhani+<label>@smartsensesolutions.com` (plus-addressing) — never fake domains like
+  `@example.com` or `@smartsense.local`.
 - Promote, don't pre-share: code moves to `shared/`/`packages/*` on the second real consumer.
 - `npm` only — a `pnpm-lock.yaml` or `yarn.lock` is a defect.
 

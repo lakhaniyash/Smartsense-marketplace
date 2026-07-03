@@ -30,7 +30,7 @@ describe('JwtStrategy', () => {
   const resolvedUser = {
     id: 'user-1',
     keycloakSubjectId: 'kc-sub-1',
-    email: 'a@b.com',
+    email: 'yash.lakhani+test@smartsensesolutions.com',
     fullName: 'A B',
     status: UserStatus.ACTIVE,
     roles: [],

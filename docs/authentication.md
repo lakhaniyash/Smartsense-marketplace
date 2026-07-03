@@ -15,7 +15,7 @@ It builds directly on decisions already made elsewhere in the repo rather than r
 - **RBAC is permission-based, not role-string-based** (`canViewOrders()`, never `role === "Admin"`) — `docs/architecture.md`.
 - **The `User`/`Role`/`Permission`/`UserRole`/`RolePermission` schema already exists** in `database/prisma/schema.prisma` and is documented in `docs/database-schema.md`. `User.keycloakSubjectId` is the join key between Keycloak identity and the application's authorization data — it is _not_ a placeholder to design around, it's already there waiting to be populated by a real login.
 - **Frontend feature-based architecture**: auth UI/state lives in `apps/web/src/features/auth/`, route guards in `apps/web/src/app/guards/`, Apollo Client wiring in `apps/web/src/lib/apollo/` — `docs/folder-structure.md` conventions, folders already scaffolded.
-- **Backend module structure**: `apps/api/src/modules/auth/` implements this document's [Backend Auth Module Responsibilities](#backend-auth-module-responsibilities) — see `apps/api/README.md`'s Authentication & Authorization section for the concrete guard/decorator API and known gaps (notably: the local Keycloak realm doesn't yet configure an audience mapper for `smartsense-api`, so real `smartsense-web`-issued tokens will fail the audience check until that realm change ships).
+- **Backend module structure**: `apps/api/src/modules/auth/` implements this document's [Backend Auth Module Responsibilities](#backend-auth-module-responsibilities) — see `apps/api/README.md`'s Authentication & Authorization section for the concrete guard/decorator API. (The audience-mapper gap originally noted here is resolved: the realm export configures an `oidc-audience-mapper` adding `smartsense-api` to `smartsense-web` tokens — M7-T4, `docs/keycloak-setup.md`.)
 - **Roadmap**: the frontend half (`apps/web/src/features/auth/`) of Phase 3 in `docs/roadmap.md` / `TASKS.md` remains unimplemented.
 
 This document was originally written as architecture-only (no code); it has since been implemented on the backend as described above. The flows, diagrams, and configuration contracts below remain the source of truth for behavior — this file was not rewritten around the implementation, only its status header and cross-references were updated.
@@ -165,7 +165,7 @@ Beyond the token itself, `User.status` is re-checked against Postgres on every r
 
 ## Role Mapping
 
-Keycloak realm roles are the transport; Postgres `Role`/`UserRole` rows are what the application actually queries. Mapping happens once, at provisioning/login time, not on every request.
+Keycloak realm roles are the transport; Postgres `Role`/`UserRole` rows are what the application actually queries. As implemented, the sync runs inside `AuthService.validateAndProvisionUser` — i.e. whenever a token is validated (every authenticated request), upserting only missing `UserRole` rows; the upsert is cheap and idempotent, but it is per-request, not once-at-login.
 
 ```mermaid
 sequenceDiagram
@@ -190,7 +190,7 @@ Rules:
 - **Keycloak realm role names must exactly match `Role.name`** for the three system roles (`Admin`, `Partner`, `Customer`) — this is the join key. Renaming a role in Keycloak without a corresponding Postgres migration breaks the mapping by design (fail closed, per the flow above), which is preferable to silently granting the wrong access.
 - **A user can hold multiple roles** (already modeled: `User ↔ Role` is many-to-many via `UserRole`, per `docs/domain-model.md`'s "Billing Manager and Catalog Editor" example) — a Keycloak user can have multiple realm roles, and each maps independently.
 - **Custom, non-system roles** (`isSystemRole: false`) are managed entirely in Postgres by an Admin through the application (not by editing Keycloak) — they're a composition of existing `Permission`s and don't require a new Keycloak realm role per custom role. This keeps "future roles should be easy to add" (`docs/requirements.md`) true without IdP configuration changes.
-- Role sync happens **on login and on token refresh**, not via a Keycloak webhook — simpler operationally for v1, at the cost of role changes taking effect on the user's next token refresh rather than instantly. Acceptable given access tokens are short-lived (10–15 min).
+- Role sync happens **during token validation** (every authenticated request, as implemented — see above), not via a Keycloak webhook — simpler operationally for v1. Keycloak-side role changes still only reach the token on the next refresh, so they take effect within one access-token lifetime (10–15 min).
 
 ---
 
