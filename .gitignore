@@ -15,9 +15,6 @@ build/
 # Turborepo
 .turbo/
 
-# GraphQL generated types — regenerated via `npm run codegen`
-apps/web/src/lib/graphql/__generated__/
-
 # GraphQL schema — auto-generated at runtime
 apps/api/src/schema.gql
 
