@@ -22,7 +22,7 @@ describe('PermissionGuard', () => {
   const user: AuthenticatedUser = {
     id: 'user-1',
     keycloakSubjectId: 'kc-1',
-    email: 'partner@smartsense.example',
+    email: 'yash.lakhani+partner@smartsensesolutions.com',
     fullName: 'Partner',
     status: UserStatus.ACTIVE,
     roles: ['Partner'],

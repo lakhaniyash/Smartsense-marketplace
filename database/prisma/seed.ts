@@ -123,11 +123,11 @@ async function seedAdminUser() {
   // (infrastructure/keycloak/realm-export/) so first login attaches this
   // pending row's placeholder keycloakSubjectId to the real one.
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@smartsense.local' },
+    where: { email: 'yash.lakhani+admin@smartsensesolutions.com' },
     update: { status: 'ACTIVE' },
     create: {
       keycloakSubjectId: 'seed-admin-0000-0000-0000',
-      email: 'admin@smartsense.local',
+      email: 'yash.lakhani+admin@smartsensesolutions.com',
       fullName: 'Platform Admin',
       status: 'ACTIVE',
       ownerType: 'NONE',
@@ -154,7 +154,7 @@ async function seedSamplePartner() {
       legalName: 'Acme Supplies Pvt Ltd',
       displayName: 'Acme Supplies',
       status: 'ACTIVE',
-      contactEmail: 'contact@acme-supplies.example',
+      contactEmail: 'yash.lakhani+acme-contact@smartsensesolutions.com',
       taxId: 'ACME-TAX-0001',
       registrationNumber: 'ACME-REG-0001',
       commissionRate: '15.00',
@@ -163,11 +163,11 @@ async function seedSamplePartner() {
   });
 
   const staffUser = await prisma.user.upsert({
-    where: { email: 'staff@acme-supplies.example' },
+    where: { email: 'yash.lakhani+partner@smartsensesolutions.com' },
     update: { status: 'ACTIVE', partnerId: partner.id },
     create: {
       keycloakSubjectId: 'seed-partner-staff-0000-0001',
-      email: 'staff@acme-supplies.example',
+      email: 'yash.lakhani+partner@smartsensesolutions.com',
       fullName: 'Acme Supplies Staff',
       status: 'ACTIVE',
       ownerType: 'PARTNER',

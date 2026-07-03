@@ -26,7 +26,7 @@ describe('Auth pipeline (e2e)', () => {
   let privateKey: KeyObject
   let originalJwksUri: string | undefined
 
-  const TEST_USER_EMAIL = 'auth-e2e-test-user@smartsense.example'
+  const TEST_USER_EMAIL = 'yash.lakhani+auth-e2e@smartsensesolutions.com'
   let testUserId: string
 
   function signToken(overrides: Partial<Record<string, unknown>> = {}): string {
@@ -149,7 +149,10 @@ describe('Auth pipeline (e2e)', () => {
   })
 
   it('rejects a fully valid token for an identity with no provisioned account', async () => {
-    const token = signToken({ sub: 'kc-sub-nobody', email: 'nobody@smartsense.example' })
+    const token = signToken({
+      sub: 'kc-sub-nobody',
+      email: 'yash.lakhani+nobody@smartsensesolutions.com',
+    })
     const res = await request(app.getHttpServer())
       .post('/graphql')
       .set('Authorization', `Bearer ${token}`)

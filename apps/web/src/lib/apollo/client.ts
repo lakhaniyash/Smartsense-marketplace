@@ -1,7 +1,8 @@
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client'
+import { appConfig } from '@shared/config'
 
 const httpLink = createHttpLink({
-  uri: import.meta.env.VITE_GRAPHQL_URL ?? '/graphql',
+  uri: appConfig.graphqlUrl,
 })
 
 export const apolloClient = new ApolloClient({

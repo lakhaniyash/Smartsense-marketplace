@@ -14,7 +14,7 @@ describe('PermissionService', () => {
   const user = (permissions: string[]): AuthenticatedUser => ({
     id: 'user-1',
     keycloakSubjectId: 'kc-1',
-    email: 'a@b.com',
+    email: 'yash.lakhani+test@smartsensesolutions.com',
     fullName: 'A B',
     status: UserStatus.ACTIVE,
     roles: [],

@@ -1,16 +1,371 @@
-Read all documentation.
+# SmartSense Marketplace — Deployment & Operations Guide
 
-Generate docs/deployment.md.
+Version: 1.0
 
-Document:
+---
 
-- GitHub Actions
-- Build pipeline
-- Environments
-- Secrets
-- Versioning
-- Release strategy
-- CI/CD
-- Deployment checklist
+## Purpose
 
-No application code.
+### Goals
+
+- Define how SmartSense Marketplace is configured, built, deployed, verified, and recovered — one authoritative reference for anyone standing up, upgrading, or debugging a running environment.
+- Make every deployment reproducible: the same inputs (commit, environment variables, database state) always produce the same running system, with no undocumented manual steps.
+- Separate what is **implemented today** (local Docker Compose) from what is **defined-but-not-yet-provisioned** (QA/Staging/Production environments, monitoring, backups), so this document stays honest as the operational footprint grows.
+
+### Scope
+
+This document covers **deployment and operations**: environments, build artifacts, container orchestration, configuration, releases, health verification, and recovery. It does not repeat what other documents own:
+
+| Already covered elsewhere                                                                   | See                                                   |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Application architecture, layering, frontend/backend responsibilities                       | [architecture.md](./architecture.md)                  |
+| Repository layout, workspace structure, where infrastructure files live                     | [folder-structure.md](./folder-structure.md)          |
+| Authentication flows, JWT validation, required auth environment variables (the full tables) | [authentication.md](./authentication.md)              |
+| Prisma schema, migration content, constraint verification, seed data contents               | [database-schema.md](./database-schema.md)            |
+| Keycloak realm contents, clients, roles/groups, local startup and verification steps        | [keycloak-setup.md](./keycloak-setup.md)              |
+| Testing strategy, the CI test-stage gap, smoke/e2e test definitions                         | [testing.md](./testing.md)                            |
+| GraphQL production posture (introspection/playground off in production)                     | [graphql.md](./graphql.md#12-security-considerations) |
+
+**Assumptions made explicit.**
+
+1. **The only deployment target that exists today is local Docker Compose** (`infrastructure/docker/docker-compose.yml`, plus the API-focused `apps/api/docker-compose.yml`). No cloud infrastructure, DNS, TLS termination, reverse proxy, QA/Staging/Production environment, monitoring stack, or backup job has been provisioned. Sections describing those are **target conventions**, labeled as such, so the eventual implementation follows a documented plan instead of improvisation.
+2. **The frontend has no container image yet.** `apps/web` builds to static assets via Vite (`npm run build`); no `apps/web/Dockerfile` exists and no serving strategy (nginx container, CDN/static hosting) has been chosen. This is a stated open decision, revisited in [Future Enhancements](#future-enhancements).
+3. **A known Docker build fix is not yet merged.** The API image must be built with the **monorepo root as the Docker build context** (the API depends on `database/prisma/schema.prisma` and `packages/*`, both outside `apps/api` — see [folder-structure.md](./folder-structure.md#root-layout)). A commit fixing the Dockerfile and both compose files to use `context: ../..` + `dockerfile: apps/api/Dockerfile` (with a root `.dockerignore`) exists on the `chore/claude-agents` branch but has not reached `development` at the time of writing — the compose files on `development` still use `apps/api` as the context and **will fail to build** (`prisma:generate` cannot see the schema). This document describes the corrected, verified convention; treat merging that fix as a prerequisite for any Docker-based deployment.
+
+### Deployment Philosophy
+
+- **Containers everywhere beyond a developer's laptop.** The unit of deployment is a Docker image, not a directory of source files on a host.
+- **Configuration through the environment, never through the image.** One image serves every environment; behavior differences come exclusively from environment variables ([Environment Configuration](#environment-configuration)). An image rebuilt "for staging" is a process failure.
+- **Fail closed on misconfiguration.** The API refuses to boot if required variables are missing or malformed — enforced by the Joi `validationSchema` in `apps/api/src/config/validation.schema.ts`. A misconfigured deployment dies loudly at startup, not quietly at the first request.
+- **Roll forward by default, roll back by exception.** Additive database migrations and additive schema evolution ([graphql.md § 14](./graphql.md#14-versioning--deprecation)) mean most bad releases are fixed by deploying the corrected next version, not by restoring the previous one — see [Release Strategy § Rollback](#release-strategy).
+
+---
+
+## Deployment Architecture
+
+The deployed system is four long-running services plus (eventually) a reverse proxy and the statically served frontend:
+
+```mermaid
+flowchart TD
+    U["Browser (SPA user)"] --> RP["Reverse Proxy / TLS termination<br/>(future — not yet provisioned)"]
+    RP --> WEB["Web Application<br/>apps/web static build<br/>(serving strategy TBD)"]
+    RP --> API["Backend API<br/>NestJS container, port 3000<br/>/graphql + /health"]
+    RP --> KC["Keycloak 26.0<br/>port 8080<br/>realm: smartsense-marketplace"]
+
+    API --> DB[("PostgreSQL 17<br/>smartsense_marketplace<br/>volume: postgres_data")]
+    API -- "JWKS fetch (token validation)" --> KC
+    KC --> KCDB[("PostgreSQL 17<br/>keycloak<br/>volume: keycloak_db_data")]
+    WEB -. "GraphQL over HTTPS" .-> API
+    WEB -. "OIDC redirect flow" .-> KC
+
+    subgraph Docker["Docker Compose network (infrastructure/docker/docker-compose.yml)"]
+        API
+        KC
+        DB
+        KCDB
+    end
+```
+
+Key structural decisions, stated once:
+
+- **Two isolated PostgreSQL instances.** The application database (`db`) and Keycloak's database (`keycloak-db`) are separate containers with separate volumes — identity data and business data never share a database, per [authentication.md § Security Best Practices Checklist](./authentication.md#security-best-practices-checklist). (Whether production uses two instances or two databases in one managed cluster is an open question carried in [authentication.md § Open Questions](./authentication.md#open-questions).)
+- **The browser talks to Keycloak directly** for login (OIDC redirect flow) and to the API for everything else; the API talks to Keycloak only to fetch the JWKS document for token validation — full flow in [authentication.md](./authentication.md#complete-authentication-flow-login).
+- **Startup ordering is dependency-driven**: the API container starts only after both `db` and `keycloak` report healthy (`depends_on` with `condition: service_healthy`), because it validates its configuration and needs both reachable at boot.
+
+---
+
+## Supported Environments
+
+| Environment              | Status             | Purpose                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local Development**    | ✅ Implemented     | A developer's machine: apps run via `npm run dev` (Turborepo watch mode) against Dockerized `db`/`keycloak`, or the full stack via Compose. The only environment with hot reload, GraphQL Playground, and seeded dev credentials.                                                                       |
+| **Development (shared)** | ⬜ Not provisioned | A continuously deployed instance of the `development` branch for integration by the team — first target once hosting exists. Runs with introspection on, relaxed data retention, disposable database.                                                                                                   |
+| **QA**                   | ⬜ Not provisioned | A stable build handed to testers per release candidate; refreshed on demand, seeded with representative (never production) data. Playwright suites ([testing.md § End-to-End Testing](./testing.md#end-to-end-testing)) run here against a deployed build.                                              |
+| **Staging**              | ⬜ Not provisioned | Production configuration rehearsal: same topology, same secrets _mechanism_ (not the same secrets), production-like data volume. The gate every release passes through before production — also the target for deployed smoke tests per [testing.md § Test Environment](./testing.md#test-environment). |
+| **Production**           | ⬜ Not provisioned | The live system. Introspection and Playground off ([graphql.md § 12](./graphql.md#12-security-considerations)), TLS everywhere, secrets from a secrets manager, backups and monitoring active.                                                                                                          |
+
+Environment-specific behavior differences are expressed **only** through the environment variables in [Environment Configuration](#environment-configuration) — never through code branches on environment names beyond what `NODE_ENV` already controls.
+
+---
+
+## Infrastructure Components
+
+| Component                  | Deployment responsibility                                                                                                                                                                                                                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **React Application**      | Static asset bundle produced by `npm run build -w @smartsense/web` (Vite). Environment values are baked at build time via `VITE_*` variables — meaning the frontend, unlike the API, needs one build per environment (or a runtime-config injection pattern, a future decision).                                                                   |
+| **NestJS API**             | The single stateful-process-free backend container ([apps/api/Dockerfile](../apps/api/Dockerfile), multi-stage `node:22-alpine`). Serves `/graphql` and `/health` on port 3000. Horizontally scalable — see [Scaling Strategy](#scaling-strategy).                                                                                                 |
+| **PostgreSQL**             | `postgres:17-alpine` (pinned major version — matches what the schema's constraints were verified against, per [database-schema.md](./database-schema.md#constraints-added-by-hand-to-the-migration)). Owns the only irreplaceable state in the system.                                                                                             |
+| **Prisma**                 | Not a runtime service — a build-time (client generation) and deploy-time (migrations) tool. The generated client ships inside the API image; migrations run as a deploy step ([Database Deployment](#database-deployment)).                                                                                                                        |
+| **Keycloak**               | `quay.io/keycloak/keycloak:26.0`, imports the realm from `infrastructure/keycloak/realm-export/` on startup. Full configuration in [keycloak-setup.md](./keycloak-setup.md).                                                                                                                                                                       |
+| **Docker**                 | The packaging format for every backend service. Images are immutable per release ([Release Strategy](#release-strategy)).                                                                                                                                                                                                                          |
+| **Docker Compose**         | The orchestrator for local development and (initially) single-host deployments — `infrastructure/docker/docker-compose.yml` is the full-stack definition; `apps/api/docker-compose.yml` is the API-workspace convenience variant ([folder-structure.md § infrastructure](./folder-structure.md#infrastructure--local--deployment-infrastructure)). |
+| **Reverse Proxy (future)** | Not yet chosen or provisioned. Target responsibilities when introduced: TLS termination, routing (`/` → web assets, `/graphql`+`/health` → API, `/realms/*` → Keycloak), compression, and the natural insertion point for rate limiting ([graphql.md § 12](./graphql.md#12-security-considerations)).                                              |
+
+---
+
+## Environment Configuration
+
+### `.env` Strategy
+
+| File                          | Committed?               | Purpose                                                                                                                                                                                                                      |
+| ----------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api/.env.example`       | ✅ Yes                   | The authoritative list of every API variable with safe dev defaults — updated in the same PR as any config change.                                                                                                           |
+| `apps/api/.env`               | ❌ Never                 | A developer's local values, copied from the example.                                                                                                                                                                         |
+| `apps/web/.env.example`       | ✅ Yes                   | Same contract for the frontend's `VITE_*` variables.                                                                                                                                                                         |
+| `apps/web/.env.local`         | ❌ Never                 | Local frontend values.                                                                                                                                                                                                       |
+| Compose `environment:` blocks | ✅ Yes (dev values only) | Local-stack wiring. The values checked in (e.g. `smartsense-api-dev-secret-change-me`, `postgres`/`password`, Keycloak `admin`/`admin`) are **deliberately dev-only placeholders** — no deployed environment may reuse them. |
+
+### Secrets
+
+- A secret (database password, `KEYCLOAK_API_CLIENT_SECRET`, Keycloak admin credentials) is never committed with a real value and never baked into an image — in deployed environments it is injected at runtime from the platform's secret store (GitHub Actions secrets for CI, a secrets manager for hosting, per [authentication.md § Security Best Practices Checklist](./authentication.md#security-best-practices-checklist)).
+- The frontend bundle contains **no secrets by construction** — every `VITE_*` value is public configuration (URLs, realm/client identifiers); the SPA is a public OIDC client with no client secret ([authentication.md § Keycloak Realm & Client Topology](./authentication.md#keycloak-realm--client-topology)).
+
+### Configuration Loading
+
+The API reads `process.env` in exactly one place — `apps/api/src/config/configuration.ts` — validated at boot by the Joi schema in `validation.schema.ts` (required variables, type/range checks, defaults). The frontend equivalently centralizes `import.meta.env` access per [architecture.md § Environment Configuration](./architecture.md#environment-configuration). A deployment that omits a required variable fails at container start with a named validation error, which is the intended behavior.
+
+### Environment Variable Naming
+
+| Convention                                                                  | Example                                                                    |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `SCREAMING_SNAKE_CASE`, prefixed by subsystem                               | `KEYCLOAK_URL`, `KEYCLOAK_JWKS_CACHE_TTL_SECONDS`, `GRAPHQL_INTROSPECTION` |
+| Frontend variables prefixed `VITE_` (Vite exposes only these to the bundle) | `VITE_GRAPHQL_URL`, `VITE_KEYCLOAK_REALM`                                  |
+| Booleans as `'true'`/`'false'` strings, parsed centrally                    | `GRAPHQL_PLAYGROUND=false`                                                 |
+
+The complete variable tables (name, meaning, per-environment values) for auth-related configuration live in [authentication.md § Required Environment Variables](./authentication.md#required-environment-variables) — this document does not duplicate them.
+
+---
+
+## Build Process
+
+```mermaid
+flowchart TD
+    SRC["Source checkout (one commit)"] --> INSTALL["npm ci (workspace root)"]
+    INSTALL --> PRISMA["prisma generate<br/>(client from database/prisma/schema.prisma)"]
+    PRISMA --> BUILDAPI["Backend build<br/>nest build → apps/api/dist"]
+    INSTALL --> BUILDWEB["Frontend build<br/>tsc -b && vite build → apps/web/dist<br/>(VITE_* baked in per environment)"]
+    BUILDAPI --> IMG["Docker image<br/>apps/api/Dockerfile, context = monorepo root<br/>multi-stage: builder → production (prod deps only)"]
+    BUILDWEB --> ART2["Static asset artifact<br/>(serving strategy TBD)"]
+    IMG --> ART1["Tagged image artifact<br/>(registry push — future)"]
+```
+
+Order and rationale:
+
+1. **`npm ci` at the workspace root** — installs every workspace's dependencies from the single lockfile. Never `npm install` in CI/builds (non-reproducible).
+2. **Prisma client generation before any TypeScript build** — the API's code imports `@prisma/client` types; building without generating first fails typecheck (this is why CI generates the client as its second step, per `.github/workflows/ci.yml`).
+3. **Backend and frontend builds are independent** and can run in parallel (Turborepo's task graph already models this — `turbo run build`).
+4. **The API image build repeats these steps inside Docker** (multi-stage): the `builder` stage runs `npm ci` + `prisma:generate` + `nest build`; the `production` stage re-installs with `--omit=dev` and copies only `dist`, the generated Prisma client, and production `node_modules` — dev toolchain never ships. The build context **must be the monorepo root** (Assumption 3 in [Purpose](#purpose)).
+5. **Deployment artifacts** are: one tagged API image + one frontend static bundle per environment + the migration files already in the repo. Nothing else is produced or needed.
+
+---
+
+## Docker Strategy
+
+Current, checked-in behavior of `infrastructure/docker/docker-compose.yml` (and its `apps/api/` twin):
+
+| Concern              | Convention                                                                                                                                                                                                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Containers**       | `api` (built), `db`, `keycloak-db`, `keycloak` (pulled, version-pinned images: `postgres:17-alpine`, `keycloak:26.0`). Image tags are always pinned to at least a major version — never `latest`.                                                                                                                       |
+| **Networks**         | The single default Compose network; services address each other by service name (`db`, `keycloak`) — which is why `KEYCLOAK_URL=http://keycloak:8080` inside the stack differs from `http://localhost:8080` outside it (a recurring troubleshooting item, see [Troubleshooting](#troubleshooting)).                     |
+| **Volumes**          | Exactly two named volumes, both for database state: `postgres_data`, `keycloak_db_data`. Application containers are stateless and own no volumes. The realm export is a **read-only bind mount** (`realm-export:/opt/keycloak/data/import:ro`) — configuration flows from the repo into Keycloak, never back.           |
+| **Restart policies** | `restart: unless-stopped` on every service — a crashed service recovers automatically; a deliberately stopped one stays stopped.                                                                                                                                                                                        |
+| **Health checks**    | `db`/`keycloak-db`: `pg_isready` (10s interval, 5 retries). `keycloak`: TCP connect to 8080 (30s start period — Keycloak boots slowly). **Gap:** the `api` service defines no container healthcheck yet, despite `/health` existing — adding one (`curl -f http://localhost:3000/health`) is a small known improvement. |
+
+---
+
+## Database Deployment
+
+Schema content, constraint rationale, and seed data contents are owned by [database-schema.md](./database-schema.md) — this section covers only the _operational_ handling.
+
+### Prisma Migrations
+
+- **Local development:** `npm run prisma:migrate -w @smartsense/api` (`prisma migrate dev`) — creates and applies migrations, regenerates the client.
+- **Deployed environments:** `prisma migrate deploy` — applies pending, already-authored migrations only; it never generates, never prompts, never drifts. This is the only migration command that may run against a shared/production database.
+- Migrations run **as an explicit deploy step before the new API version starts serving traffic**, not implicitly at application boot — a migration failure must abort the deployment while the previous version keeps running, which is impossible if the new container migrates on startup.
+- Hand-written SQL sections inside migrations (the `CHECK`/exclusion constraints per [database-schema.md § Constraints Added by Hand](./database-schema.md#constraints-added-by-hand-to-the-migration)) deploy exactly like generated SQL — `migrate deploy` runs the file verbatim.
+
+### Seed Strategy
+
+`npm run prisma:seed -w @smartsense/api` populates reference data (system Roles, Permissions, seed admin — see [database-schema.md § Seed Data](./database-schema.md#seed-data)). Seeding is for **local/dev/QA database initialization only**; it is never run automatically in staging/production, where reference data changes ship as migrations or deliberate operational tasks instead.
+
+### Rollback Considerations
+
+Prisma has no down-migrations. The strategy is therefore **expand → migrate → contract**: a schema change ships in a backward-compatible form first (add the new column nullable, backfill, switch code, then remove the old column in a _later_ release), so the previous application version always still runs against the new schema. If a migration itself fails mid-deploy, the deployment aborts with the old version still serving; genuinely destructive recovery falls to [Backup & Recovery](#backup--recovery).
+
+### Backup Expectations
+
+Not yet implemented (no deployed environment exists). Target: automated daily `pg_dump` (or provider-managed snapshots) of the application database with a defined retention window, plus a backup taken immediately **before every production migration** — see [Backup & Recovery](#backup--recovery).
+
+---
+
+## Keycloak Deployment
+
+Realm contents, clients, roles, verification steps: [keycloak-setup.md](./keycloak-setup.md). Operationally:
+
+| Concern                  | Convention                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Realm import**         | The realm JSON is imported automatically at container start (`start-dev --import-realm` locally). Import is a _bootstrap_ mechanism: it does not overwrite an existing realm on restart — drift between the file and a long-running instance is resolved by re-export or reset ([keycloak-setup.md § Resetting to a clean state](./keycloak-setup.md#starting-the-environment)). Production uses `start` (not `start-dev`) with proper hostname/TLS settings — the dev command is not production-safe. |
+| **Client configuration** | Client changes (redirect URIs per environment, secret rotation) are made in the realm export file and re-imported/re-applied, keeping the repo the source of truth — exact-match redirect URIs per environment, no wildcards beyond local dev ([authentication.md § Security Best Practices Checklist](./authentication.md#security-best-practices-checklist)).                                                                                                                                        |
+| **Backup**               | Keycloak's state _is_ its database — backing up `keycloak-db` (same mechanism as the application database) is the backup. The realm export file in the repo is a configuration baseline, not a backup: it does not contain users created at runtime.                                                                                                                                                                                                                                                   |
+| **Version upgrades**     | Keycloak is pinned (`26.0`). Upgrades are deliberate: read the upgrade notes, back up `keycloak-db`, bump the tag in both compose files in one commit, verify login + JWKS fetch + the [keycloak-setup.md verification checklist](./keycloak-setup.md#verification-checklist) in a non-production environment first. Keycloak migrates its own schema on first boot of a new version — which is why the database backup precedes the upgrade.                                                          |
+
+---
+
+## CI/CD Strategy
+
+### Current State
+
+`.github/workflows/ci.yml` implements **CI only**: install → Prisma generate → lint → typecheck → build, on pushes/PRs to `main` and `development`. There is no test stage yet (gap documented in [testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)), no image build, and no deployment automation.
+
+### Target Pipeline
+
+```mermaid
+flowchart TD
+    A["Lint"] --> B["Typecheck"]
+    B --> C["Tests<br/>(unit + integration + Playwright,<br/>per testing.md's target pipeline)"]
+    C --> D["Build<br/>(web assets + api dist)"]
+    D --> E["Docker Image<br/>(build once, tag with version + commit SHA, push to registry)"]
+    E --> F["Deploy<br/>(migrate deploy → start new version)"]
+    F --> G["Smoke Tests<br/>(health checks + minimal e2e against the deployed instance)"]
+    G -->|pass| H["Release complete"]
+    G -->|fail| I["Halt promotion / roll back"]
+```
+
+Principles for the pipeline as it gets built out:
+
+- **Build once, promote many.** The image built for the release candidate is byte-identical in QA, staging, and production — only environment variables differ.
+- **Every stage gates the next.** A test failure never produces an image; a failed smoke test never marks a release complete.
+- **Deployment is triggered by promotion (a tag or approved release), not by every merge to `development`** — except the shared Development environment, which tracks `development` continuously once it exists.
+
+---
+
+## Release Strategy
+
+| Concern               | Convention                                                                                                                                                                                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Versioning**        | Semantic versioning (`MAJOR.MINOR.PATCH`), currently `0.0.1` across workspaces. Conventional Commits ([coding-standards.md § 13](./coding-standards.md#13-git--commit-message-standards)) make version bumps and changelogs derivable mechanically (`feat` → minor, `fix` → patch). Docker images are tagged with both the version and the commit SHA. |
+| **Release process**   | Work merges to `development` via PR ([coding-standards.md § Branch Naming](./coding-standards.md#branch-naming)); a release is a reviewed merge from `development` to `main` plus a version tag, which (once CD exists) triggers the pipeline above through staging to production.                                                                     |
+| **Rollback strategy** | Application rollback = redeploy the previous image tag (always possible because migrations are backward-compatible per [Database Deployment § Rollback Considerations](#database-deployment)). Database rollback = restore from backup, treated as an incident, not a routine operation. Roll forward is the default response to a bad release.        |
+| **Hotfix process**    | Branch `fix/...` from `main`, fix, PR back to `main`, release as a patch version through the same pipeline (staging is not skipped — it is fast, not optional), then merge `main` back into `development` so the fix is never lost in the next release.                                                                                                |
+
+---
+
+## Health Checks
+
+| Component    | Mechanism                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API**      | `GET /health` — NestJS Terminus (`apps/api/src/health/`). **Known gap:** the check list is currently empty (`health.check([])`) — it verifies the process is up and serving HTTP, but not that its dependencies are reachable. Target: add a Prisma/database indicator (and optionally a JWKS-reachability indicator) so `/health` fails when the API cannot actually serve requests. |
+| **Database** | Container level: `pg_isready` healthcheck in Compose. Application level: covered by the API's database indicator once added above.                                                                                                                                                                                                                                                    |
+| **Keycloak** | Container level: TCP healthcheck on 8080 (Compose). Keycloak's own health endpoints are enabled (`KC_HEALTH_ENABLED: 'true'`) for a richer check when a reverse proxy/orchestrator can consume them.                                                                                                                                                                                  |
+| **Frontend** | Static assets — "health" is the HTTP status of the serving layer plus a smoke test that the SPA boots and reaches the API ([testing.md](./testing.md#end-to-end-testing)).                                                                                                                                                                                                            |
+
+**Verification expectation after any deploy or restart:** all container healthchecks report healthy, `curl /health` returns 200, and a `{ authStatus }` GraphQL query succeeds — the same sequence as the local verification flow in [keycloak-setup.md § Verification](./keycloak-setup.md#verification).
+
+---
+
+## Monitoring
+
+Not yet implemented — no deployed environment exists to monitor. Target strategy, so tooling choices later slot into a plan:
+
+| Concern        | Target                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Logs**       | Containers log to stdout/stderr (already true — `LoggingService` extends `ConsoleLogger`); the platform aggregates them centrally with retention. What is logged (and never logged) is governed by [coding-standards.md § 11](./coding-standards.md#11-logging-standards) and [api-conventions.md § Logging](./api-conventions.md#logging) — correlation IDs, once implemented per that document, are what make aggregated logs traceable per request. |
+| **Metrics**    | Process-level (CPU/memory/restarts), HTTP-level (request rate, error rate, p95/p99 latency per GraphQL operation), and database-level (connections, slow queries) — the runtime counterpart of the performance concerns in [graphql.md § 13](./graphql.md#13-performance-guidelines).                                                                                                                                                                  |
+| **Alerts**     | Page-worthy: sustained health-check failure, error-rate spike, database unreachable, disk/volume near capacity, TLS certificate expiry. Alerts fire on symptoms users feel, not on every warning-level log line.                                                                                                                                                                                                                                       |
+| **Dashboards** | One per environment answering "is it healthy, what changed, what's trending" — service status, error rates, latency, and the most recent deploy markers side by side.                                                                                                                                                                                                                                                                                  |
+
+---
+
+## Backup & Recovery
+
+Nothing here is implemented yet (Assumption 1). Target conventions:
+
+| Concern               | Convention                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Database backups**  | Automated daily dumps/snapshots of the application database + an on-demand backup immediately before every production migration or Keycloak upgrade. Retention: rolling window (e.g. 30 days) plus longer-lived monthly archives — exact numbers to be set when provisioned.                                                                                                                                        |
+| **Keycloak backups**  | The `keycloak-db` database backs up on the same schedule and mechanism — it contains runtime users/sessions the realm export file does not ([Keycloak Deployment](#keycloak-deployment)).                                                                                                                                                                                                                           |
+| **Restore process**   | Documented, and **rehearsed before it's ever needed in anger**: restore the dump into a fresh instance, point a stack at it, run the health verification sequence. A backup that has never been restored is a hope, not a backup.                                                                                                                                                                                   |
+| **Disaster recovery** | The system's only irreplaceable state is the two databases. Everything else — images, realm config, migrations, infrastructure definitions — is reproducible from the Git repository and the image registry. DR is therefore: provision fresh infrastructure, restore the two databases, deploy the current release, re-point DNS. Recovery time/point objectives are to be defined when production is provisioned. |
+
+---
+
+## Security During Deployment
+
+| Concern                 | Convention                                                                                                                                                                                                                                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Secret management**   | Secrets injected at runtime from the platform's secret store; never in images, never in Git, never in logs ([Environment Configuration § Secrets](#environment-configuration)). Rotation is an expected operation, not an emergency — see [Operational Runbooks](#operational-runbooks).                                           |
+| **TLS expectations**    | HTTPS for all traffic in every environment beyond local dev ([architecture.md § Security](./architecture.md#security)); termination at the future reverse proxy. Keycloak in production runs with strict hostname settings and TLS — the local `KC_HTTP_ENABLED`/`KC_HOSTNAME_STRICT: 'false'` settings are dev-only.              |
+| **Least privilege**     | The API's database user gets DML on the application schema only — DDL rights are reserved for the migration step's credentials. The Keycloak DB user cannot touch the application database and vice versa. CI/CD credentials can deploy, not administer.                                                                           |
+| **Image security**      | Base images pinned (`node:22-alpine`, `postgres:17-alpine`, `keycloak:26.0`) and bumped deliberately. Production stage of the API image carries no dev dependencies or source — only `dist` and production `node_modules`. Target additions: a non-root `USER` in the Dockerfile and image vulnerability scanning in the pipeline. |
+| **Dependency scanning** | Target: automated dependency audit (Dependabot/`npm audit`) wired into CI so vulnerable transitive dependencies surface as PRs/failures, not surprises — consistent with [coding-standards.md](./coding-standards.md)'s "do not introduce unnecessary dependencies" posture.                                                       |
+
+---
+
+## Scaling Strategy
+
+| Concern                  | Position                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Horizontal scaling**   | The API is stateless by design — sessions live in the browser + Keycloak, request-scoped state dies with the request ([authentication.md § Session Management](./authentication.md#session-management)) — so it scales by running more containers behind the reverse proxy with no coordination. The frontend is static assets and scales trivially (CDN).                                                 |
+| **Stateless services**   | The invariant that keeps the above true, and therefore a deployment-time rule: no filesystem writes (uploads go to object storage when implemented, per [api-conventions.md § File Upload Strategy](./api-conventions.md#file-upload-strategy)), no in-process caches that must be shared (a future shared cache would be an external service, e.g. Redis), no sticky sessions ever required.              |
+| **Database scaling**     | Vertical first (PostgreSQL 17 goes far on one primary), guided by the indexing strategy in [database-schema.md § Indexing Strategy](./database-schema.md#indexing-strategy); read replicas only when a measured read-heavy bottleneck justifies the consistency trade-offs. Connection pooling (e.g. PgBouncer) becomes relevant as API replica count grows, since each replica holds its own Prisma pool. |
+| **Kubernetes readiness** | Not needed at current scale — Compose on a single host is the deliberate starting point. The design keeps the door open: stateless containers, health endpoints, env-only configuration, and pinned images are exactly the properties a later Kubernetes migration needs; nothing in the current setup assumes a single host except Compose itself.                                                        |
+
+---
+
+## Operational Runbooks
+
+All commands run from the repository root. `<compose>` = `docker compose -f infrastructure/docker/docker-compose.yml`.
+
+| Task                      | Procedure                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Restart services**      | Single service: `<compose> restart api`. Full stack: `<compose> down && <compose> up -d`. Data survives (named volumes); add `-v` to `down` **only** when deliberately destroying local state ([keycloak-setup.md § Resetting to a clean state](./keycloak-setup.md#starting-the-environment)).                                                          |
+| **Apply migrations**      | Local: `npm run prisma:migrate -w @smartsense/api`. Deployed: back up first, then `npx prisma migrate deploy` with the environment's `DATABASE_URL` (via the migration-privileged credentials), then restart/deploy the API.                                                                                                                             |
+| **Seed database**         | `npm run prisma:seed -w @smartsense/api` — local/dev/QA only, never staging/production ([Database Deployment § Seed Strategy](#database-deployment)).                                                                                                                                                                                                    |
+| **Rotate secrets**        | Generate the new value (for `KEYCLOAK_API_CLIENT_SECRET`: regenerate in Keycloak admin console → update the realm export file so the repo stays authoritative) → update the secret store → restart the API → verify with the [Health Checks](#health-checks) sequence. Database password rotation additionally updates `DATABASE_URL` wherever injected. |
+| **Update Keycloak realm** | Edit `infrastructure/keycloak/realm-export/smartsense-marketplace-realm.json` in a PR → apply to the running instance (local: reset + re-import; deployed: apply the same change via admin console/API, keeping file and instance in sync) → run the [keycloak-setup.md verification checklist](./keycloak-setup.md#verification-checklist).             |
+| **Deploy a new release**  | Until CD exists, the manual sequence mirrors the target pipeline: pull the release commit → build (`npm ci`, `turbo run build`) → build/tag the API image (monorepo-root context) → back up DB → `prisma migrate deploy` → start new containers → run [Health Checks](#health-checks) verification → (future) smoke tests.                               |
+
+---
+
+## Troubleshooting
+
+| Symptom                                                               | Likely cause & fix                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API container exits immediately with a Joi validation error           | A required environment variable is missing/malformed. The error names the variable — fix the environment, not the code. This is the fail-closed design working as intended.                                                                                                                                                                                                                |
+| Docker build fails at `prisma:generate` — schema not found            | The build used `apps/api` as the context. The context must be the monorepo root (Assumption 3 in [Purpose](#purpose)); confirm the compose file has `context: ../..` + `dockerfile: apps/api/Dockerfile` — i.e. the fix from `chore/claude-agents` is present on your branch.                                                                                                              |
+| API starts but every authenticated request returns `UNAUTHENTICATED`  | JWKS unreachable or issuer mismatch — inside Compose the API must use `http://keycloak:8080` (service name), while the browser uses `http://localhost:8080`; a token minted against one issuer string fails validation against the other. Check `KEYCLOAK_URL`/`KEYCLOAK_JWKS_URI` and the token's `iss` claim ([authentication.md § JWT Validation](./authentication.md#jwt-validation)). |
+| Keycloak container unhealthy for ~30s after start                     | Normal — Keycloak boots slowly; the healthcheck has a 30s `start_period` and the API waits via `depends_on`. Only investigate if it stays unhealthy past the retry window (then: `<compose> logs keycloak`, usually a `keycloak-db` connectivity or import error).                                                                                                                         |
+| Realm changes in the export file don't appear in a running Keycloak   | Import only runs against a fresh instance — it does not overwrite an existing realm. Reset local state or apply the change through the admin console/API ([Keycloak Deployment § Realm import](#keycloak-deployment)).                                                                                                                                                                     |
+| `migrate deploy` fails partway                                        | The deployment must halt with the previous version serving. Read the migration error, fix forward with a corrective migration where possible; restore from the pre-migration backup only for destructive failures ([Database Deployment](#database-deployment)).                                                                                                                           |
+| Frontend loads but all GraphQL calls fail (CORS / connection refused) | `VITE_GRAPHQL_URL` was baked with the wrong value for this environment (frontend env vars are build-time, per [Infrastructure Components](#infrastructure-components)) — rebuild the frontend with the correct env, and confirm the API's CORS configuration covers the frontend's origin.                                                                                                 |
+
+---
+
+## Best Practices
+
+Deployment checklist — every deploy, any environment:
+
+- [ ] The exact commit being deployed passed CI (lint, typecheck, build — and tests, once wired in per [testing.md](./testing.md#ci-testing-pipeline)).
+- [ ] The image was built once from the monorepo-root context and is the same artifact promoted from the previous environment — not rebuilt per environment.
+- [ ] All required environment variables are present in the target environment's secret store/config (the API's boot-time validation is the backstop, not the plan).
+- [ ] Production posture confirmed: `GRAPHQL_INTROSPECTION=false`, `GRAPHQL_PLAYGROUND=false`, no dev-placeholder secrets, Keycloak not running `start-dev`.
+- [ ] Database backed up before running migrations; migrations applied via `migrate deploy` **before** the new version takes traffic.
+- [ ] Pending migrations reviewed for backward compatibility (expand → migrate → contract) so the previous image remains deployable.
+- [ ] Post-deploy verification run: container healthchecks green, `/health` 200, a GraphQL query succeeds, login flow works.
+- [ ] The previous image tag is known and confirmed re-deployable (the rollback path exists _before_ it's needed).
+- [ ] Any config/realm/infra change made during the deploy is reflected back into the repository in the same release.
+
+---
+
+## Future Enhancements
+
+Tracked as known, deliberate gaps — roughly in priority order:
+
+- **Merge the Docker build-context fix into `development`** (Assumption 3) — prerequisite for any Docker-based deployment working from the main line.
+- **Add a database indicator to `/health`** and a container healthcheck to the `api` Compose service ([Health Checks](#health-checks)).
+- **Wire test stages into CI** (owned by [testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)) and extend the workflow to build/push tagged images.
+- **Frontend serving decision** — nginx container vs. CDN/static hosting, and with it a runtime-config strategy to avoid per-environment frontend rebuilds ([Infrastructure Components](#infrastructure-components)).
+- **Provision the first deployed environment** (shared Development), then QA/Staging/Production per [Supported Environments](#supported-environments), including the reverse proxy and TLS.
+- **Backups, monitoring, and alerting** as provisioning proceeds ([Backup & Recovery](#backup--recovery), [Monitoring](#monitoring)) — with a rehearsed restore before production launch.
+- **Image hardening** — non-root user, vulnerability scanning, dependency audit in CI ([Security During Deployment](#security-during-deployment)).
+- **Kubernetes migration** — only if/when single-host Compose becomes the measured bottleneck ([Scaling Strategy](#scaling-strategy)).

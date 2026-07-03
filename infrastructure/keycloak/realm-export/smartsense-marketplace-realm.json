@@ -101,8 +101,8 @@
 
   "users": [
     {
-      "username": "admin@smartsense.local",
-      "email": "admin@smartsense.local",
+      "username": "yash.lakhani+admin@smartsensesolutions.com",
+      "email": "yash.lakhani+admin@smartsensesolutions.com",
       "emailVerified": true,
       "enabled": true,
       "firstName": "Platform",
@@ -117,8 +117,8 @@
       ]
     },
     {
-      "username": "partner.test@smartsense.local",
-      "email": "partner.test@smartsense.local",
+      "username": "yash.lakhani+partner@smartsensesolutions.com",
+      "email": "yash.lakhani+partner@smartsensesolutions.com",
       "emailVerified": true,
       "enabled": true,
       "firstName": "Partner",

@@ -4,7 +4,7 @@ export const appConfig = {
   graphqlUrl: import.meta.env.VITE_GRAPHQL_URL ?? '/graphql',
   keycloak: {
     url: import.meta.env.VITE_KEYCLOAK_URL ?? 'http://localhost:8080',
-    realm: import.meta.env.VITE_KEYCLOAK_REALM ?? 'smartsense',
-    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'marketplace-app',
+    realm: import.meta.env.VITE_KEYCLOAK_REALM ?? 'smartsense-marketplace',
+    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'smartsense-web',
   },
 } as const
