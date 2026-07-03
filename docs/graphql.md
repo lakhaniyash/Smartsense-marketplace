@@ -29,7 +29,7 @@ It deliberately does **not** cover topics owned elsewhere — refer to those doc
 ### Why GraphQL Was Chosen
 
 - **One typed contract for a multi-client platform.** Admin, Partner, and Customer roles ([requirements.md](./requirements.md#user-roles)) view overlapping but different slices of the same data (a Partner's own Orders vs. an Admin's view across all Partners). GraphQL lets each client request exactly the shape it needs from one schema, instead of maintaining REST endpoints per role/view.
-- **End-to-end type safety.** GraphQL Code Generator (§ 10) turns the schema into TypeScript types and typed Apollo hooks consumed directly by React components — the same schema is the contract for both the NestJS resolvers and the frontend, eliminating a whole class of "backend changed the shape, frontend didn't notice until runtime" bugs. This is why [CLAUDE.md](../CLAUDE.md) mandates generated types only, never hand-written GraphQL types.
+- **End-to-end type safety.** GraphQL Code Generator (§ 10) turns the schema into typed documents (`TypedDocumentNode`) consumed directly by Apollo Client's `useQuery`/`useMutation` in React components — the same schema is the contract for both the NestJS resolvers and the frontend, eliminating a whole class of "backend changed the shape, frontend didn't notice until runtime" bugs. This is why [CLAUDE.md](../CLAUDE.md) mandates generated types only, never hand-written GraphQL types.
 - **A single introspectable schema doubles as living documentation** for a domain with as many interrelated entities as this one ([domain-model.md](./domain-model.md) lists sixteen), reducing drift between "what the API does" and "what's documented."
 
 ### Benefits Over REST for This Project
@@ -465,14 +465,14 @@ const config: CodegenConfig = {
 }
 ```
 
-This produces, per operation/fragment document: a typed `TDocumentNode`, a corresponding TypeScript result/variables type, and (via `@graphql-codegen/client-preset`'s integration) typed Apollo hooks consumable as `useGetOrdersQuery()`, `useCreateOrderMutation()`, etc.
+This produces, per operation/fragment document, a typed `TypedDocumentNode<TResult, TVariables>` (e.g. `MeDocument`) plus its corresponding TypeScript result/variables types (e.g. `MeQuery`, `MeQueryVariables`) in `graphql.ts`. **Correction (verified building M8, 2026-07-03):** the `client` preset alone does not generate named hooks like `useGetOrdersQuery()` — that requires additionally configuring `@graphql-codegen/typescript-react-apollo`, which `codegen.ts` does not do. The established pattern is instead Apollo Client's own `useQuery(MeDocument)` / `useMutation(...)`, which infer their result/variable types directly from the `TypedDocumentNode` — fully typed with no extra plugin, per `features/auth/hooks/useCurrentUser.ts`. Adding the react-apollo plugin later (for the convenience of a named hook per operation) is a valid future choice, not a currently implemented one.
 
 ### Development Workflow
 
 1. Backend: add/modify a resolver, DTO, or type. Start (or restart) the Nest dev server — `autoSchemaFile` regenerates `apps/api/src/schema.gql` automatically (§ 2).
 2. Frontend: write or update a `.graphql` document under the owning feature's `graphql/` folder.
 3. Run `npm run codegen -w @smartsense/web` (or `codegen:watch` during active development) to regenerate `src/lib/graphql/__generated__/`.
-4. Import the generated hook/type in the component/hook/service that needs it.
+4. Import the generated `TypedDocumentNode` and pass it to `useQuery`/`useMutation` in the component/hook/service that needs it.
 
 CI does not currently run codegen as a separate step — a stale `__generated__` directory that no longer matches its source `.graphql` documents and the live schema will surface as a TypeScript error during `npm run typecheck`, since the generated types are checked in as regular source files consumed by the rest of the app.
 

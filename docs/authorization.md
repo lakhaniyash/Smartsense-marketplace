@@ -179,7 +179,7 @@ Choosing the right tool, in order of preference:
 
 ## Frontend Authorization
 
-All frontend checks are UX-only mirrors of the backend decision — worth building well, never worth trusting ([authentication.md § Permission Strategy](./authentication.md#permission-strategy)). Mechanics land with milestone M8; the conventions are fixed now:
+All frontend checks are UX-only mirrors of the backend decision — worth building well, never worth trusting ([authentication.md § Permission Strategy](./authentication.md#permission-strategy)). Mechanics landed with milestone M8 (`app/guards/PermissionRoute.tsx`, `features/auth/hooks/usePermissions.ts`):
 
 | Concern                           | Convention                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

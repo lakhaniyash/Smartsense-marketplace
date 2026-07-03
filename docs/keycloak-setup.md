@@ -13,7 +13,7 @@ This document is the operational counterpart to [`docs/authentication.md`](./aut
 This milestone was originally infrastructure only:
 
 - ~~No NestJS module reads these tokens yet~~ — superseded: `apps/api/src/modules/auth/` now validates Keycloak-issued JWTs (signature via JWKS, `exp`, `iss`, `aud`/`azp`), resolves roles/permissions, and enforces them via global GraphQL guards. See `apps/api/README.md`.
-- No React code talks to Keycloak yet (`apps/web/src/features/auth/` remains scaffolding) — still true.
+- ~~No React code talks to Keycloak yet~~ — superseded (2026-07-03): `apps/web/src/features/auth/services/keycloak.service.ts` is the sole `keycloak-js` importer, wired to real logins against this realm. See `docs/authentication.md`.
 
 ~~**Known gap surfaced by the backend integration**: this realm export does not configure an audience mapper adding `smartsense-api` to tokens issued to the `smartsense-web` client~~ — **resolved (M7-T4)**: the realm export now includes an `oidc-audience-mapper` protocol mapper on `smartsense-web` that adds `smartsense-api` to the access token's `aud` claim, satisfying the backend's `aud`/`azp` check (`docs/authentication.md`'s claims table). Tokens from a real `smartsense-web` login pass audience validation.
 
@@ -324,7 +324,7 @@ yash.lakhani+partner@smartsensesolutions.com | enabled=True | emailVerified=True
 ## Explicitly Out of Scope (This Milestone)
 
 - ~~NestJS `AuthModule` reading/validating any Keycloak-issued token~~ — done, see `apps/api/README.md`.
-- React `features/auth` calling Keycloak or handling redirects — still pending.
+- ~~React `features/auth` calling Keycloak or handling redirects~~ — done, see `docs/authentication.md`.
 - ~~Adding an audience mapper so `smartsense-web`-issued tokens carry `smartsense-api` in `aud`~~ — done with M7-T4; the realm export now configures it (see the resolved note above).
 - Realm/client provisioning for staging or production (separate Keycloak deployment, per `docs/authentication.md`'s environment table).
 - Rotating the placeholder `smartsense-api` client secret or the seeded user passwords — required before this configuration is ever used outside a local machine.

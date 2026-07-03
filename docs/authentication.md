@@ -1,9 +1,11 @@
 # SmartSense Marketplace — Authentication & Authorization
 
-Version: 1.1
+Version: 1.2
 Status: Backend implemented (2026-07-02) — JWT validation, guards, decorators,
-role/permission resolution. Frontend (`apps/web/src/features/auth/`) is still
-unimplemented; see [Open Questions](#open-questions) and the note below.
+role/permission resolution. Frontend (`apps/web/src/features/auth/`) implemented
+(2026-07-03) — Keycloak adapter, `AuthProvider`, route guards, Apollo auth/error
+links, login/logout/silent-refresh. See [Open Questions](#open-questions) for
+what was resolved and what remains.
 
 ## Purpose
 
@@ -552,7 +554,7 @@ Consolidates the security posture implied throughout this document, cross-refere
 
 Carried forward for stakeholder/implementation-phase decision, in the same spirit as `docs/domain-model.md`'s open questions:
 
-1. Should refresh happen via Keycloak's iframe-based silent SSO (`checkLoginIframe`) or a same-origin backend proxy, given increasing third-party-cookie/iframe restrictions in modern browsers? This affects the [Session Management](#session-management) refresh-token-handling note.
-2. Does the test/CI environment use a real (containerized) Keycloak instance or signed-mock JWTs for Playwright authentication tests (`docs/testing.md`, once written)? Affects CI runtime and fixture design.
+1. ~~Should refresh happen via Keycloak's iframe-based silent SSO (`checkLoginIframe`) or a same-origin backend proxy...~~ — **resolved (M8, 2026-07-03)**: `onLoad: 'check-sso'` with `silentCheckSsoRedirectUri` (a static `public/silent-check-sso.html`) runs once at bootstrap for the initial session check. The separate periodic `checkLoginIframe` re-check is deliberately disabled — the app's own `updateToken()` polling (every 20s, `minValidity` from `VITE_AUTH_SESSION_WARNING_SECONDS`) plus the Apollo error link's reactive refresh-on-`UNAUTHENTICATED` already cover session validity without a second iframe-based polling mechanism. A same-origin backend proxy was not pursued — no third-party-cookie failures were observed against local Keycloak. Revisit if a browser blocks the silent-check-sso iframe in practice.
+2. ~~Does the test/CI environment use a real (containerized) Keycloak instance or signed-mock JWTs for Playwright authentication tests...~~ — **resolved (M8, 2026-07-03)**: Playwright drives the real redirect to the real local Keycloak login form using the seeded dev users (`docs/keycloak-setup.md` § Users) — see `apps/web/e2e/auth/`. No Keycloak test client changes were needed. **Known gap**: no seeded Keycloak user currently lacks a permission on any of the four routes this milestone protects (`dashboard:view`, `catalog:read`, `orders:read`, `billing:read` — Admin and Partner both hold all four), so a true `PermissionRoute`-triggered 403 E2E scenario isn't covered yet. Closing this needs either a seeded Customer test user or an Admin-only route from a real future module — tracked as a follow-up, not fabricated with an artificial route/permission now.
 3. Should custom (non-system) `Role`s ever need a corresponding Keycloak realm role, or do they remain purely a Postgres-side composition of `Permission`s assigned directly to `User`s who also hold a system role for Keycloak-side identity purposes? Current design assumes the latter but this hasn't been validated against a concrete "custom role" use case yet.
 4. Is a dedicated `keycloak-db` Postgres instance justified for local Docker Compose, or is a separate database within the existing `db` service (same Postgres container, different database name) sufficient to keep the isolation property without a second container? Affects the [Required Docker Services](#required-docker-services) table.

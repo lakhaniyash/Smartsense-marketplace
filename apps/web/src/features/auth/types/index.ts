@@ -1,8 +1,7 @@
-export type AuthStatus = 'authenticated' | 'unauthenticated' | 'loading'
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
-export interface AuthUser {
+export interface AuthenticatedIdentity {
   id: string
   email: string
-  name: string
   roles: string[]
 }

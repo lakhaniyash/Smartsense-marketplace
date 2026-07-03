@@ -44,42 +44,42 @@
 
 ## Phase 3 — Authentication
 
-- [ ] Install and configure `keycloak-js`
-- [ ] Create `AuthProvider` in `features/auth/`
-- [ ] Implement login flow
-- [ ] Implement logout flow
-- [ ] Implement silent login / token refresh
-- [ ] Implement session timeout handling
-- [ ] Create `AuthService` (wraps Keycloak — app never imports `keycloak-js` directly)
-- [ ] Create `useAuth` hook
-- [ ] Implement `ProtectedRoute` guard
-- [ ] Implement `PublicRoute` guard
-- [ ] Create Unauthorized page
-- [ ] Create Forbidden page
-- [ ] Add role resolution utilities
-- [ ] Write Playwright auth smoke tests
+- [x] Install and configure `keycloak-js`
+- [x] Create `AuthProvider` in `features/auth/`
+- [x] Implement login flow
+- [x] Implement logout flow
+- [x] Implement silent login / token refresh
+- [x] Implement session timeout handling
+- [x] Create `AuthService` (wraps Keycloak — app never imports `keycloak-js` directly)
+- [x] Create `useAuth` hook
+- [x] Implement `ProtectedRoute` guard
+- [x] Implement `PublicRoute` guard
+- [x] Create Unauthorized page
+- [x] Create Forbidden page
+- [x] Add role resolution utilities
+- [x] Write Playwright auth smoke tests
 
 ---
 
 ## Phase 4 — Apollo Client
 
-- [ ] Connect Apollo Client to real GraphQL endpoint
-- [ ] Configure authentication headers (attach Keycloak token)
-- [ ] Configure token refresh on 401
-- [ ] Configure error link (GraphQL + network errors)
+- [x] Connect Apollo Client to real GraphQL endpoint
+- [x] Configure authentication headers (attach Keycloak token)
+- [x] Configure token refresh on 401
+- [x] Configure error link (GraphQL + network errors)
 - [ ] Configure retry link
-- [ ] Configure cache policies per operation type
-- [ ] Test Apollo Client connection
+- [x] Configure cache policies per operation type
+- [x] Test Apollo Client connection
 
 ---
 
 ## Phase 5 — GraphQL
 
-- [ ] Add GraphQL schema URL to codegen config
-- [ ] Run `npm run codegen` and verify type generation
+- [x] Add GraphQL schema URL to codegen config
+- [x] Run `npm run codegen` and verify type generation
 - [ ] Define shared fragments (`shared/graphql/`)
 - [ ] Configure pagination fragment
-- [ ] Validate generated hook imports work end-to-end
+- [x] Validate generated hook imports work end-to-end
 
 ---
 

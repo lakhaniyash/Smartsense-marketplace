@@ -1,1 +1,5 @@
-export type { AuthStatus, AuthUser } from './types'
+export type { AuthStatus, AuthenticatedIdentity } from './types'
+export { AuthProvider } from './components'
+export { useAuth, useCurrentUser, usePermissions } from './hooks'
+export { LoginPage, UnauthorizedPage, ForbiddenPage } from './pages'
+export { authService } from './services'
