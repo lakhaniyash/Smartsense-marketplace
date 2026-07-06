@@ -205,12 +205,12 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 ### M11 — Dashboard
 
-| Task ID | Task                                                               | Priority | Status     | Dependencies |
-| ------- | ------------------------------------------------------------------ | -------- | ---------- | ------------ |
-| M11-T1  | Dashboard schema/resolvers (overview, statistics, recent activity) | High     | ⬜ Backlog | M8, M9       |
-| M11-T2  | Dashboard pages with per-card progressive loading, all four states | High     | ⬜ Backlog | M11-T1, M10  |
-| M11-T3  | Role-scoped dashboard variants (Admin / Partner / Customer)        | Medium   | ⬜ Backlog | M11-T2       |
-| M11-T4  | Document the vertical-slice pattern as the M12–M17 reference       | Medium   | ⬜ Backlog | M11-T2       |
+| Task ID | Task                                                               | Priority | Status  | Dependencies |
+| ------- | ------------------------------------------------------------------ | -------- | ------- | ------------ |
+| M11-T1  | Dashboard schema/resolvers (overview, statistics, recent activity) | High     | ✅ Done | M8, M9       |
+| M11-T2  | Dashboard pages with per-card progressive loading, all four states | High     | ✅ Done | M11-T1, M10  |
+| M11-T3  | Role-scoped dashboard variants (Admin / Partner / Customer)        | Medium   | ✅ Done | M11-T2       |
+| M11-T4  | Document the vertical-slice pattern as the M12–M17 reference       | Medium   | ✅ Done | M11-T2       |
 
 ### M12 — Catalog
 

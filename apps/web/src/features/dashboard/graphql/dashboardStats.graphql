@@ -1,0 +1,7 @@
+query DashboardStats {
+  dashboardStats {
+    totalProducts
+    totalOrders
+    totalCustomers
+  }
+}
