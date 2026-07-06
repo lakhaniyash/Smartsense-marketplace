@@ -26,7 +26,7 @@ This document defines the **testing strategy and quality assurance process** for
 | Domain entities and business rules being verified                                          | [domain-model.md](./domain-model.md)         |
 | Prisma schema, constraints, migrations being verified                                      | [database-schema.md](./database-schema.md)   |
 
-**Assumption made explicit — current tooling state.** At the time of writing: `apps/api` has a working Jest unit-test suite (real specs exist under `apps/api/src/modules/auth/`) and one Jest-based end-to-end integration test (`apps/api/test/auth.e2e-spec.ts`, run via `npm run test:e2e -w @smartsense/api`). `apps/web` has Playwright _configured_ (`apps/web/playwright.config.ts`) but its `e2e/` directory contains no specs yet (`apps/web/e2e/.gitkeep` only), and has **no frontend unit/component test runner installed** — no Vitest, no React Testing Library dependency exists in `apps/web/package.json` yet. [architecture.md § Testing Strategy](./architecture.md#testing-strategy) already flags Vitest/React Testing Library as forward-looking ("Future Unit Tests," "Component Tests"). This document defines the target strategy across all these layers and states plainly, section by section, which parts are implemented today versus pending — it is not a description of a fully built-out suite.
+**Assumption made explicit — current tooling state.** At the time of writing: `apps/api` has a working Jest unit-test suite (real specs exist under `apps/api/src/modules/auth/`) and one Jest-based end-to-end integration test (`apps/api/test/auth.e2e-spec.ts`, run via `npm run test:e2e -w @smartsense/api`). `apps/web` has Playwright configured (`apps/web/playwright.config.ts`) with real specs under `apps/web/e2e/auth/`, and — as of M10 — Vitest + React Testing Library + `jest-axe` (`apps/web/vitest.config.ts`, `npm run test -w @smartsense/web`), used for the shared component library's tests. This document defines the target strategy across all these layers and states plainly, section by section, which parts are implemented today versus pending — it is not a description of a fully built-out suite.
 
 ### Testing Philosophy
 
@@ -89,21 +89,20 @@ Every change is tested at the **lowest layer that can actually prove the thing t
 
 ### React Testing Library
 
-The chosen tool for component/hook testing once introduced ([architecture.md § Testing Strategy](./architecture.md#testing-strategy) already names it). RTL's guiding principle — query and interact with components the way a user would (by role, label, and text, not by internal implementation detail or CSS class) — is adopted as the project's default testing style the moment it is added, consistent with this document's "test behavior, not implementation" philosophy.
+Installed as of M10 (`apps/web/package.json`'s `@testing-library/react`/`jest-dom`/`user-event`, configured in `apps/web/vitest.config.ts`). RTL's guiding principle — query and interact with components the way a user would (by role, label, and text, not by internal implementation detail or CSS class) — is the project's default testing style, consistent with this document's "test behavior, not implementation" philosophy. Naming follows the project's one documented convention ([coding-standards.md § Naming Conventions](./coding-standards.md#naming-conventions)): `*.spec.tsx`, colocated with the component, not `*.test.tsx`.
 
 ### Component Testing
 
-A component test renders the component in isolation (mocking Apollo/GraphQL responses per [Mocking Strategy § GraphQL Mocking](#graphql-mocking)) and asserts on what a user would see/do:
+A component test renders the component in isolation (mocking Apollo/GraphQL responses per [Mocking Strategy § GraphQL Mocking](#graphql-mocking) for feature-level components; shared UI primitives have no data dependency to mock) and asserts on what a user would see/do:
 
 ```tsx
-// Illustrative pattern — not yet implemented in this codebase.
 test('renders the empty state when there are no orders', () => {
   render(<OrdersListPage />, { apolloMocks: [emptyOrdersMock] })
   expect(screen.getByText(/no orders yet/i)).toBeInTheDocument()
 })
 ```
 
-Every shared component in `packages/ui`/`shared/components` ([ui-guidelines.md § Component Hierarchy](./ui-guidelines.md#component-hierarchy)) is expected to have a component test covering, at minimum, its documented states (default, loading, disabled, error, per [ui-guidelines.md](./ui-guidelines.md)'s per-component sections) once the component and the test tooling both exist.
+Every shared component in `apps/web/src/shared/components`/`shared/layouts` ([ui-guidelines.md § Component Hierarchy](./ui-guidelines.md#component-hierarchy)) has a component test covering its documented states (default, loading, disabled, error, per [ui-guidelines.md](./ui-guidelines.md)'s per-component sections) plus a `jest-axe` `toHaveNoViolations()` check, established with the M10 component set. Feature-level components (`ProductCard`, `OrderTimeline`, etc.) follow the same pattern as they're built.
 
 ### Hook Testing
 
@@ -368,7 +367,7 @@ flowchart TD
     A["Install dependencies"] --> B["Generate Prisma Client"]
     B --> C["Lint"]
     C --> D["Typecheck"]
-    D --> E["Unit Tests<br/>(apps/api Jest, future apps/web Vitest)"]
+    D --> E["Unit Tests<br/>(apps/api Jest, apps/web Vitest)"]
     E --> F["Integration Tests<br/>(apps/api Jest e2e, real Postgres + mocked JWKS)"]
     F --> G["Playwright<br/>(apps/web e2e, once specs exist)"]
     G --> H["Build"]

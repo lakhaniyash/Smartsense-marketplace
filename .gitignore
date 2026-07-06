@@ -21,7 +21,11 @@ apps/api/src/schema.gql
 # Testing artifacts
 apps/web/playwright-report/
 apps/web/test-results/
+apps/web/coverage/
 apps/api/coverage/
+
+# Storybook
+apps/web/storybook-static/
 
 # Editor
 .vscode/*

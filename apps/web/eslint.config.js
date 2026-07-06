@@ -9,11 +9,13 @@ export default [
       'src/lib/graphql/__generated__/**',
       'playwright-report/**',
       'test-results/**',
+      'storybook-static/**',
+      'coverage/**',
     ],
   },
   ...webConfig,
   {
-    files: ['*.config.{js,ts}', 'codegen.ts', 'playwright.config.ts'],
+    files: ['*.config.{js,ts}', 'codegen.ts', 'playwright.config.ts', '.storybook/*.ts'],
     languageOptions: {
       globals: globals.node,
     },

@@ -609,9 +609,9 @@ End-to-End
 
 Playwright
 
-Future Unit Tests
+Unit Tests
 
-Vitest
+Vitest (introduced M10, `apps/web`)
 
 Component Tests
 
