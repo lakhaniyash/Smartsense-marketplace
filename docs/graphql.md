@@ -490,13 +490,14 @@ CI does not currently run codegen as a separate step — a stale `__generated__`
 
 All GraphQL error formatting is centralized in `GlobalExceptionFilter` (`apps/api/src/common/filters/global-exception.filter.ts`) — no resolver or service constructs a `GraphQLError` directly. A thrown NestJS exception is mapped to an `extensions.code` value:
 
-| Exception thrown                             | `extensions.code`       | Meaning                                                                                                    |
-| -------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `NotFoundException`                          | `NOT_FOUND`             | Requested entity does not exist (or is not visible to this caller).                                        |
-| `UnauthorizedException` (or a guard failure) | `UNAUTHENTICATED`       | Missing/invalid/expired credentials — see [authentication.md](./authentication.md#graphql-authentication). |
-| `ForbiddenException`                         | `FORBIDDEN`             | Valid identity, insufficient role/permission.                                                              |
-| `BadRequestException`                        | `BAD_USER_INPUT`        | Input failed validation (§ Validation Errors below).                                                       |
-| Anything else / unrecognized                 | `INTERNAL_SERVER_ERROR` | Unexpected failure — logged with full context, returned to the client as a generic message.                |
+| Exception thrown                             | `extensions.code`       | Meaning                                                                                                                                     |
+| -------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NotFoundException`                          | `NOT_FOUND`             | Requested entity does not exist (or is not visible to this caller).                                                                         |
+| `UnauthorizedException` (or a guard failure) | `UNAUTHENTICATED`       | Missing/invalid/expired credentials — see [authentication.md](./authentication.md#graphql-authentication).                                  |
+| `ForbiddenException`                         | `FORBIDDEN`             | Valid identity, insufficient role/permission.                                                                                               |
+| `BadRequestException`                        | `BAD_USER_INPUT`        | Input failed validation (§ Validation Errors below).                                                                                        |
+| `ConflictException`                          | `CONFLICT`              | State conflict — e.g. a unique constraint violation translated from Prisma's `P2002` (`docs/api-conventions.md § Error Handling Strategy`). |
+| Anything else / unrecognized                 | `INTERNAL_SERVER_ERROR` | Unexpected failure — logged with full context, returned to the client as a generic message.                                                 |
 
 ### Validation Errors
 

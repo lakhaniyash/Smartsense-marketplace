@@ -1,0 +1,29 @@
+query GetProducts(
+  $first: Int
+  $after: String
+  $filter: ProductFilterInput
+  $sort: ProductSortInput
+) {
+  products(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        title
+        sku
+        status
+        category {
+          id
+          name
+        }
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

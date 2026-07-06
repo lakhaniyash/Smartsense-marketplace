@@ -1,0 +1,17 @@
+query GetProductById($id: ID!) {
+  productById(id: $id) {
+    id
+    title
+    description
+    brand
+    sku
+    status
+    category {
+      id
+      name
+      slug
+    }
+    createdAt
+    publishedAt
+  }
+}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ApolloProvider } from '@apollo/client'
 import { apolloClient } from '@lib/apollo/client'
 import { AuthProvider, authService } from '@features/auth'
+import { ToastProvider } from '@shared/components'
 
 // Composition-root wiring: features/auth never imports lib/apollo (that
 // would reverse the sanctioned lib → features dependency the auth/error
@@ -17,7 +18,9 @@ interface ProvidersProps {
 export function Providers({ children }: ProvidersProps) {
   return (
     <ApolloProvider client={apolloClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider>
+        <ToastProvider>{children}</ToastProvider>
+      </AuthProvider>
     </ApolloProvider>
   )
 }
