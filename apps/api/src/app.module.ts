@@ -33,6 +33,10 @@ import { UsersModule } from './modules/users/users.module'
         playground: config.get<boolean>('graphql.playground') ?? false,
         introspection: config.get<boolean>('graphql.introspection') ?? true,
         debug: config.get<boolean>('graphql.debug') ?? false,
+        // NestJS's `debug` above only controls dev-mode schema-build logging — Apollo
+        // Server 4+ renamed the actual stacktrace-exposure setting to this field, so it
+        // must be wired separately or GRAPHQL_DEBUG=false has no effect on error responses.
+        includeStacktraceInErrorResponses: config.get<boolean>('graphql.debug') ?? false,
       }),
     }),
     CommonModule,

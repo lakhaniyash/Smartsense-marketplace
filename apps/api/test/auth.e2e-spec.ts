@@ -28,6 +28,7 @@ describe('Auth pipeline (e2e)', () => {
 
   const TEST_USER_EMAIL = 'yash.lakhani+auth-e2e@smartsensesolutions.com'
   let testUserId: string
+  let originalNodeEnv: string | undefined
 
   function signToken(overrides: Partial<Record<string, unknown>> = {}): string {
     const now = Math.floor(Date.now() / 1000)
@@ -70,6 +71,15 @@ describe('Auth pipeline (e2e)', () => {
     originalJwksUri = process.env['KEYCLOAK_JWKS_URI']
     process.env['KEYCLOAK_JWKS_URI'] = `http://127.0.0.1:${address.port}/certs`
 
+    // Apollo Server's own includeStacktraceInErrorResponses default is
+    // `NODE_ENV !== 'production' && NODE_ENV !== 'test'`. Jest sets NODE_ENV=test,
+    // which would mask a regression in apps/api/src/app.module.ts's explicit wiring
+    // of that option (it'd default to false under 'test' regardless of the app's own
+    // config) — force a non-test/non-production value so the stacktrace assertion
+    // below actually exercises the app's own setting, matching real dev/prod behavior.
+    originalNodeEnv = process.env['NODE_ENV']
+    process.env['NODE_ENV'] = 'development'
+
     const keycloakUrl = process.env['KEYCLOAK_URL'] ?? 'http://localhost:8080'
     const keycloakRealm = process.env['KEYCLOAK_REALM'] ?? 'smartsense-marketplace'
     issuer = `${keycloakUrl}/realms/${keycloakRealm}`
@@ -101,11 +111,19 @@ describe('Auth pipeline (e2e)', () => {
     await new Promise<void>((resolve) => jwksServer.close(() => resolve()))
     if (originalJwksUri === undefined) delete process.env['KEYCLOAK_JWKS_URI']
     else process.env['KEYCLOAK_JWKS_URI'] = originalJwksUri
+    if (originalNodeEnv === undefined) delete process.env['NODE_ENV']
+    else process.env['NODE_ENV'] = originalNodeEnv
   })
 
   it('rejects a protected query with no Authorization header', async () => {
     const res = await request(app.getHttpServer()).post('/graphql').send(meQuery()).expect(200)
     expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED')
+  })
+
+  it('does not leak an internal stacktrace in the GraphQL error response', async () => {
+    const res = await request(app.getHttpServer()).post('/graphql').send(meQuery()).expect(200)
+    expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED')
+    expect(res.body.errors[0].extensions.stacktrace).toBeUndefined()
   })
 
   it('rejects a malformed bearer token', async () => {
