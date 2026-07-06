@@ -1,7 +1,23 @@
-import { ComingSoonPage } from '@shared/components'
+import { PageHeader } from '@shared/components'
+import { QuickActions, RecentActivity, StatisticsGrid, WelcomeSection } from '../components'
 
-// M8 proves the routing/guard infrastructure only — the real Dashboard UI
-// ships with M11 (docs/milestones.md).
+// No Breadcrumb here: /dashboard is the app's landing route (one level
+// deep), and docs/ui-guidelines.md § Navigation reserves Breadcrumb for
+// pages nested more than one level deep. Each section below fetches
+// independently and owns its own loading/error/empty state — see
+// StatisticsGrid, the only section backed by a real query today.
 export function DashboardPage() {
-  return <ComingSoonPage title="Dashboard" />
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Dashboard" description="An overview of marketplace activity." />
+      <WelcomeSection />
+      <StatisticsGrid />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <RecentActivity />
+        </div>
+        <QuickActions />
+      </div>
+    </div>
+  )
 }

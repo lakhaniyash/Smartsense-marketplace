@@ -34,13 +34,18 @@ Turborepo monorepo, **npm workspaces** (not pnpm): `apps/web` (React SPA), `apps
 
 ## Current Status (see docs/milestones.md for live state)
 
-- ✅ M1–M7: monorepo, both app shells, database (16 entities, verified constraints, seed),
-  auth design, Keycloak infrastructure, backend authentication (guards, RBAC, tests).
-- ⬜ Next: M8 frontend auth, M9 GraphQL integration, M10 shared UI, then feature slices M11–M14.
-- GraphQL schema currently exposes only placeholder `xStatus` queries + `me`; frontend
-  `features/*` and `packages/ui` are scaffolds. `main` trails `development`; no release tags yet.
-- Known debt: TD-1 Docker build-context fix unmerged, TD-2 CI runs no tests, TD-3 no frontend
-  test tooling — register in [docs/TASKS.md](../../docs/TASKS.md#technical-debt).
+- ✅ M1–M11: monorepo, both app shells, database (16 entities, verified constraints, seed),
+  auth design, Keycloak infrastructure, backend + frontend authentication, GraphQL codegen
+  pipeline, shared component library, and the Dashboard vertical slice (mock stats, no
+  revenue field pending a real Decimal/Money scalar).
+- ⬜ Next: M12 Catalog, M13 Orders, M14 Billing (v1.0 feature slices).
+- GraphQL schema exposes `me`, `dashboardStats`, and placeholder `xStatus` queries for the
+  not-yet-built modules; `packages/ui` remains a scaffold (Dashboard's UI lives in
+  `apps/web/src/features/dashboard` + `shared/`, per folder-structure.md's promote-don't-
+  pre-share rule). `main` trails `development`; no release tags yet.
+- Known debt: TD-1 Docker build-context fix unmerged, TD-2 CI runs no tests — register in
+  [docs/TASKS.md](../../docs/TASKS.md#technical-debt). TD-3 (no frontend test tooling)
+  resolved at M10 (Vitest + RTL + jest-axe).
 
 ## Documentation Map (read the owner before touching an area)
 

@@ -1,8 +1,19 @@
-export type DashboardPeriod = 'day' | 'week' | 'month' | 'year'
+import type { ComponentType, SVGProps } from 'react'
 
-export interface StatCard {
+export type DashboardIcon = ComponentType<SVGProps<SVGSVGElement>>
+
+export interface DashboardStatCard {
+  key: string
   label: string
   value: number
-  change: number
-  changeType: 'increase' | 'decrease' | 'neutral'
+  icon: DashboardIcon
+  permission: string
+}
+
+export interface DashboardQuickAction {
+  key: string
+  label: string
+  href: string
+  icon: DashboardIcon
+  permission: string
 }

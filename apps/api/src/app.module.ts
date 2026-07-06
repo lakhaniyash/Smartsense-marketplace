@@ -14,6 +14,7 @@ import { PrismaModule } from './prisma/prisma.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { BillingModule } from './modules/billing/billing.module'
 import { CatalogModule } from './modules/catalog/catalog.module'
+import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { OrdersModule } from './modules/orders/orders.module'
 import { UsersModule } from './modules/users/users.module'
 
@@ -44,6 +45,7 @@ import { UsersModule } from './modules/users/users.module'
     HealthModule,
     AuthModule,
     UsersModule,
+    DashboardModule,
     CatalogModule,
     OrdersModule,
     BillingModule,
