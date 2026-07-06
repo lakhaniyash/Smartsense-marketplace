@@ -1,0 +1,95 @@
+import type { Ref, SelectHTMLAttributes } from 'react'
+import { useId } from 'react'
+import { ChevronDownIcon, DangerIcon } from '@shared/icons'
+import { cn } from '@shared/utils'
+
+export interface SelectOption {
+  value: string
+  label: string
+  disabled?: boolean
+}
+
+export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'> {
+  ref?: Ref<HTMLSelectElement>
+  label?: string
+  error?: string
+  helperText?: string
+  options: SelectOption[]
+  placeholder?: string
+}
+
+// Native <select> per docs/ui-guidelines.md's ARIA Usage rule ("use the
+// native element... except where no native element fits") — a single-select
+// dropdown of simple options is exactly the case the native element fits.
+export function Select({
+  ref,
+  label,
+  error,
+  helperText,
+  options,
+  placeholder,
+  id,
+  required,
+  className,
+  ...props
+}: SelectProps) {
+  const generatedId = useId()
+  const selectId = id ?? generatedId
+  const messageId = `${selectId}-message`
+  const hasMessage = error !== undefined || helperText !== undefined
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label !== undefined && (
+        <label htmlFor={selectId} className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          {label}
+          {required === true && <span className="text-danger"> *</span>}
+        </label>
+      )}
+      <div className="relative">
+        <select
+          ref={ref}
+          id={selectId}
+          required={required}
+          aria-invalid={error !== undefined || undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+          className={cn(
+            'h-10 w-full appearance-none rounded-md border bg-white px-3 pr-9 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-gray-100',
+            error !== undefined
+              ? 'border-danger focus-visible:ring-danger'
+              : 'border-gray-300 focus-visible:ring-gray-400 dark:border-gray-700',
+            className,
+          )}
+          {...props}
+        >
+          {placeholder !== undefined && (
+            <option value="" disabled hidden>
+              {placeholder}
+            </option>
+          )}
+          {options.map((option) => (
+            <option key={option.value} value={option.value} disabled={option.disabled}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon
+          className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-gray-400"
+          aria-hidden="true"
+        />
+      </div>
+      {error !== undefined ? (
+        <p id={messageId} className="text-danger flex items-center gap-1 text-sm">
+          <DangerIcon className="size-4 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
+      ) : (
+        helperText !== undefined && (
+          <p id={messageId} className="text-sm text-gray-500">
+            {helperText}
+          </p>
+        )
+      )}
+    </div>
+  )
+}

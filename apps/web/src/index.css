@@ -1,3 +1,27 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic color tokens (docs/ui-guidelines.md § Design Tokens / § Color Philosophy).
+ * Aliases onto Tailwind's default palette so every component that renders a
+ * status (Alert, Badge, Button's danger variant, form field errors) shares one
+ * definition instead of picking its own shade of red/green/amber/blue.
+ */
+@theme {
+  --color-success: var(--color-green-600);
+  --color-success-subtle: var(--color-green-50);
+  --color-success-emphasis: var(--color-green-700);
+
+  --color-warning: var(--color-amber-600);
+  --color-warning-subtle: var(--color-amber-50);
+  --color-warning-emphasis: var(--color-amber-700);
+
+  --color-danger: var(--color-red-600);
+  --color-danger-subtle: var(--color-red-50);
+  --color-danger-emphasis: var(--color-red-700);
+
+  --color-info: var(--color-blue-600);
+  --color-info-subtle: var(--color-blue-50);
+  --color-info-emphasis: var(--color-blue-700);
+}

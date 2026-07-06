@@ -11,5 +11,12 @@
     "noEmit": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "codegen.ts", "playwright.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "codegen.ts",
+    "playwright.config.ts",
+    ".storybook/main.ts",
+    ".storybook/preview.ts"
+  ]
 }

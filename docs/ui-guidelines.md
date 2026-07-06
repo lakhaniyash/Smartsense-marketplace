@@ -24,7 +24,7 @@ This document governs **visual design, interaction patterns, and component-level
 | Product modules, user roles, the canonical reusable-component list, routing table                                                                      | [requirements.md](./requirements.md)         |
 | Route protection, `/unauthorized` vs. `/forbidden` semantics                                                                                           | [authentication.md](./authentication.md)     |
 
-**Assumption made explicit.** As of this writing, `packages/ui` and `apps/web/src/shared/components` are scaffolds with no components implemented yet (`export {}`), and Tailwind is configured with no project-specific `@theme` customization (`apps/web/src/index.css` is just `@import 'tailwindcss';` plus a `@custom-variant dark` declaration). This document therefore defines the design system and conventions the first and every subsequent component must follow — it describes what to build and how, not an already-built library. Where a concrete Tailwind token value is stated below, it is either a currently-in-use default (verified against the existing `PlaceholderPage` markup in `apps/web/src/app/router`) or an explicitly proposed addition to `@theme`, and each is labeled accordingly.
+**Status.** As of M10, the shared component library is built and populated at `apps/web/src/shared/components`/`apps/web/src/shared/layouts` — not `packages/ui` (`apps/api` never consumes React components, so per [folder-structure.md](./folder-structure.md#packages--shared-workspace-packages)'s promote-don't-pre-share rule, `packages/ui` remains an untouched scaffold). Tailwind's `@theme` block now defines the semantic color tokens in [Design Tokens](#design-tokens) below; the rest of this document's conventions were established alongside that first implementation and are the reference every subsequent component follows. Where a concrete Tailwind token value is stated below, it is either a currently-in-use default (verified against `ErrorPage`/`AppLoadingState`/`ComingSoonPage` markup) or a defined `@theme` addition, and each is labeled accordingly.
 
 ### Design Philosophy
 
@@ -54,16 +54,30 @@ This document governs **visual design, interaction patterns, and component-level
 
 ### Design Tokens
 
-Design tokens are expressed as Tailwind utility classes backed by Tailwind's token scales, configured via the CSS-first `@theme` mechanism (Tailwind v4) rather than a `tailwind.config.js` file — see `apps/web/src/index.css`. **Current state:** no `@theme` override block exists yet, so every token below is Tailwind's un-customized default scale. The moment SmartSense-specific brand values (a specific blue, a specific type ramp) are finalized, they are added as a `@theme` block in `apps/web/src/index.css` — this is the single place project-specific tokens are declared; they are never redefined ad hoc as arbitrary Tailwind values (`bg-[#1a2b3c]`) scattered across components.
+Design tokens are expressed as Tailwind utility classes backed by Tailwind's token scales, configured via the CSS-first `@theme` mechanism (Tailwind v4) rather than a `tailwind.config.js` file — see `apps/web/src/index.css`. As of M10, semantic status color tokens are defined there as aliases onto Tailwind's default palette (no separate brand color/type ramp has been introduced — neutral grays and Tailwind's default scale remain the baseline). Project-specific tokens are declared only in this one place; they are never redefined ad hoc as arbitrary Tailwind values (`bg-[#1a2b3c]`) scattered across components.
 
 ```css
-/* apps/web/src/index.css — where project tokens are added when defined */
+/* apps/web/src/index.css */
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* --color-brand-*, --font-*, --radius-*, etc. — not yet defined */
+  --color-success: var(--color-green-600);
+  --color-success-subtle: var(--color-green-50);
+  --color-success-emphasis: var(--color-green-700);
+
+  --color-warning: var(--color-amber-600);
+  --color-warning-subtle: var(--color-amber-50);
+  --color-warning-emphasis: var(--color-amber-700);
+
+  --color-danger: var(--color-red-600);
+  --color-danger-subtle: var(--color-red-50);
+  --color-danger-emphasis: var(--color-red-700);
+
+  --color-info: var(--color-blue-600);
+  --color-info-subtle: var(--color-blue-50);
+  --color-info-emphasis: var(--color-blue-700);
 }
 ```
 
@@ -117,7 +131,7 @@ A shadow is never used on a flat, in-flow page element purely for visual weight 
 
 ### Icons
 
-- One icon set for the entire application (a specific icon library is a decision to record in `apps/web/src/shared/icons` once selected — not yet chosen at time of writing). Mixing icon sets/styles (outline vs. filled, different stroke widths) within the same screen is not acceptable.
+- One icon set for the entire application — `lucide-react`, chosen at M10, re-exported from `apps/web/src/shared/icons` as the single sourcing point (components/features import icons from there, never from `lucide-react` directly). Mixing icon sets/styles (outline vs. filled, different stroke widths) within the same screen is not acceptable.
 - Icons default to `currentColor` so they inherit their container's text color rather than hardcoding a fill — this is what lets the same icon component work inside a default, success, and danger button variant without a prop for color.
 - A standalone icon that conveys meaning (not purely decorative) always has an accessible label — see [Accessibility § ARIA Usage](#aria-usage).
 
@@ -547,10 +561,9 @@ Before submitting UI work:
 
 Tracked here as known, deliberate scope boundaries — not oversights:
 
-- **A finalized `@theme` design token set** (brand colors, custom type ramp) — currently running on Tailwind's un-customized defaults ([Design Tokens](#design-tokens)).
-- **Icon library selection** — no icon set has been chosen yet ([Design System § Icons](#icons)).
-- **Dark mode implementation** — the CSS variant is scaffolded; no components, toggle, or persistence exist yet ([Dark Mode](#dark-mode)).
+- **A finalized brand `@theme` (brand colors, custom type ramp)** — M10 added semantic status color tokens only; neutral grays and typography still run on Tailwind's un-customized defaults ([Design Tokens](#design-tokens)).
+- **Dark mode implementation** — the CSS variant is scaffolded and every M10 component ships its `dark:` variants, but no toggle or persistence mechanism exists yet ([Dark Mode](#dark-mode)).
 - **A Notifications center** — asynchronous, user-directed notifications beyond in-the-moment Toasts/Alerts ([Feedback Components](#feedback-components)), pending a concrete product requirement.
 - **Image/CDN pipeline** for Product and avatar assets ([Icons & Images § Image Optimization](#icons--images)) — no asset delivery infrastructure decision has been made yet.
 - **Internationalization** — library selection and string-extraction tooling, if/when a multi-language requirement is introduced ([Internationalization Readiness](#internationalization-readiness)).
-- **A published Storybook (or equivalent) for `packages/ui`** — once the shared component library has real components, an isolated development/visual-regression environment for them is a natural next step, not yet set up.
+- **Mobile sidebar polish** — the M10 `AppShell` opens a `Drawer` with the same nav items below `lg`, but a persistent icon-only collapsed state for tablet widths (per [Sidebar Behavior](#sidebar-behavior)) is not yet built.
