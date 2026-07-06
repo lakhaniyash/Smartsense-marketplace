@@ -30,6 +30,8 @@ describe('RolesGuard', () => {
     status: UserStatus.ACTIVE,
     roles: ['Admin'],
     permissions: [],
+    partnerId: null,
+    customerId: null,
   }
 
   beforeEach(() => {

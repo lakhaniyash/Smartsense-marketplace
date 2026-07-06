@@ -27,6 +27,8 @@ describe('PermissionGuard', () => {
     status: UserStatus.ACTIVE,
     roles: ['Partner'],
     permissions: ['catalog:read'],
+    partnerId: 'partner-1',
+    customerId: null,
   }
 
   beforeEach(() => {

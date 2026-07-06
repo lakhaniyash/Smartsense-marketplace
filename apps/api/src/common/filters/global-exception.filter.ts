@@ -94,6 +94,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (status === HttpStatus.UNAUTHORIZED) return 'UNAUTHENTICATED'
       if (status === HttpStatus.FORBIDDEN) return 'FORBIDDEN'
       if (status === HttpStatus.BAD_REQUEST) return 'BAD_USER_INPUT'
+      // ConflictException (409) — first exercised by CatalogService's SKU
+      // uniqueness check (api-conventions.md § Error Handling Strategy's
+      // P2002 → ConflictException mapping); update docs/graphql.md § 11's
+      // error table in the same PR as any further change to this mapping.
+      if (status === HttpStatus.CONFLICT) return 'CONFLICT'
     }
     return 'INTERNAL_SERVER_ERROR'
   }

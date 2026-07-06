@@ -20,6 +20,8 @@ describe('AuthService', () => {
     email: 'yash.lakhani+admin@smartsensesolutions.com',
     fullName: 'Admin User',
     status: UserStatus.ACTIVE,
+    partnerId: null,
+    customerId: null,
   }
 
   const payload: KeycloakJwtPayload = {
@@ -74,6 +76,8 @@ describe('AuthService', () => {
         status: UserStatus.ACTIVE,
         roles: ['Admin'],
         permissions: ['catalog:write'],
+        partnerId: null,
+        customerId: null,
       })
     })
 

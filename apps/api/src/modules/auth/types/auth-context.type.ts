@@ -33,6 +33,10 @@ export interface AuthenticatedUser {
   status: UserStatus
   roles: string[]
   permissions: string[]
+  /** Owning Partner, if any — the ownership-scoping key for Partner-reachable data (docs/authorization.md § Ownership Rules). */
+  partnerId: string | null
+  /** Owning Customer, if any — same role as partnerId for Customer-reachable data. */
+  customerId: string | null
 }
 
 /** Shape of the Express request once JwtAuthGuard/GqlAuthGuard has run. */

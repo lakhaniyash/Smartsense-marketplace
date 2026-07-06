@@ -214,13 +214,20 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 ### M12 — Catalog
 
-| Task ID | Task                                                                     | Priority | Status     | Dependencies |
-| ------- | ------------------------------------------------------------------------ | -------- | ---------- | ------------ |
-| M12-T1  | Product/variant CRUD (schema → resolvers → services → UI)                | High     | ⬜ Backlog | M8, M9, M10  |
-| M12-T2  | Category taxonomy management                                             | Medium   | ⬜ Backlog | M12-T1       |
-| M12-T3  | Inventory tracking with reservation invariants                           | High     | ⬜ Backlog | M12-T1       |
-| M12-T4  | List conventions first implementation: cursor pagination, filter, search | High     | ⬜ Backlog | M12-T1       |
-| M12-T5  | Product forms (React Hook Form + Zod) incl. publish lifecycle            | High     | ⬜ Backlog | M12-T1       |
+| Task ID | Task                                                                     | Priority | Status         | Dependencies |
+| ------- | ------------------------------------------------------------------------ | -------- | -------------- | ------------ |
+| M12-T1  | Product/variant CRUD (schema → resolvers → services → UI)                | High     | ✅ Completed   | M8, M9, M10  |
+| M12-T2  | Category taxonomy management                                             | Medium   | 🔵 In Progress | M12-T1       |
+| M12-T3  | Inventory tracking with reservation invariants                           | High     | ⬜ Backlog     | M12-T1       |
+| M12-T4  | List conventions first implementation: cursor pagination, filter, search | High     | ✅ Completed   | M12-T1       |
+| M12-T5  | Product forms (React Hook Form + Zod) incl. publish lifecycle            | High     | ✅ Completed   | M12-T1       |
+
+**M12 scope notes (Catalog Foundation pass):**
+
+- **M12-T1** — `Product`/`Category`/`ProductVariant`/`Inventory` already existed in `schema.prisma` from M4; no migration was needed. Per a confirmed scope decision, `ProductVariant`/`Inventory` are created transactionally by `CatalogService` as internal implementation details and are never exposed via the GraphQL API or UI — every Product's `sku` is flattened from its hidden singleton variant. `price` is intentionally absent from the schema entirely (no field, no placeholder scalar) until the Decimal/Money scalar ships with M14 Billing.
+- **M12-T2** — Read/browse only (flat `categories` query + `CategorySelect`), matching Jira SM-63/SM-119's scope. Admin create/edit/delete category management (`docs/domain-model.md` Assumption 4) is not built this pass.
+- **M12-T3** — Deliberately descoped: a zero-quantity `Inventory` row is created alongside each Product's hidden variant only to satisfy the domain invariant ("every ProductVariant has exactly one Inventory record") — no stock levels, reservation, or low-stock logic exists. Revisit alongside M13 Orders, which is the first real consumer of inventory reservation.
+- New in this pass, not originally itemized: `GlobalExceptionFilter` gained a `ConflictException` → `CONFLICT` mapping (`docs/graphql.md` § 11), first exercised by SKU-uniqueness conflicts; `AuthenticatedUser` gained `partnerId`/`customerId` (`docs/authentication.md` already assumed these existed for ownership checks — this pass is what actually wired them through); `ToastProvider` was mounted at the app composition root (`app/providers`) — it existed since M10 but was never connected until Catalog's mutations needed it.
 
 ### M13 — Orders
 

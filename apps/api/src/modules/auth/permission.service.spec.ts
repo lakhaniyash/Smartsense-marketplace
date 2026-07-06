@@ -19,6 +19,8 @@ describe('PermissionService', () => {
     status: UserStatus.ACTIVE,
     roles: [],
     permissions,
+    partnerId: null,
+    customerId: null,
   })
 
   describe('getPermissionKeysForUser', () => {

@@ -43,6 +43,8 @@ export class AuthService {
       status: user.status,
       roles,
       permissions,
+      partnerId: user.partnerId,
+      customerId: user.customerId,
     }
   }
 

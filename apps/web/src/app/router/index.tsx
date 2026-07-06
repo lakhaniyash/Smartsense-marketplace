@@ -19,6 +19,12 @@ const DashboardPage = lazy(() =>
 const CatalogPage = lazy(() =>
   import('@features/catalog').then((m) => ({ default: m.CatalogPage })),
 )
+const ProductDetailPage = lazy(() =>
+  import('@features/catalog').then((m) => ({ default: m.ProductDetailPage })),
+)
+const ProductFormPage = lazy(() =>
+  import('@features/catalog').then((m) => ({ default: m.ProductFormPage })),
+)
 const OrdersPage = lazy(() => import('@features/orders').then((m) => ({ default: m.OrdersPage })))
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
@@ -65,7 +71,26 @@ const router = createBrowserRouter([
           },
           {
             element: <PermissionRoute permission="catalog:read" />,
-            children: [{ path: ROUTES.CATALOG.slice(1), element: withSuspense(<CatalogPage />) }],
+            children: [
+              { path: ROUTES.CATALOG.slice(1), element: withSuspense(<CatalogPage />) },
+              {
+                path: `${ROUTES.CATALOG.slice(1)}/:id`,
+                element: withSuspense(<ProductDetailPage />),
+              },
+            ],
+          },
+          {
+            element: <PermissionRoute permission="catalog:write" />,
+            children: [
+              {
+                path: `${ROUTES.CATALOG.slice(1)}/new`,
+                element: withSuspense(<ProductFormPage />),
+              },
+              {
+                path: `${ROUTES.CATALOG.slice(1)}/:id/edit`,
+                element: withSuspense(<ProductFormPage />),
+              },
+            ],
           },
           {
             element: <PermissionRoute permission="orders:read" />,

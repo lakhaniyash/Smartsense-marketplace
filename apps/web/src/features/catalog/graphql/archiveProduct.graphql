@@ -1,0 +1,6 @@
+mutation ArchiveProduct($id: ID!) {
+  archiveProduct(id: $id) {
+    id
+    status
+  }
+}

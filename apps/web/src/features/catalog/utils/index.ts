@@ -1,1 +1,1 @@
-export {}
+export { buildCategoryOptions } from './buildCategoryOptions'

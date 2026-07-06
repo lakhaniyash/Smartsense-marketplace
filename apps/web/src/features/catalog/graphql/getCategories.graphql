@@ -1,0 +1,9 @@
+query GetCategories {
+  categories {
+    id
+    name
+    slug
+    parentCategoryId
+    displayOrder
+  }
+}
