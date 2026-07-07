@@ -27,7 +27,7 @@ This document covers **authorization**: the RBAC/permission model, role definiti
 
 **Assumptions made explicit.**
 
-1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): nine `Permission.key` values across five domains. `reports:*` and `settings:*` keys do not exist yet — they are introduced with milestones M15/M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization tables mark them as planned.
+1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): ten `Permission.key` values across five domains (M13 added `orders:create`). `reports:*` and `settings:*` keys do not exist yet — they are introduced with milestones M15/M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization tables mark them as planned.
 2. **Only realm roles are used.** No Keycloak client roles or composite roles are configured, deliberately — see [RBAC Model](#rbac-model).
 3. **"Super Admin" and "Read-only" are not implemented roles.** The system roles are exactly `Admin`, `Partner`, `Customer` ([requirements.md § User Roles](./requirements.md#user-roles)); the [System Roles](#system-roles) section documents the two future candidates and the mechanism that makes them cheap to add.
 
