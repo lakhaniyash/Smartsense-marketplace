@@ -1,6 +1,7 @@
 import { ProductStatus } from '@prisma/client'
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql'
 import { CategoryOutput } from './category.output'
+import { ProductVariantOutput } from './product-variant.output'
 
 registerEnumType(ProductStatus, {
   name: 'ProductStatus',
@@ -9,11 +10,9 @@ registerEnumType(ProductStatus, {
 
 @ObjectType('Product', {
   description:
-    'A Partner catalog listing. SKU is flattened here from an internal ProductVariant ' +
-    'record the service layer creates and maintains automatically — Variants and ' +
-    'Inventory are not modeled in this API yet (M12 Catalog Foundation scope; see ' +
-    'docs/milestones.md M12). Price is intentionally absent until the Decimal/Money ' +
-    'scalar ships with M14 Billing.',
+    'A Partner catalog listing. Always has at least one ProductVariant ' +
+    '(docs/domain-model.md § Product Variant); `sku` is flattened from the default one ' +
+    'for convenience, and `variants` carries the full list for management.',
 })
 export class ProductOutput {
   @Field(() => ID)
@@ -28,7 +27,7 @@ export class ProductOutput {
   @Field(() => String, { nullable: true })
   brand!: string | null
 
-  @Field({ description: 'Flattened from the internal singleton ProductVariant.' })
+  @Field({ description: 'Flattened from the default ProductVariant.' })
   sku!: string
 
   @Field(() => ProductStatus)
@@ -36,6 +35,9 @@ export class ProductOutput {
 
   @Field(() => CategoryOutput)
   category!: CategoryOutput
+
+  @Field(() => [ProductVariantOutput])
+  variants!: ProductVariantOutput[]
 
   @Field()
   createdAt!: Date

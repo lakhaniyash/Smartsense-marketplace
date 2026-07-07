@@ -31,13 +31,6 @@ export class UpdateProductInput {
   @IsUUID()
   categoryId?: string
 
-  @Field({ nullable: true, description: 'Updates the internal singleton ProductVariant.' })
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(64)
-  sku?: string
-
   @Field(() => ProductStatus, { nullable: true })
   @IsOptional()
   @IsEnum(ProductStatus)

@@ -94,7 +94,8 @@ describe('Catalog (e2e)', () => {
         productId: product.id,
         partnerId,
         sku,
-        price: 0,
+        price: 10,
+        isDefault: true,
       },
     })
     await prisma.inventory.create({ data: { productVariantId: variant.id } })
@@ -410,6 +411,7 @@ describe('Catalog (e2e)', () => {
               title: 'Denied Product',
               categoryId: electronicsCategoryId,
               sku: 'CATALOG-E2E-DENIED-SKU',
+              price: '9.99',
             },
           },
         })
@@ -429,6 +431,7 @@ describe('Catalog (e2e)', () => {
               title: 'Catalog E2E Created Product',
               categoryId: electronicsCategoryId,
               sku: 'CATALOG-E2E-CREATED-SKU',
+              price: '24.99',
             },
           },
         })
@@ -466,6 +469,7 @@ describe('Catalog (e2e)', () => {
               title: 'Duplicate SKU Product',
               categoryId: electronicsCategoryId,
               sku: 'CATALOG-E2E-OWN-SKU', // already used by ownProductId's variant
+              price: '9.99',
             },
           },
         })
@@ -549,6 +553,370 @@ describe('Catalog (e2e)', () => {
         .expect(200)
 
       expect(res.body.errors[0].extensions.code).toBe('NOT_FOUND')
+    })
+  })
+
+  describe('variants and inventory', () => {
+    const CREATE_VARIANT_MUTATION = `
+      mutation CreateVariant($input: CreateProductVariantInput!) {
+        createProductVariant(input: $input) {
+          id
+          sku
+          price
+          isDefault
+          attributes { key value }
+          inventory { quantityOnHand quantityReserved sellableQuantity }
+        }
+      }
+    `
+
+    async function productVariants(productId: string) {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query:
+            'query($id: ID!) { productById(id: $id) { variants { id sku isDefault status } } }',
+          variables: { id: productId },
+        })
+        .expect(200)
+      return res.body.data.productById.variants as Array<{
+        id: string
+        sku: string
+        isDefault: boolean
+      }>
+    }
+
+    it('rejects a caller with no catalog:write permission', async () => {
+      const token = signToken()
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: { input: { productId: ownProductId, sku: 'X', price: '1.00' } },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('FORBIDDEN')
+    })
+
+    it('returns NOT_FOUND when adding a variant to a Product owned by a different Partner', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: { input: { productId: otherProductId, sku: 'X', price: '1.00' } },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('NOT_FOUND')
+    })
+
+    it('adds a non-default Variant with structured attributes, without disturbing the existing default', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: {
+            input: {
+              productId: ownProductId,
+              sku: 'CATALOG-E2E-VARIANT-2',
+              price: '29.99',
+              attributes: [{ key: 'color', value: 'Blue' }],
+            },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors).toBeUndefined()
+      expect(res.body.data.createProductVariant).toMatchObject({
+        sku: 'CATALOG-E2E-VARIANT-2',
+        price: '29.99',
+        isDefault: false,
+        attributes: [{ key: 'color', value: 'Blue' }],
+        inventory: { quantityOnHand: 0, quantityReserved: 0, sellableQuantity: 0 },
+      })
+
+      const variants = await productVariants(ownProductId)
+      expect(variants.filter((v) => v.isDefault)).toHaveLength(1)
+      expect(variants.find((v) => v.sku === 'CATALOG-E2E-OWN-SKU')?.isDefault).toBe(true)
+    })
+
+    it('rejects a duplicate SKU within the same Partner as CONFLICT', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: {
+            input: { productId: ownProductId, sku: 'CATALOG-E2E-OWN-SKU', price: '5.00' },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('CONFLICT')
+    })
+
+    it('rejects a non-positive price at the input layer', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: {
+            input: { productId: ownProductId, sku: 'CATALOG-E2E-ZERO-PRICE', price: '0' },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
+    it('setDefaultProductVariant promotes a new default and demotes the previous one', async () => {
+      const createRes = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: {
+            input: { productId: ownProductId, sku: 'CATALOG-E2E-VARIANT-3', price: '15.00' },
+          },
+        })
+        .expect(200)
+      const newVariantId = createRes.body.data.createProductVariant.id as string
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: 'mutation($id: ID!) { setDefaultProductVariant(id: $id) { id isDefault } }',
+          variables: { id: newVariantId },
+        })
+        .expect(200)
+
+      expect(res.body.errors).toBeUndefined()
+      expect(res.body.data.setDefaultProductVariant).toEqual({ id: newVariantId, isDefault: true })
+
+      const variants = await productVariants(ownProductId)
+      expect(variants.filter((v) => v.isDefault)).toEqual([
+        expect.objectContaining({ id: newVariantId }),
+      ])
+    })
+
+    it('rejects archiving the default variant', async () => {
+      const variants = await productVariants(ownProductId)
+      const defaultVariant = variants.find((v) => v.isDefault)
+      expect(defaultVariant).toBeDefined()
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: 'mutation($id: ID!) { archiveProductVariant(id: $id) { id } }',
+          variables: { id: defaultVariant!.id },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
+    it("rejects archiving a Product's only remaining variant", async () => {
+      // A Product created via createProduct/createProductFixture always
+      // starts with exactly one Variant, which is necessarily its default —
+      // this exercises the same "must keep >= 1 Variant" invariant that
+      // "rejects archiving the default variant" covers from the other angle.
+      const solo = await createProductFixture(
+        ownPartnerId,
+        electronicsCategoryId,
+        'CATALOG-E2E-SOLO-SKU',
+      )
+      mutationCreatedProductIds.push(solo.id)
+      const [soloVariant] = await productVariants(solo.id)
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: 'mutation($id: ID!) { archiveProductVariant(id: $id) { id } }',
+          variables: { id: soloVariant?.id },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
+    it('archives a non-default Variant when another Variant remains', async () => {
+      const variants = await productVariants(ownProductId)
+      const nonDefault = variants.find((v) => !v.isDefault)
+      expect(nonDefault).toBeDefined()
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: 'mutation($id: ID!) { archiveProductVariant(id: $id) { id } }',
+          variables: { id: nonDefault!.id },
+        })
+        .expect(200)
+
+      expect(res.body.errors).toBeUndefined()
+    })
+
+    describe('updateProductVariant', () => {
+      it('rejects setting status directly to ACTIVE or OUT_OF_STOCK', async () => {
+        const variants = await productVariants(ownProductId)
+        const target = variants[0]
+
+        const res = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: `
+              mutation($input: UpdateProductVariantInput!) {
+                updateProductVariant(input: $input) { id status }
+              }
+            `,
+            variables: { input: { id: target?.id, status: 'OUT_OF_STOCK' } },
+          })
+          .expect(200)
+
+        expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      })
+
+      it('allows transitioning status to DISCONTINUED', async () => {
+        const created = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: CREATE_VARIANT_MUTATION,
+            variables: {
+              input: { productId: ownProductId, sku: 'CATALOG-E2E-DISCONTINUE', price: '3.00' },
+            },
+          })
+          .expect(200)
+        const variantId = created.body.data.createProductVariant.id as string
+
+        const res = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: `
+              mutation($input: UpdateProductVariantInput!) {
+                updateProductVariant(input: $input) { id status }
+              }
+            `,
+            variables: { input: { id: variantId, status: 'DISCONTINUED' } },
+          })
+          .expect(200)
+
+        expect(res.body.errors).toBeUndefined()
+        expect(res.body.data.updateProductVariant).toEqual({
+          id: variantId,
+          status: 'DISCONTINUED',
+        })
+      })
+    })
+
+    describe('adjustInventory', () => {
+      const ADJUST_MUTATION = `
+        mutation($input: AdjustInventoryInput!) {
+          adjustInventory(input: $input) {
+            id
+            status
+            inventory { quantityOnHand quantityReserved sellableQuantity }
+          }
+        }
+      `
+
+      it('returns NOT_FOUND for a variant owned by a different Partner', async () => {
+        const [otherVariant] = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${adminToken()}`)
+          .send({
+            query: 'query($id: ID!) { productById(id: $id) { variants { id } } }',
+            variables: { id: otherProductId },
+          })
+          .then((res) => res.body.data.productById.variants as Array<{ id: string }>)
+
+        const res = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: ADJUST_MUTATION,
+            variables: {
+              input: {
+                productVariantId: otherVariant?.id,
+                adjustmentType: 'INCREASE',
+                quantity: 1,
+              },
+            },
+          })
+          .expect(200)
+
+        expect(res.body.errors[0].extensions.code).toBe('NOT_FOUND')
+      })
+
+      it('INCREASE raises quantityOnHand and flips status to ACTIVE', async () => {
+        const created = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: CREATE_VARIANT_MUTATION,
+            variables: {
+              input: { productId: ownProductId, sku: 'CATALOG-E2E-ADJUST-1', price: '7.50' },
+            },
+          })
+          .expect(200)
+        const variantId = created.body.data.createProductVariant.id as string
+
+        const res = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: ADJUST_MUTATION,
+            variables: {
+              input: { productVariantId: variantId, adjustmentType: 'INCREASE', quantity: 20 },
+            },
+          })
+          .expect(200)
+
+        expect(res.body.errors).toBeUndefined()
+        expect(res.body.data.adjustInventory).toEqual({
+          id: variantId,
+          status: 'ACTIVE',
+          inventory: { quantityOnHand: 20, quantityReserved: 0, sellableQuantity: 20 },
+        })
+      })
+
+      it('rejects a DECREASE that would drive stock negative', async () => {
+        const created = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: CREATE_VARIANT_MUTATION,
+            variables: {
+              input: { productId: ownProductId, sku: 'CATALOG-E2E-ADJUST-2', price: '7.50' },
+            },
+          })
+          .expect(200)
+        const variantId = created.body.data.createProductVariant.id as string
+
+        const res = await request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${partnerToken()}`)
+          .send({
+            query: ADJUST_MUTATION,
+            variables: {
+              input: { productVariantId: variantId, adjustmentType: 'DECREASE', quantity: 1 },
+            },
+          })
+          .expect(200)
+
+        expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      })
     })
   })
 })

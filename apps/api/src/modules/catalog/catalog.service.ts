@@ -15,26 +15,23 @@ import { ProductSortField, SortDirection } from './dto/product-sort.enum'
 import { ProductSortInput } from './dto/product-sort.input'
 import { ProductOutput } from './dto/product.output'
 import { UpdateProductInput } from './dto/update-product.input'
+import { mapVariantToOutput } from './mappers/product-variant.mapper'
 
 const DEFAULT_PAGE_SIZE = 20
 
-// Internal placeholder only — ProductVariant.price is a required, non-null
-// column, but this milestone's API deliberately never exposes price at all
-// (Product Foundation defers pricing to M14/Billing, per the confirmed scope
-// decision — see docs/milestones.md M12 and ProductOutput's description).
-// Nothing reads this value; M14 replaces this write with a real price input.
-const INTERNAL_VARIANT_PLACEHOLDER_PRICE = 0
-
-const PRODUCT_LIST_INCLUDE = {
+const PRODUCT_INCLUDE = {
   category: true,
-  // Every Product has exactly one internal ProductVariant, created and
-  // maintained by this service (Variants/Inventory are not modeled in the
-  // API this milestone — see ProductOutput's description). `take: 1` is
-  // defensive, not load-bearing: nothing else can ever create a second one.
-  variants: { take: 1 },
+  // Every Product has at least one ProductVariant (docs/domain-model.md
+  // § Product Variant); the default one surfaces as ProductOutput.sku, the
+  // full list as ProductOutput.variants. Soft-deleted Variants are excluded.
+  variants: {
+    where: { deletedAt: null },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    include: { inventory: true },
+  },
 } satisfies Prisma.ProductInclude
 
-type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof PRODUCT_LIST_INCLUDE }>
+type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof PRODUCT_INCLUDE }>
 
 export interface FindProductsArgs {
   first?: number | undefined
@@ -82,7 +79,7 @@ export class CatalogService {
         cursor: { id: this.decodeCursor(after) },
         skip: 1,
       }),
-      include: PRODUCT_LIST_INCLUDE,
+      include: PRODUCT_INCLUDE,
     })
 
     const hasNextPage = rows.length > first
@@ -107,7 +104,7 @@ export class CatalogService {
   async findProductById(user: AuthenticatedUser, id: string): Promise<ProductOutput> {
     const product = await this.prisma.product.findFirst({
       where: { id, deletedAt: null },
-      include: PRODUCT_LIST_INCLUDE,
+      include: PRODUCT_INCLUDE,
     })
 
     // Ownership miss reads as NOT_FOUND, never FORBIDDEN — an id outside the
@@ -122,11 +119,11 @@ export class CatalogService {
 
   /**
    * Creates a Product owned by the caller's own Partner, transactionally
-   * alongside its internal singleton ProductVariant + zero-quantity
-   * Inventory row (docs/domain-model.md: "even a product with no real
-   * variation... still has exactly one ProductVariant row"). Ownership is
-   * never client-supplied — it's always the caller's own partnerId
-   * (docs/authorization.md § Ownership Rules).
+   * alongside its initial, default ProductVariant + zero-quantity Inventory
+   * row (docs/domain-model.md: "even a product with no real variation...
+   * still has exactly one ProductVariant row"). Further Variants are added
+   * via createProductVariant. Ownership is never client-supplied — it's
+   * always the caller's own partnerId (docs/authorization.md § Ownership Rules).
    */
   async createProduct(user: AuthenticatedUser, input: CreateProductInput): Promise<ProductOutput> {
     const partnerId = user.partnerId
@@ -156,7 +153,8 @@ export class CatalogService {
             productId: product.id,
             partnerId,
             sku: input.sku,
-            price: INTERNAL_VARIANT_PLACEHOLDER_PRICE,
+            price: input.price,
+            isDefault: true,
           },
         })
         await tx.inventory.create({ data: { productVariantId: variant.id } })
@@ -171,7 +169,7 @@ export class CatalogService {
   /**
    * Partial update. Ownership is verified before any write, in the same
    * method as the write itself (docs/authorization.md § Ownership Rules).
-   * A supplied `sku` updates the internal singleton variant, not the Product.
+   * SKU/price/variant-level fields are managed via VariantService, not here.
    */
   async updateProduct(user: AuthenticatedUser, input: UpdateProductInput): Promise<ProductOutput> {
     const existing = await this.prisma.product.findFirst({
@@ -182,26 +180,18 @@ export class CatalogService {
     }
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.product.update({
-          where: { id: input.id },
-          data: {
-            ...(input.title !== undefined && { title: input.title }),
-            ...(input.description !== undefined && { description: input.description }),
-            ...(input.brand !== undefined && { brand: input.brand }),
-            ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
-            ...(input.status !== undefined && {
-              status: input.status,
-              ...(input.status === ProductStatus.PUBLISHED && { publishedAt: new Date() }),
-            }),
-          },
-        })
-        if (input.sku !== undefined) {
-          await tx.productVariant.updateMany({
-            where: { productId: input.id },
-            data: { sku: input.sku },
-          })
-        }
+      await this.prisma.product.update({
+        where: { id: input.id },
+        data: {
+          ...(input.title !== undefined && { title: input.title }),
+          ...(input.description !== undefined && { description: input.description }),
+          ...(input.brand !== undefined && { brand: input.brand }),
+          ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
+          ...(input.status !== undefined && {
+            status: input.status,
+            ...(input.status === ProductStatus.PUBLISHED && { publishedAt: new Date() }),
+          }),
+        },
       })
     } catch (error) {
       this.translatePrismaError(error)
@@ -269,19 +259,21 @@ export class CatalogService {
   }
 
   private mapProductToOutput(product: ProductWithRelations): ProductOutput {
-    const [variant] = product.variants
-    if (variant === undefined) {
-      // Fail loud: every Product this service creates gets exactly one
-      // variant in the same transaction (see createProduct) — a Product
-      // with none means that invariant was violated, not a normal miss.
-      throw new Error(`Product ${product.id} has no internal ProductVariant`)
+    const defaultVariant =
+      product.variants.find((variant) => variant.isDefault) ?? product.variants[0]
+    if (defaultVariant === undefined) {
+      // Fail loud: every Product this service creates gets a default variant
+      // in the same transaction (see createProduct), and archiveProductVariant
+      // refuses to remove a Product's last one — a Product with none means
+      // that invariant was violated, not a normal miss.
+      throw new Error(`Product ${product.id} has no ProductVariant`)
     }
     return {
       id: product.id,
       title: product.title,
       description: product.description,
       brand: product.brand,
-      sku: variant.sku,
+      sku: defaultVariant.sku,
       status: product.status,
       category: {
         id: product.category.id,
@@ -290,6 +282,7 @@ export class CatalogService {
         parentCategoryId: product.category.parentCategoryId,
         displayOrder: product.category.displayOrder,
       },
+      variants: product.variants.map(mapVariantToOutput),
       createdAt: product.createdAt,
       publishedAt: product.publishedAt,
     }
