@@ -1,0 +1,21 @@
+mutation CreateProductVariant($input: CreateProductVariantInput!) {
+  createProductVariant(input: $input) {
+    id
+    sku
+    price
+    status
+    isDefault
+    attributes {
+      key
+      value
+    }
+    inventory {
+      quantityOnHand
+      quantityReserved
+      sellableQuantity
+      reorderThreshold
+      updatedAt
+    }
+    createdAt
+  }
+}

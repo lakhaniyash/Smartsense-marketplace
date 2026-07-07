@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { ProductStatus } from '@lib/graphql/__generated__/graphql'
 import { Button, Input, Select, Textarea, type SelectOption } from '@shared/components'
 import { CategorySelect } from './CategorySelect'
-import { productFormSchema, type ProductFormValues } from './productForm.schema'
+import { buildProductFormSchema, type ProductFormValues } from './productForm.schema'
 
 const STATUS_OPTIONS: SelectOption[] = [
   { value: ProductStatus.Draft, label: 'Draft' },
@@ -13,14 +13,11 @@ const STATUS_OPTIONS: SelectOption[] = [
 ]
 
 export interface ProductFormProps {
+  mode: 'create' | 'edit'
   defaultValues?: Partial<ProductFormValues> | undefined
   onSubmit: (values: ProductFormValues) => void
   isSubmitting: boolean
   submitLabel: string
-  // A new Product always starts DRAFT (docs/domain-model.md § Catalog
-  // Management) — the status field only makes sense once editing an
-  // existing one.
-  showStatusField?: boolean
 }
 
 // exactOptionalPropertyTypes forbids passing `error={undefined}` to the
@@ -33,19 +30,22 @@ function errorProp(message: string | undefined): { error?: string } {
 
 // One page hosts both create and edit (SM-113) — this component is the
 // shared form; ProductFormPage decides which mutation `onSubmit` wraps.
+// `mode` also decides which fields render: sku/price seed the initial
+// default ProductVariant (create only); status only makes sense once
+// editing an existing Product.
 export function ProductForm({
+  mode,
   defaultValues,
   onSubmit,
   isSubmitting,
   submitLabel,
-  showStatusField = false,
 }: ProductFormProps) {
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<ProductFormValues>({
-    resolver: zodResolver(productFormSchema),
+    resolver: zodResolver(buildProductFormSchema(mode)),
     ...(defaultValues !== undefined && { defaultValues }),
   })
 
@@ -57,14 +57,25 @@ export function ProductForm({
         {...register('categoryId')}
         {...errorProp(errors.categoryId?.message)}
       />
-      <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+      {mode === 'create' && (
+        <>
+          <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+          <Input
+            label="Price"
+            required
+            helperText="e.g. 19.99"
+            {...register('price')}
+            {...errorProp(errors.price?.message)}
+          />
+        </>
+      )}
       <Textarea
         label="Description"
         {...register('description')}
         {...errorProp(errors.description?.message)}
       />
       <Input label="Brand" {...register('brand')} {...errorProp(errors.brand?.message)} />
-      {showStatusField && (
+      {mode === 'edit' && (
         <Select
           label="Status"
           options={STATUS_OPTIONS}

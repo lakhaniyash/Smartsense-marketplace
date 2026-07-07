@@ -35,9 +35,10 @@ test.describe('Catalog', () => {
     await page.getByLabel('Title').fill('Playwright E2E Product')
     await page.getByLabel('Category').selectOption({ label: 'Electronics' })
     await page.getByLabel('SKU').fill(uniqueSku)
+    await page.getByLabel('Price').fill('19.99')
     await page.getByRole('button', { name: 'Create product' }).click()
 
-    await expect(page.getByText('Product created')).toBeVisible()
+    await expect(page.getByText('Product created').first()).toBeVisible()
     await expect(page).toHaveURL(/\/catalog\/[0-9a-f-]+$/)
     await expect(page.getByRole('heading', { name: 'Playwright E2E Product' })).toBeVisible()
     await expect(page.getByText(`SKU: ${uniqueSku}`)).toBeVisible()
@@ -60,7 +61,7 @@ test.describe('Catalog', () => {
     await expect(page).toHaveURL(/\/edit$/)
     await page.getByLabel('Title').fill('Playwright E2E Product (renamed)')
     await page.getByRole('button', { name: 'Save changes' }).click()
-    await expect(page.getByText('Product updated')).toBeVisible()
+    await expect(page.getByText('Product updated').first()).toBeVisible()
     await expect(
       page.getByRole('heading', { name: 'Playwright E2E Product (renamed)' }),
     ).toBeVisible()
@@ -68,7 +69,7 @@ test.describe('Catalog', () => {
     // Delete — cleans up the fixture this test created.
     await page.getByRole('button', { name: 'Delete' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
-    await expect(page.getByText('Product deleted')).toBeVisible()
+    await expect(page.getByText('Product deleted').first()).toBeVisible()
     await expect(page).toHaveURL(/\/catalog$/)
   })
 })

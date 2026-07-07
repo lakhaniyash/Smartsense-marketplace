@@ -49,22 +49,34 @@ export function ProductFormPage() {
     const description = values.description === '' ? undefined : values.description
     const brand = values.brand === '' ? undefined : values.brand
 
-    const input = {
-      title: values.title,
-      categoryId: values.categoryId,
-      sku: values.sku,
-      ...(description !== undefined && { description }),
-      ...(brand !== undefined && { brand }),
-    }
-
     if (isEditMode) {
       void updateProduct({
         variables: {
-          input: { id, ...input, ...(values.status !== undefined && { status: values.status }) },
+          input: {
+            id,
+            title: values.title,
+            categoryId: values.categoryId,
+            ...(description !== undefined && { description }),
+            ...(brand !== undefined && { brand }),
+            ...(values.status !== undefined && { status: values.status }),
+          },
         },
       })
-    } else {
-      void createProduct({ variables: { input } })
+    } else if (values.sku !== undefined && values.price !== undefined) {
+      // buildProductFormSchema('create') rejects submission before this
+      // point if either is missing, so this narrows rather than guards.
+      void createProduct({
+        variables: {
+          input: {
+            title: values.title,
+            categoryId: values.categoryId,
+            sku: values.sku,
+            price: values.price,
+            ...(description !== undefined && { description }),
+            ...(brand !== undefined && { brand }),
+          },
+        },
+      })
     }
   }
 
@@ -96,12 +108,12 @@ export function ProductFormPage() {
       />
       <PageHeader title={isEditMode ? 'Edit product' : 'New product'} />
       <ProductForm
+        mode={isEditMode ? 'edit' : 'create'}
         defaultValues={
           isEditMode && product !== undefined
             ? {
                 title: product.title,
                 categoryId: product.category.id,
-                sku: product.sku,
                 status: product.status,
               }
             : undefined
@@ -109,7 +121,6 @@ export function ProductFormPage() {
         onSubmit={handleSubmit}
         isSubmitting={isCreating || isUpdating}
         submitLabel={isEditMode ? 'Save changes' : 'Create product'}
-        showStatusField={isEditMode}
       />
     </div>
   )
