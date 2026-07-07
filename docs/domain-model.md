@@ -411,6 +411,36 @@ Notes on the diagram:
 
 ---
 
+### Order Status History
+
+**Purpose.** An append-only audit trail of an Order's status transitions, dedicated rather than reusing the generic `Audit Log` (below) so the Order detail page's timeline UI can query it directly without filtering a cross-entity log (M13, docs/milestones.md).
+
+**Attributes**
+
+| Attribute       | Notes                                                           |
+| --------------- | --------------------------------------------------------------- |
+| id              |                                                                 |
+| orderId         |                                                                 |
+| fromStatus      | Nullable — null for the initial row created alongside the Order |
+| toStatus        |                                                                 |
+| changedByUserId | Nullable — survives the acting User's deletion (`SetNull`)      |
+| reason          | Optional, free text (e.g. a cancellation reason)                |
+| createdAt       |                                                                 |
+
+**Relationships**
+
+- Many-to-one with `Order` (`Cascade` — history has no independent existence without its Order).
+- Many-to-one with `User` (`SetNull` on delete).
+
+**Business rules**
+
+- One row is created per status transition, in the same transaction as the transition itself (docs/api-conventions.md § Transactions) — never as an eventually-consistent side effect.
+- Rows are never updated or deleted; the table is append-only, same convention as `Audit Log`.
+
+**Lifecycle.** Created alongside the Order (initial `DRAFT` row) and once per subsequent transition; never modified.
+
+---
+
 ### Invoice
 
 **Purpose.** The financial document issued for a completed Order, billed to the Customer and used to reconcile what the Partner is owed.

@@ -49,6 +49,8 @@ erDiagram
     PRODUCT_VARIANT ||--o{ ORDER_ITEM : "ordered as"
 
     ORDER ||--o{ ORDER_ITEM : contains
+    ORDER ||--o{ ORDER_STATUS_HISTORY : "tracked by"
+    USER ||--o{ ORDER_STATUS_HISTORY : changes
     ORDER ||--o| INVOICE : "billed via"
     ORDER }o--o| ADDRESS : "ships to"
 
@@ -69,7 +71,7 @@ Notes:
 | -------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary keys         | `UUID`, Prisma `@default(uuid())`                                                                        | Non-sequential IDs avoid leaking row counts/creation order across a multi-tenant (multi-Partner) system; portable across environments without sequence coordination.                                                                                                                                                                                                                          |
 | Timestamps           | `createdAt` (`@default(now())`) + `updatedAt` (`@updatedAt`) on every mutable table                      | Baseline audit trail on every row, independent of `AuditLog` (which records _who_ and _why_, not just _when_).                                                                                                                                                                                                                                                                                |
-| Immutable tables     | `OrderItem`, `AuditLog` omit `updatedAt`                                                                 | They are write-once by business rule (domain-model.md) — omitting the column documents that in the schema itself.                                                                                                                                                                                                                                                                             |
+| Immutable tables     | `OrderItem`, `AuditLog`, `OrderStatusHistory` (M13) omit `updatedAt`                                     | They are write-once by business rule (domain-model.md) — omitting the column documents that in the schema itself.                                                                                                                                                                                                                                                                             |
 | Soft delete          | Nullable `deletedAt`                                                                                     | See [Soft Delete Strategy](#soft-delete-strategy) below.                                                                                                                                                                                                                                                                                                                                      |
 | Naming               | Prisma models/fields: `PascalCase`/`camelCase`. Database tables/columns: `snake_case` via `@@map`/`@map` | Prisma Client stays idiomatic TypeScript; the physical schema stays idiomatic PostgreSQL.                                                                                                                                                                                                                                                                                                     |
 | Money                | `Decimal @db.Decimal(12, 2)`                                                                             | Never `Float` — avoids binary floating-point rounding errors in financial calculations.                                                                                                                                                                                                                                                                                                       |
@@ -93,7 +95,7 @@ These are all entities the domain model explicitly says are deactivated/archived
 
 - `Permission` — static reference data, "never deleted while any code path still checks for it" (domain-model.md).
 - `Order`, `Invoice`, `Payment`, `BillingReport` — ledger/financial records. These use their own status state machine (`Cancelled`, `Void`, `Refunded`, etc.) as the "is this still active" signal; a `deletedAt` on top would create two competing sources of truth for the same question.
-- `OrderItem`, `AuditLog` — immutable by design (see table above); "deleted" isn't a state that should exist for a row that's supposed to be a permanent record.
+- `OrderItem`, `AuditLog`, `OrderStatusHistory` (M13) — immutable by design (see table above); "deleted" isn't a state that should exist for a row that's supposed to be a permanent record.
 - `UserRole`, `RolePermission` — pure join rows; removing an assignment is a hard delete of the join row, not a soft delete of the User/Role/Permission itself.
 
 **Enforcement note:** Prisma has no built-in global soft-delete filter. Every query against a soft-deletable model must explicitly filter `deletedAt: null` at the service layer (e.g. a shared Prisma Client extension/middleware) — this is a backend implementation task, not a schema concern, and is called out here so it isn't lost between milestones.
@@ -132,6 +134,7 @@ Every relationship in the schema, why it exists, and how it's enforced.
 - **`Customer` → `Order` (many-to-one)** and **`Partner` → `Order` (many-to-one)** — both `Restrict`. Assumption 3 (single-partner order scoping) is enforced at the application layer when building an Order's line items (all `OrderItem.productVariant.partnerId` must equal `Order.partnerId`) — this is a cross-table invariant, not something a single-row `CHECK` can express; see [Constraints Not Enforceable at the Database Level](#constraints-not-enforceable-at-the-database-level).
 - **`Address` → `Order` (many-to-one, optional, `shippingAddress`)** — `onDelete: Restrict`. In practice this should never fire, because Addresses are soft-deactivated (`isActive = false`), never hard-deleted (domain-model.md: "Soft-deactivate instead").
 - **`Order` → `OrderItem` (one-to-many)** — `onDelete: Cascade`. Line items have no independent existence without their Order.
+- **`Order` → `OrderStatusHistory` (one-to-many, M13)** — `onDelete: Cascade`, same reasoning as `OrderItem`. **`User` → `OrderStatusHistory` (many-to-one, optional, M13)** — `onDelete: SetNull`; history is a record of what happened and must outlive the acting User's own deletion.
 - **`Order` ↔ `Invoice` (one-to-one, optional)** — Assumption 7: exactly one Invoice per completed Order, and not every Order has reached that stage yet, hence optional on the Order side.
 
 ### Billing
@@ -187,6 +190,7 @@ None of these are bugs — they're the expected boundary between what a relation
 - Every soft-deletable model indexes `deletedAt` so `WHERE deleted_at IS NULL` scans stay cheap as tables grow.
 - Unique business keys double as their own index automatically: `User.email`, `User.keycloakSubjectId`, `Category.slug`, `Order.orderNumber`, `Invoice.invoiceNumber`, `Payment.externalTransactionId`, `ProductVariant.(partnerId, sku)`.
 - `AuditLog` indexes `(entityType, entityId)` for its primary query shape ("show me the history for this specific entity") and `occurredAt` for time-range queries independent of entity.
+- `OrderStatusHistory` (M13) indexes `(orderId, createdAt)` — its only query shape is "this Order's timeline, oldest first."
 
 ---
 
