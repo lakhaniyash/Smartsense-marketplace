@@ -10,7 +10,7 @@ const DECIMAL_PATTERN = /^\d+(\.\d{1,2})?$/
 // at the submit-handler boundary, never sent as `''` to the mutation.
 const baseProductFormSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(200, 'Title is too long'),
-  categoryId: z.string().min(1, 'Category is required'),
+  categoryId: z.string().uuid('Select a valid category'),
   description: z.string().trim().max(2000, 'Description is too long').optional(),
   brand: z.string().trim().max(100, 'Brand is too long').optional(),
   // `sku`/`price` seed the Product's initial default ProductVariant and are

@@ -29,6 +29,17 @@ describe('Select', () => {
     expect(placeholderOption).toBeDisabled()
   })
 
+  it('lets the user reselect a clearable placeholder after choosing a value (filter usage)', async () => {
+    render(<Select label="Status" options={options} placeholder="All statuses" clearable />)
+    const select = screen.getByLabelText('Status')
+
+    await userEvent.selectOptions(select, 'partner')
+    expect(select).toHaveValue('partner')
+
+    await userEvent.selectOptions(select, '')
+    expect(select).toHaveValue('')
+  })
+
   it('shows the error message instead of helper text', () => {
     render(<Select label="Role" options={options} helperText="Pick one" error="Role is required" />)
 

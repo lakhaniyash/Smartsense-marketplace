@@ -38,12 +38,15 @@ export function ProductFilterBar({
         onChange={(event) => onSearchChange(event.target.value || undefined)}
       />
       <CategorySelect
+        placeholder="All categories"
+        clearable
         value={categoryId ?? ''}
         onChange={(event) => onCategoryChange(event.target.value || undefined)}
       />
       <Select
         label="Status"
         placeholder="All statuses"
+        clearable
         options={STATUS_OPTIONS}
         value={status ?? ''}
         onChange={(event) => onStatusChange((event.target.value as ProductStatus) || undefined)}

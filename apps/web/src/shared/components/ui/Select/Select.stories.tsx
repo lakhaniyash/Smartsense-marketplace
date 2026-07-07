@@ -18,5 +18,16 @@ type Story = StoryObj<typeof Select>
 
 export const Default: Story = {}
 export const WithPlaceholder: Story = { args: { placeholder: 'Choose a role' } }
+export const AsFilter: Story = {
+  args: { label: 'Status', placeholder: 'All statuses', clearable: true },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Use `clearable` for filter Selects, where the placeholder is a real "no filter" state the user must be able to reselect — never for a required form field.',
+      },
+    },
+  },
+}
 export const WithError: Story = { args: { error: 'Role is required' } }
 export const Disabled: Story = { args: { disabled: true } }

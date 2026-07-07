@@ -10,6 +10,10 @@ export interface CategorySelectProps extends Omit<
   label?: string
   placeholder?: string
   error?: string
+  // See Select's own doc comment — set true when this is a filter (the
+  // placeholder means "all categories" and must stay re-selectable), leave
+  // false (default) for a required form field like ProductForm's picker.
+  clearable?: boolean
 }
 
 // Wraps the shared Select with the live category taxonomy. Read-only browse
@@ -18,6 +22,7 @@ export interface CategorySelectProps extends Omit<
 export function CategorySelect({
   label = 'Category',
   placeholder = 'Select a category',
+  clearable = false,
   disabled,
   error,
   ...props
@@ -29,6 +34,7 @@ export function CategorySelect({
     <Select
       label={label}
       placeholder={placeholder}
+      clearable={clearable}
       options={options}
       disabled={isLoading || disabled}
       {...(error !== undefined && { error })}
