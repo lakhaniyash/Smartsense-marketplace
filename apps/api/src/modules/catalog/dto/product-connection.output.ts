@@ -1,5 +1,5 @@
 import { Field, ObjectType } from '@nestjs/graphql'
-import { PageInfoOutput } from './page-info.output'
+import { PageInfoOutput } from '../../../common/graphql/page-info.output'
 import { ProductOutput } from './product.output'
 
 @ObjectType('ProductEdge')

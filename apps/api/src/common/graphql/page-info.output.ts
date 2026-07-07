@@ -1,8 +1,8 @@
 import { Field, ObjectType } from '@nestjs/graphql'
 
-// Relay-style cursor pagination shape (docs/graphql.md § 5 Pagination). Stays
-// local to the catalog module until a second module needs the same shape —
-// then it promotes to common/graphql/ per docs/graphql.md § 3 Shared Types.
+// Relay-style cursor pagination shape (docs/graphql.md § 5 Pagination).
+// Promoted from the Catalog module once Orders (M13) became its second
+// consumer, per docs/graphql.md § 3 Shared Types.
 @ObjectType('PageInfo')
 export class PageInfoOutput {
   @Field()

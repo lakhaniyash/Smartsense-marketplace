@@ -1,8 +1,9 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { PartnerStatus, Prisma, ProductStatus, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
+import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { CatalogService } from './catalog.service'
-import { ProductSortField, SortDirection } from './dto/product-sort.enum'
+import { ProductSortField } from './dto/product-sort.enum'
 
 function knownRequestError(code: string): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError('mock', { code, clientVersion: '6.0.0' })

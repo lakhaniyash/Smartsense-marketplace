@@ -1,0 +1,40 @@
+query GetOrderById($id: ID!) {
+  order(id: $id) {
+    id
+    orderNumber
+    status
+    customerId
+    partnerId
+    shippingAddressId
+    subtotal
+    tax
+    shippingCost
+    total
+    placedAt
+    createdAt
+    updatedAt
+    items {
+      id
+      productVariantId
+      quantity
+      unitPriceSnapshot
+      lineTotal
+      productVariant {
+        id
+        sku
+        attributes {
+          key
+          value
+        }
+      }
+    }
+    statusHistory {
+      id
+      fromStatus
+      toStatus
+      changedByUserId
+      reason
+      createdAt
+    }
+  }
+}

@@ -17,12 +17,15 @@ const ADJUSTMENT_OPTIONS: SelectOption[] = [
 
 // Validates user input before a mutation is even sent — a UX optimization,
 // not the security/correctness boundary (docs/architecture.md § Forms).
+const MAX_QUANTITY = 1_000_000
+
 const adjustInventoryFormSchema = z.object({
   adjustmentType: z.nativeEnum(InventoryAdjustmentType),
   quantity: z.coerce
     .number({ invalid_type_error: 'Quantity is required' })
     .int('Quantity must be a whole number')
-    .min(0, 'Quantity cannot be negative'),
+    .min(0, 'Quantity cannot be negative')
+    .max(MAX_QUANTITY, `Quantity cannot exceed ${MAX_QUANTITY.toLocaleString()}`),
   reason: z.string().trim().max(200, 'Reason is too long').optional(),
 })
 type AdjustInventoryFormValues = z.infer<typeof adjustInventoryFormSchema>

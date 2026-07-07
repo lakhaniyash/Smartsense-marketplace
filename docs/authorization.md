@@ -27,7 +27,7 @@ This document covers **authorization**: the RBAC/permission model, role definiti
 
 **Assumptions made explicit.**
 
-1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): nine `Permission.key` values across five domains. `reports:*` and `settings:*` keys do not exist yet — they are introduced with milestones M15/M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization tables mark them as planned.
+1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): ten `Permission.key` values across five domains (M13 added `orders:create`). `reports:*` and `settings:*` keys do not exist yet — they are introduced with milestones M15/M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization tables mark them as planned.
 2. **Only realm roles are used.** No Keycloak client roles or composite roles are configured, deliberately — see [RBAC Model](#rbac-model).
 3. **"Super Admin" and "Read-only" are not implemented roles.** The system roles are exactly `Admin`, `Partner`, `Customer` ([requirements.md § User Roles](./requirements.md#user-roles)); the [System Roles](#system-roles) section documents the two future candidates and the mechanism that makes them cheap to add.
 
@@ -103,19 +103,22 @@ The action vocabulary is **deliberately coarser than CRUD**. Full CRUD granulari
 
 Splitting an action into finer keys is an additive change (new `Permission` row + `RolePermission` grants in a migration) made **when a real requirement demands it** — e.g. if a "Catalog Editor who cannot archive products" role ever materializes, `catalog:write` splits then, not speculatively now.
 
+M13 (Orders) is the first real instance of this: `orders:create` (place/cancel one's own order) was split out from `orders:write` (drive fulfillment) because Customers must be trusted with the former but never the latter — the coarse `write` verb couldn't express that distinction. See the [Orders Status Transition Matrix](#orders-status-transition-matrix-m13) below.
+
 ### The Seeded Catalog
 
-| Permission key   | Grants                                    | Admin | Partner | Customer |
-| ---------------- | ----------------------------------------- | :---: | :-----: | :------: |
-| `dashboard:view` | Dashboard analytics and summaries         |  ✅   |   ✅    |    ✅    |
-| `catalog:read`   | View products, variants, categories       |  ✅   |   ✅    |    —     |
-| `catalog:write`  | Create/edit products, variants, inventory |  ✅   |   ✅    |    —     |
-| `orders:read`    | View orders and order history             |  ✅   |   ✅    |    ✅    |
-| `orders:write`   | Update order status, manage fulfillment   |  ✅   |   ✅    |    —     |
-| `billing:read`   | View invoices, payments, billing reports  |  ✅   |   ✅    |    —     |
-| `billing:manage` | Administrative billing operations         |  ✅   |    —    |    —     |
-| `users:read`     | View platform users                       |  ✅   |    —    |    —     |
-| `users:manage`   | Manage users and role assignments         |  ✅   |    —    |    —     |
+| Permission key   | Grants                                                          | Admin | Partner | Customer |
+| ---------------- | --------------------------------------------------------------- | :---: | :-----: | :------: |
+| `dashboard:view` | Dashboard analytics and summaries                               |  ✅   |   ✅    |    ✅    |
+| `catalog:read`   | View products, variants, categories                             |  ✅   |   ✅    |    ✅    |
+| `catalog:write`  | Create/edit products, variants, inventory                       |  ✅   |   ✅    |    —     |
+| `orders:read`    | View orders and order history                                   |  ✅   |   ✅    |    ✅    |
+| `orders:create`  | Place a new order; cancel an own order before fulfillment (M13) |  ✅   |   ✅    |    ✅    |
+| `orders:write`   | Update order status, manage fulfillment                         |  ✅   |   ✅    |    —     |
+| `billing:read`   | View invoices, payments, billing reports                        |  ✅   |   ✅    |    —     |
+| `billing:manage` | Administrative billing operations                               |  ✅   |    —    |    —     |
+| `users:read`     | View platform users                                             |  ✅   |    —    |    —     |
+| `users:manage`   | Manage users and role assignments                               |  ✅   |    —    |    —     |
 
 Grants are exactly as seeded (`database/prisma/seed.ts`); a ✅ never implies ownership bypass — Partner and Customer grants are always additionally ownership-scoped ([Ownership Rules](#ownership-rules)).
 
@@ -123,13 +126,13 @@ Grants are exactly as seeded (`database/prisma/seed.ts`); a ✅ never implies ow
 
 ## System Roles
 
-| Role                       | Responsibilities                                                                                                            | Accessible modules                                                        | Restrictions                                                                                                                                                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Admin**                  | Platform operation: partner approval, user/role administration, catalog oversight, billing administration, dispute handling | All modules, all records                                                  | None by permission — but every action is audit-logged ([Security Considerations](#security-considerations)); Admin is powerful, not invisible.                                                      |
-| **Partner**                | Run their own selling operation: catalog, inventory, order fulfillment, billing visibility                                  | Dashboard, Catalog, Orders, Billing (read), Reports/Settings when shipped | Strictly ownership-scoped: only records where `partnerId` matches their organization; no user administration; no billing management.                                                                |
-| **Customer**               | Browse and track their own purchases                                                                                        | Dashboard (own summary), Orders (own, read-only)                          | Read-mostly; no catalog management, no billing surface; scoped to `customerId` ownership.                                                                                                           |
-| **Super Admin** _(future)_ | Would separate platform _configuration_ (role/permission administration, destructive operations) from day-to-day operation  | —                                                                         | Not implemented — today `Admin` holds all nine permissions. If operational experience shows Admin is too broad, the split is a new system role + regrant, no structural change.                     |
-| **Read-only** _(future)_   | Auditor/viewer access — every `read`/`view` key, no `write`/`manage`                                                        | All modules, read-only                                                    | Not implemented — expressible today as a custom Postgres role composing the existing `*:read`/`*:view` keys, per [RBAC Model](#rbac-model); needs no new mechanism, only the decision to create it. |
+| Role                       | Responsibilities                                                                                                            | Accessible modules                                                                                               | Restrictions                                                                                                                                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Admin**                  | Platform operation: partner approval, user/role administration, catalog oversight, billing administration, dispute handling | All modules, all records                                                                                         | None by permission — but every action is audit-logged ([Security Considerations](#security-considerations)); Admin is powerful, not invisible.                                                      |
+| **Partner**                | Run their own selling operation: catalog, inventory, order fulfillment, billing visibility                                  | Dashboard, Catalog, Orders, Billing (read), Reports/Settings when shipped                                        | Strictly ownership-scoped: only records where `partnerId` matches their organization; no user administration; no billing management.                                                                |
+| **Customer**               | Browse, place, and track their own purchases                                                                                | Dashboard (own summary), Catalog (read-only, all Partners), Orders (own: read, place, cancel before fulfillment) | No catalog management, no billing surface, no fulfillment (`orders:write`); scoped to `customerId` ownership.                                                                                       |
+| **Super Admin** _(future)_ | Would separate platform _configuration_ (role/permission administration, destructive operations) from day-to-day operation  | —                                                                                                                | Not implemented — today `Admin` holds all nine permissions. If operational experience shows Admin is too broad, the split is a new system role + regrant, no structural change.                     |
+| **Read-only** _(future)_   | Auditor/viewer access — every `read`/`view` key, no `write`/`manage`                                                        | All modules, read-only                                                                                           | Not implemented — expressible today as a custom Postgres role composing the existing `*:read`/`*:view` keys, per [RBAC Model](#rbac-model); needs no new mechanism, only the decision to create it. |
 
 ---
 
@@ -137,22 +140,38 @@ Grants are exactly as seeded (`database/prisma/seed.ts`); a ✅ never implies ow
 
 Per-module access rules. "Own" means ownership-scoped per [Ownership Rules](#ownership-rules); permission keys marked _(planned)_ do not exist yet (Assumption 1).
 
-| Module                      | Operation                       | Required permission                                                                          | Admin    | Partner         | Customer                                                                 |
-| --------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- | -------- | --------------- | ------------------------------------------------------------------------ |
-| **Dashboard**               | View dashboard                  | `dashboard:view`                                                                             | All data | Own data        | Own data                                                                 |
-| **Catalog**                 | Browse products/categories      | `catalog:read`                                                                               | All      | Own catalog     | — _(public browsing is a future `@Public()` decision, not a permission)_ |
-|                             | Create/edit products, inventory | `catalog:write`                                                                              | All      | Own catalog     | —                                                                        |
-| **Orders**                  | View orders                     | `orders:read`                                                                                | All      | Own (as vendor) | Own (as buyer)                                                           |
-|                             | Update status / fulfill         | `orders:write`                                                                               | All      | Own (as vendor) | —                                                                        |
-| **Billing**                 | View invoices/payments          | `billing:read`                                                                               | All      | Own             | —                                                                        |
-|                             | Adjust/void/administer          | `billing:manage`                                                                             | All      | —               | —                                                                        |
-| **Reports**                 | Generate/view billing reports   | `reports:read` _(planned, M15)_ — interim: `billing:read`                                    | All      | Own             | —                                                                        |
-| **Settings**                | Own profile/preferences         | Authenticated (no key — every user manages _their own_ profile; ownership is the whole rule) | Own      | Own             | Own                                                                      |
-|                             | Partner organization settings   | `settings:manage` _(planned, M17)_ — interim: ownership + Partner role                       | All      | Own org         | —                                                                        |
-| **Users** _(Admin surface)_ | View users                      | `users:read`                                                                                 | All      | —               | —                                                                        |
-|                             | Manage users/roles              | `users:manage`                                                                               | All      | —               | —                                                                        |
+| Module                      | Operation                       | Required permission                                                                          | Admin    | Partner         | Customer                                                                                                |
+| --------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- | -------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| **Dashboard**               | View dashboard                  | `dashboard:view`                                                                             | All data | Own data        | Own data                                                                                                |
+| **Catalog**                 | Browse products/categories      | `catalog:read`                                                                               | All      | Own catalog     | All Partners' published catalog _(M13 — needed to shop when placing an order; unscoped, same as Admin)_ |
+|                             | Create/edit products, inventory | `catalog:write`                                                                              | All      | Own catalog     | —                                                                                                       |
+| **Orders**                  | View orders                     | `orders:read`                                                                                | All      | Own (as vendor) | Own (as buyer)                                                                                          |
+|                             | Place an order / cancel own     | `orders:create`                                                                              | All      | Own (as vendor) | Own (as buyer)                                                                                          |
+|                             | Update status / fulfill         | `orders:write`                                                                               | All      | Own (as vendor) | —                                                                                                       |
+| **Billing**                 | View invoices/payments          | `billing:read`                                                                               | All      | Own             | —                                                                                                       |
+|                             | Adjust/void/administer          | `billing:manage`                                                                             | All      | —               | —                                                                                                       |
+| **Reports**                 | Generate/view billing reports   | `reports:read` _(planned, M15)_ — interim: `billing:read`                                    | All      | Own             | —                                                                                                       |
+| **Settings**                | Own profile/preferences         | Authenticated (no key — every user manages _their own_ profile; ownership is the whole rule) | Own      | Own             | Own                                                                                                     |
+|                             | Partner organization settings   | `settings:manage` _(planned, M17)_ — interim: ownership + Partner role                       | All      | Own org         | —                                                                                                       |
+| **Users** _(Admin surface)_ | View users                      | `users:read`                                                                                 | All      | —               | —                                                                                                       |
+|                             | Manage users/roles              | `users:manage`                                                                               | All      | —               | —                                                                                                       |
 
 When M15/M17 introduce their permission keys, this table and the [seeded catalog](#the-seeded-catalog) are updated in the same PR as the migration that adds them.
+
+### Orders Status Transition Matrix (M13)
+
+`orders:create` and `orders:write` compose with the current `Order.status` to decide exactly which transition a caller may perform — a single coarse "can write orders" check can't express "a Customer may confirm/cancel their own order but never drive fulfillment." `apps/api/src/modules/orders/orders.service.ts`'s `ORDER_TRANSITIONS` table is the executable form of this; the resolver's `@Permissions` decorator is only the floor (the loosest key any row needs), and `OrdersService.updateStatus` re-derives and enforces the row-specific key.
+
+| Transition                 | Required permission | Who (ownership per [Ownership Rules](#ownership-rules))      | Inventory effect                       |
+| -------------------------- | ------------------- | ------------------------------------------------------------ | -------------------------------------- |
+| (create) → `DRAFT`         | `orders:create`     | Customer (self) or Partner/Admin (on behalf of a customerId) | None                                   |
+| `DRAFT` → `CONFIRMED`      | `orders:create`     | Order's own Customer, vendor Partner, or Admin               | Reserve (`quantityReserved` increases) |
+| `CONFIRMED` → `PROCESSING` | `orders:write`      | Vendor Partner or Admin only                                 | None                                   |
+| `DRAFT` → `CANCELLED`      | `orders:create`     | Order's own Customer, vendor Partner, or Admin               | None                                   |
+| `CONFIRMED` → `CANCELLED`  | `orders:create`     | Order's own Customer, vendor Partner, or Admin               | Release (`quantityReserved` decreases) |
+| `PROCESSING` → `CANCELLED` | `orders:write`      | Vendor Partner or Admin only                                 | Release (`quantityReserved` decreases) |
+
+Any other requested transition (including every status beyond these four — `PENDING_PAYMENT`, `SHIPPED`, `DELIVERED`, `RETURN_REQUESTED`, `COMPLETED`, `REFUNDED` — which exist in the `OrderStatus` enum for future milestones but aren't reachable yet) is rejected as an invalid transition, not silently allowed.
 
 ---
 

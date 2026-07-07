@@ -7,11 +7,12 @@ import {
 import { PartnerStatus, Prisma, ProductStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
+import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { CategoryOutput } from './dto/category.output'
 import { CreateProductInput } from './dto/create-product.input'
 import { ProductConnectionOutput, ProductEdgeOutput } from './dto/product-connection.output'
 import { ProductFilterInput } from './dto/product-filter.input'
-import { ProductSortField, SortDirection } from './dto/product-sort.enum'
+import { ProductSortField } from './dto/product-sort.enum'
 import { ProductSortInput } from './dto/product-sort.input'
 import { ProductOutput } from './dto/product.output'
 import { UpdateProductInput } from './dto/update-product.input'
@@ -239,13 +240,24 @@ export class CatalogService {
   ): Prisma.ProductWhereInput {
     const where: Prisma.ProductWhereInput = { deletedAt: null }
 
+    // Every ProductFilterInput field is `nullable: true` in the GraphQL
+    // schema, so a well-formed client (not just one under
+    // exactOptionalPropertyTypes) can legitimately send `null` rather than
+    // omitting the key — `?? undefined` normalizes both to "not provided"
+    // once, here, rather than every branch re-deriving it (same reasoning as
+    // findProducts' `after` normalization above). Skipping this crashed on
+    // `filter.search.trim()` when `search` arrived as `null`.
+    const status = filter?.status ?? undefined
+    const categoryId = filter?.categoryId ?? undefined
+    const search = filter?.search ?? undefined
+
     if (user.partnerId !== null) where.partnerId = user.partnerId
-    if (filter?.status !== undefined) where.status = filter.status
-    if (filter?.categoryId !== undefined) where.categoryId = filter.categoryId
-    if (filter?.search !== undefined && filter.search.trim() !== '') {
+    if (status !== undefined) where.status = status
+    if (categoryId !== undefined) where.categoryId = categoryId
+    if (search !== undefined && search.trim() !== '') {
       where.OR = [
-        { title: { contains: filter.search, mode: 'insensitive' } },
-        { variants: { some: { sku: { contains: filter.search, mode: 'insensitive' } } } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { variants: { some: { sku: { contains: search, mode: 'insensitive' } } } },
       ]
     }
 

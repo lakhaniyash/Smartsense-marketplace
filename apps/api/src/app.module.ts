@@ -3,6 +3,7 @@ import { ApolloDriver, type ApolloDriverConfig } from '@nestjs/apollo'
 import { Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_FILTER, APP_PIPE } from '@nestjs/core'
+import { EventEmitterModule } from '@nestjs/event-emitter'
 import { GraphQLModule } from '@nestjs/graphql'
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { CommonModule } from './common/common.module'
@@ -40,6 +41,11 @@ import { UsersModule } from './modules/users/users.module'
         includeStacktraceInErrorResponses: config.get<boolean>('graphql.debug') ?? false,
       }),
     }),
+    // First event-driven machinery in the codebase, introduced by Orders (M13)
+    // — domain events (OrderCreated, InventoryReserved, ...) so M16
+    // Notifications has something to subscribe to later. See
+    // modules/orders/events/ and modules/catalog/events/.
+    EventEmitterModule.forRoot(),
     CommonModule,
     PrismaModule,
     HealthModule,

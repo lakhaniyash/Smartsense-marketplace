@@ -228,10 +228,11 @@ model User {
   updatedAt         DateTime      @updatedAt @map("updated_at")
   deletedAt         DateTime?     @map("deleted_at")
 
-  partner   Partner?   @relation(fields: [partnerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  customer  Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  userRoles UserRole[]
-  auditLogs AuditLog[]
+  partner            Partner?             @relation(fields: [partnerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  customer           Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userRoles          UserRole[]
+  auditLogs          AuditLog[]
+  orderStatusChanges OrderStatusHistory[]
 
   @@index([partnerId])
   @@index([customerId])
@@ -417,13 +418,14 @@ model Order {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  partner         Partner     @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customer        Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  partner         Partner              @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   // `Restrict` here is permanent by design: Addresses are never hard-deleted
   // (they're soft-deactivated via `Address.isActive`, see the Address model),
   // so this constraint should never actually block a real deletion attempt.
-  shippingAddress Address?    @relation(fields: [shippingAddressId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  shippingAddress Address?             @relation(fields: [shippingAddressId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   items           OrderItem[]
+  statusHistory   OrderStatusHistory[]
   invoice         Invoice?
 
   @@index([customerId, status])
@@ -453,6 +455,27 @@ model OrderItem {
   @@index([orderId])
   @@index([productVariantId])
   @@map("order_items")
+}
+
+// Append-only audit trail of Order status transitions, dedicated (rather than
+// reusing the generic `AuditLog`) so the Order detail page's timeline can
+// query it directly. `fromStatus` is null for the initial creation row.
+// `changedByUserId` is nullable and `SetNull` on User deletion so history
+// survives user removal.
+model OrderStatusHistory {
+  id              String       @id @default(uuid()) @db.Uuid
+  orderId         String       @map("order_id") @db.Uuid
+  fromStatus      OrderStatus? @map("from_status")
+  toStatus        OrderStatus  @map("to_status")
+  changedByUserId String?      @map("changed_by_user_id") @db.Uuid
+  reason          String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  changedByUser User? @relation(fields: [changedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
 }
 
 // ---------------------------------------------------------------------------

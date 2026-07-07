@@ -7,7 +7,7 @@ describe('buildProductFormSchema', () => {
     const schema = buildProductFormSchema('create')
     const validInput = {
       title: 'Wireless Mouse',
-      categoryId: 'cat-1',
+      categoryId: '11111111-1111-4111-8111-111111111111',
       sku: 'SKU-1',
       price: '19.99',
     }
@@ -33,6 +33,11 @@ describe('buildProductFormSchema', () => {
 
     it('rejects a missing category', () => {
       const result = schema.safeParse({ ...validInput, categoryId: '' })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects a category id that is not a UUID', () => {
+      const result = schema.safeParse({ ...validInput, categoryId: 'not-a-uuid' })
       expect(result.success).toBe(false)
     })
 
@@ -83,7 +88,10 @@ describe('buildProductFormSchema', () => {
 
   describe('edit mode', () => {
     const schema = buildProductFormSchema('edit')
-    const validInput = { title: 'Wireless Mouse', categoryId: 'cat-1' }
+    const validInput = {
+      title: 'Wireless Mouse',
+      categoryId: '11111111-1111-4111-8111-111111111111',
+    }
 
     it('accepts a minimal valid product with no sku/price', () => {
       const result = schema.safeParse(validInput)

@@ -16,6 +16,14 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
   helperText?: string
   options: SelectOption[]
   placeholder?: string
+  // Default (false): the placeholder is disabled — correct for a required
+  // form field, where "no selection" must never be the end state a user
+  // lands back on. Set true for a filter/search Select, where the
+  // placeholder IS a real, meaningful, re-selectable state ("All statuses" /
+  // clear this filter) — a disabled <option> can never be reselected once
+  // the user has picked something else, which would otherwise trap a filter
+  // permanently on its last non-empty value.
+  clearable?: boolean
 }
 
 // Native <select> per docs/ui-guidelines.md's ARIA Usage rule ("use the
@@ -28,6 +36,7 @@ export function Select({
   helperText,
   options,
   placeholder,
+  clearable = false,
   id,
   required,
   className,
@@ -63,7 +72,7 @@ export function Select({
           {...props}
         >
           {placeholder !== undefined && (
-            <option value="" disabled hidden>
+            <option value="" disabled={!clearable} hidden={!clearable}>
               {placeholder}
             </option>
           )}

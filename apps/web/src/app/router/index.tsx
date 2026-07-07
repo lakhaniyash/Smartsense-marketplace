@@ -26,6 +26,12 @@ const ProductFormPage = lazy(() =>
   import('@features/catalog').then((m) => ({ default: m.ProductFormPage })),
 )
 const OrdersPage = lazy(() => import('@features/orders').then((m) => ({ default: m.OrdersPage })))
+const OrderDetailPage = lazy(() =>
+  import('@features/orders').then((m) => ({ default: m.OrderDetailPage })),
+)
+const OrderFormPage = lazy(() =>
+  import('@features/orders').then((m) => ({ default: m.OrderFormPage })),
+)
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
 )
@@ -94,7 +100,22 @@ const router = createBrowserRouter([
           },
           {
             element: <PermissionRoute permission="orders:read" />,
-            children: [{ path: ROUTES.ORDERS.slice(1), element: withSuspense(<OrdersPage />) }],
+            children: [
+              { path: ROUTES.ORDERS.slice(1), element: withSuspense(<OrdersPage />) },
+              {
+                path: `${ROUTES.ORDERS.slice(1)}/:id`,
+                element: withSuspense(<OrderDetailPage />),
+              },
+            ],
+          },
+          {
+            element: <PermissionRoute permission="orders:create" />,
+            children: [
+              {
+                path: `${ROUTES.ORDERS.slice(1)}/new`,
+                element: withSuspense(<OrderFormPage />),
+              },
+            ],
           },
           {
             element: <PermissionRoute permission="billing:read" />,

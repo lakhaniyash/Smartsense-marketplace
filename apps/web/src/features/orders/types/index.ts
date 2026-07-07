@@ -1,9 +1,9 @@
-export type OrderStatus =
-  'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded'
+import type { OrderSortField, OrderStatus, SortDirection } from '@lib/graphql/__generated__/graphql'
 
+// URL-backed filter/sort state for the order list — same pattern as
+// CatalogFilters (docs/frontend-architecture.md § State Management Strategy).
 export interface OrderFilters {
-  search?: string
-  status?: OrderStatus
-  dateFrom?: string
-  dateTo?: string
+  status?: OrderStatus | undefined
+  sortField?: OrderSortField | undefined
+  sortDirection?: SortDirection | undefined
 }

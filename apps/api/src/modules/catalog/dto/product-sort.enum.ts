@@ -9,10 +9,3 @@ registerEnumType(ProductSortField, {
   name: 'ProductSortField',
   description: 'Fields the product list can be sorted by.',
 })
-
-export enum SortDirection {
-  ASC = 'ASC',
-  DESC = 'DESC',
-}
-
-registerEnumType(SortDirection, { name: 'SortDirection' })

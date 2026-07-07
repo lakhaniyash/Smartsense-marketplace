@@ -1,2 +1,2 @@
-export type { OrderStatus, OrderFilters } from './types'
-export { OrdersPage } from './pages'
+export type { OrderFilters } from './types'
+export { OrdersPage, OrderDetailPage, OrderFormPage } from './pages'

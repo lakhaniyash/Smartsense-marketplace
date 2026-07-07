@@ -18,12 +18,22 @@ const prisma = new PrismaClient();
 // Fixed UUIDs for rows with no natural unique business key (Partner has
 // no unique column other than `id`), so re-running this script is a no-op.
 const SAMPLE_PARTNER_ID = '00000000-0000-0000-0000-000000000010';
+// Version nibble must be 1-5 (a real v4 shape here) — class-validator's
+// @IsUUID() on CreateOrderInput.customerId rejects a version-0 literal like
+// SAMPLE_PARTNER_ID's pattern above, and this id IS submitted as client
+// input (Partner/Admin placing an order on a Customer's behalf), unlike
+// SAMPLE_PARTNER_ID which is always derived server-side from auth context.
+const SAMPLE_CUSTOMER_ID = '00000000-0000-4000-8000-000000000020';
 
 const PERMISSIONS = [
   { key: 'dashboard:view', domain: 'dashboard', description: 'View dashboard analytics and summaries' },
   { key: 'catalog:read', domain: 'catalog', description: 'View products, variants, and categories' },
   { key: 'catalog:write', domain: 'catalog', description: 'Create and edit products, variants, and inventory' },
   { key: 'orders:read', domain: 'orders', description: 'View orders and order history' },
+  // Deliberately distinct from `orders:write`: a Customer places (and may
+  // cancel) their own order, but never drives fulfillment. See
+  // docs/authorization.md § Orders for the full transition/permission matrix.
+  { key: 'orders:create', domain: 'orders', description: 'Place a new order and cancel an own order before fulfillment' },
   { key: 'orders:write', domain: 'orders', description: 'Update order status and manage fulfillment' },
   { key: 'billing:read', domain: 'billing', description: 'View invoices, payments, and billing reports' },
   {
@@ -44,12 +54,25 @@ const SYSTEM_ROLES = [
   {
     name: 'Partner',
     description: 'Vendor organization staff — manages catalog, orders, and billing for their own Partner',
-    permissionKeys: ['dashboard:view', 'catalog:read', 'catalog:write', 'orders:read', 'orders:write', 'billing:read'],
+    permissionKeys: [
+      'dashboard:view',
+      'catalog:read',
+      'catalog:write',
+      'orders:read',
+      'orders:create',
+      'orders:write',
+      'billing:read',
+    ],
   },
   {
     name: 'Customer',
-    description: 'Buyer organization or individual — mostly read-only access to their own orders',
-    permissionKeys: ['dashboard:view', 'orders:read'],
+    description: 'Buyer organization or individual — browses the catalog, places and reads their own orders, no fulfillment access',
+    // catalog:read is required to browse products when placing an order
+    // (M13's Create Order line-item picker calls the same `products` query
+    // Partners use to manage their catalog) — a Customer sees every
+    // Partner's PUBLISHED products, same unscoped read CatalogService
+    // already gives Admin, since Customers aren't tied to one Partner.
+    permissionKeys: ['dashboard:view', 'catalog:read', 'orders:read', 'orders:create'],
   },
 ] as const;
 
@@ -184,12 +207,50 @@ async function seedSamplePartner() {
   console.log(`Seeded sample Partner (${partner.displayName}) with staff user (${staffUser.email}).`);
 }
 
+async function seedSampleCustomer() {
+  const customerRole = await prisma.role.findUniqueOrThrow({ where: { name: 'Customer' } });
+
+  const customer = await prisma.customer.upsert({
+    where: { id: SAMPLE_CUSTOMER_ID },
+    update: { status: 'ACTIVE' },
+    create: {
+      id: SAMPLE_CUSTOMER_ID,
+      displayName: 'Jordan Rivera',
+      type: 'INDIVIDUAL',
+      status: 'ACTIVE',
+      billingEmail: 'yash.lakhani+customer-billing@smartsensesolutions.com',
+    },
+  });
+
+  const buyerUser = await prisma.user.upsert({
+    where: { email: 'yash.lakhani+customer@smartsensesolutions.com' },
+    update: { status: 'ACTIVE', customerId: customer.id },
+    create: {
+      keycloakSubjectId: 'seed-customer-buyer-0000-0001',
+      email: 'yash.lakhani+customer@smartsensesolutions.com',
+      fullName: 'Jordan Rivera',
+      status: 'ACTIVE',
+      ownerType: 'CUSTOMER',
+      customerId: customer.id,
+    },
+  });
+
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: buyerUser.id, roleId: customerRole.id } },
+    update: {},
+    create: { userId: buyerUser.id, roleId: customerRole.id },
+  });
+
+  console.log(`Seeded sample Customer (${customer.displayName}) with buyer user (${buyerUser.email}).`);
+}
+
 async function main() {
   await seedPermissions();
   await seedRolesWithPermissions();
   await seedCategories();
   await seedAdminUser();
   await seedSamplePartner();
+  await seedSampleCustomer();
 }
 
 main()

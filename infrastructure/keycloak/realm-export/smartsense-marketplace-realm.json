@@ -131,6 +131,22 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "yash.lakhani+customer@smartsensesolutions.com",
+      "email": "yash.lakhani+customer@smartsensesolutions.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Customer",
+      "lastName": "Test",
+      "groups": ["/Customers"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Customer@12345",
+          "temporary": false
+        }
+      ]
     }
   ]
 }
