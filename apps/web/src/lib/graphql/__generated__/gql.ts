@@ -27,6 +27,12 @@ type Documents = {
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": typeof types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": typeof types.UpdateProductVariantDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": typeof types.DashboardStatsDocument,
+    "mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}": typeof types.CancelOrderDocument,
+    "mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}": typeof types.CreateOrderDocument,
+    "query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}": typeof types.GetOrderByIdDocument,
+    "query GetOrderableVariants($search: String) {\n  products(first: 50, filter: {status: PUBLISHED, search: $search}) {\n    edges {\n      node {\n        id\n        title\n        variants {\n          id\n          sku\n          price\n          status\n        }\n      }\n    }\n  }\n}": typeof types.GetOrderableVariantsDocument,
+    "query GetOrders($first: Int, $after: String, $filter: OrderFilterInput, $sort: OrderSortInput) {\n  orders(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        customerId\n        partnerId\n        subtotal\n        total\n        placedAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetOrdersDocument,
+    "mutation UpdateOrderStatus($id: ID!, $status: OrderStatus!) {\n  updateOrderStatus(id: $id, status: $status) {\n    id\n    status\n  }\n}": typeof types.UpdateOrderStatusDocument,
 };
 const documents: Documents = {
     "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}": types.MeDocument,
@@ -42,6 +48,12 @@ const documents: Documents = {
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": types.UpdateProductVariantDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": types.DashboardStatsDocument,
+    "mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}": types.CancelOrderDocument,
+    "mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}": types.CreateOrderDocument,
+    "query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}": types.GetOrderByIdDocument,
+    "query GetOrderableVariants($search: String) {\n  products(first: 50, filter: {status: PUBLISHED, search: $search}) {\n    edges {\n      node {\n        id\n        title\n        variants {\n          id\n          sku\n          price\n          status\n        }\n      }\n    }\n  }\n}": types.GetOrderableVariantsDocument,
+    "query GetOrders($first: Int, $after: String, $filter: OrderFilterInput, $sort: OrderSortInput) {\n  orders(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        customerId\n        partnerId\n        subtotal\n        total\n        placedAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetOrdersDocument,
+    "mutation UpdateOrderStatus($id: ID!, $status: OrderStatus!) {\n  updateOrderStatus(id: $id, status: $status) {\n    id\n    status\n  }\n}": types.UpdateOrderStatusDocument,
 };
 
 /**
@@ -110,6 +122,30 @@ export function gql(source: "mutation UpdateProductVariant($input: UpdateProduct
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}"): (typeof documents)["query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}"): (typeof documents)["mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}"): (typeof documents)["query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetOrderableVariants($search: String) {\n  products(first: 50, filter: {status: PUBLISHED, search: $search}) {\n    edges {\n      node {\n        id\n        title\n        variants {\n          id\n          sku\n          price\n          status\n        }\n      }\n    }\n  }\n}"): (typeof documents)["query GetOrderableVariants($search: String) {\n  products(first: 50, filter: {status: PUBLISHED, search: $search}) {\n    edges {\n      node {\n        id\n        title\n        variants {\n          id\n          sku\n          price\n          status\n        }\n      }\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetOrders($first: Int, $after: String, $filter: OrderFilterInput, $sort: OrderSortInput) {\n  orders(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        customerId\n        partnerId\n        subtotal\n        total\n        placedAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetOrders($first: Int, $after: String, $filter: OrderFilterInput, $sort: OrderSortInput) {\n  orders(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        customerId\n        partnerId\n        subtotal\n        total\n        placedAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation UpdateOrderStatus($id: ID!, $status: OrderStatus!) {\n  updateOrderStatus(id: $id, status: $status) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation UpdateOrderStatus($id: ID!, $status: OrderStatus!) {\n  updateOrderStatus(id: $id, status: $status) {\n    id\n    status\n  }\n}"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};

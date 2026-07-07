@@ -1,0 +1,6 @@
+mutation CancelOrder($id: ID!, $reason: String) {
+  cancelOrder(id: $id, reason: $reason) {
+    id
+    status
+  }
+}

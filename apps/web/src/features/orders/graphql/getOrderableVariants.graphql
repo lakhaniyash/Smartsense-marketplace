@@ -1,0 +1,16 @@
+query GetOrderableVariants($search: String) {
+  products(first: 50, filter: { status: PUBLISHED, search: $search }) {
+    edges {
+      node {
+        id
+        title
+        variants {
+          id
+          sku
+          price
+          status
+        }
+      }
+    }
+  }
+}

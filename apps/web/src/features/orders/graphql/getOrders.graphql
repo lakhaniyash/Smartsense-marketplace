@@ -1,0 +1,24 @@
+query GetOrders($first: Int, $after: String, $filter: OrderFilterInput, $sort: OrderSortInput) {
+  orders(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        orderNumber
+        status
+        customerId
+        partnerId
+        subtotal
+        total
+        placedAt
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

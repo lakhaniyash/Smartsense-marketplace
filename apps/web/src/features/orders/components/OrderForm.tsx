@@ -1,0 +1,133 @@
+import { useMemo, useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useFieldArray, useForm } from 'react-hook-form'
+import { Button, Input, Select } from '@shared/components'
+import { CloseIcon } from '@shared/icons'
+import { useOrderableVariants } from '../hooks'
+import { orderFormSchema, type OrderFormValues } from './orderForm.schema'
+
+export interface OrderFormProps {
+  onSubmit: (values: OrderFormValues) => void
+  isSubmitting: boolean
+}
+
+// exactOptionalPropertyTypes forbids passing `error={undefined}` to the
+// shared field components — same pattern as ProductForm/VariantForm.
+function errorProp(message: string | undefined): { error?: string } {
+  return message === undefined ? {} : { error: message }
+}
+
+// A repeatable line-item picker (useFieldArray, same pattern as
+// VariantForm's attributes list) plus a client-side subtotal preview — the
+// server always recomputes the authoritative total (docs/api-conventions.md
+// § Validation), this is purely informational.
+export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
+  const [variantSearch, setVariantSearch] = useState<string | undefined>(undefined)
+  const { options: variantOptions } = useOrderableVariants(variantSearch)
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<OrderFormValues>({
+    resolver: zodResolver(orderFormSchema),
+    defaultValues: { items: [{ productVariantId: '', quantity: '1' }] },
+  })
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const watchedItems = watch('items')
+
+  const subtotalPreview = useMemo(() => {
+    return watchedItems.reduce((sum, item) => {
+      const variant = variantOptions.find((option) => option.variantId === item.productVariantId)
+      const quantity = Number(item.quantity)
+      if (variant === undefined || !Number.isFinite(quantity)) return sum
+      return sum + Number(variant.price) * quantity
+    }, 0)
+  }, [watchedItems, variantOptions])
+
+  const variantSelectOptions = variantOptions.map((option) => ({
+    value: option.variantId,
+    label: option.label,
+  }))
+
+  return (
+    <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-4">
+      <Input
+        label="Search products"
+        placeholder="Filter by product title or SKU"
+        onChange={(event) => setVariantSearch(event.target.value || undefined)}
+      />
+
+      <div className="flex flex-col gap-3">
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Items</span>
+        {typeof errors.items?.message === 'string' && (
+          <p className="text-sm text-red-600 dark:text-red-400">{errors.items.message}</p>
+        )}
+        {fields.map((field, index) => (
+          <div key={field.id} className="flex items-start gap-2">
+            <Select
+              aria-label={`Item ${index + 1} product`}
+              placeholder="Select a product"
+              options={variantSelectOptions}
+              {...register(`items.${index}.productVariantId`)}
+              {...errorProp(errors.items?.[index]?.productVariantId?.message)}
+            />
+            <Input
+              aria-label={`Item ${index + 1} quantity`}
+              type="number"
+              min={1}
+              className="w-24"
+              {...register(`items.${index}.quantity`)}
+              {...errorProp(errors.items?.[index]?.quantity?.message)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Remove item"
+              disabled={fields.length === 1}
+              onClick={() => remove(index)}
+            >
+              <CloseIcon className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => append({ productVariantId: '', quantity: '1' })}
+          >
+            Add item
+          </Button>
+        </div>
+      </div>
+
+      <Input
+        label="Customer ID"
+        helperText="Only required when placing an order on behalf of a customer (Partner/Admin). Leave blank to order for yourself."
+        {...register('customerId')}
+        {...errorProp(errors.customerId?.message)}
+      />
+      <Input
+        label="Shipping address ID"
+        helperText="Optional."
+        {...register('shippingAddressId')}
+        {...errorProp(errors.shippingAddressId?.message)}
+      />
+
+      <p className="text-sm text-gray-500">
+        Estimated subtotal: ${subtotalPreview.toFixed(2)} (tax/shipping computed at checkout)
+      </p>
+
+      <div>
+        <Button type="submit" isLoading={isSubmitting}>
+          Create Order
+        </Button>
+      </div>
+    </form>
+  )
+}
