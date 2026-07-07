@@ -12,10 +12,11 @@ import {
   ErrorState,
   PageHeader,
   Skeleton,
+  Tabs,
   useToast,
 } from '@shared/components'
 import { ROUTES } from '@shared/constants'
-import { ProductStatusBadge } from '../components'
+import { ProductStatusBadge, VariantList } from '../components'
 import { useProduct } from '../hooks'
 
 // SM-108 (docs/milestones.md M12) — a single product's detail view. Nested
@@ -91,20 +92,43 @@ export function ProductDetailPage() {
               )
             }
           />
-          <Card>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <ProductStatusBadge status={product.status} />
-                <span className="text-sm text-gray-500">SKU: {product.sku}</span>
-              </div>
-              {product.description !== null && product.description !== undefined && (
-                <p className="text-sm text-gray-700 dark:text-gray-300">{product.description}</p>
-              )}
-              {product.brand !== null && product.brand !== undefined && (
-                <p className="text-sm text-gray-500">Brand: {product.brand}</p>
-              )}
-            </CardContent>
-          </Card>
+          <Tabs
+            items={[
+              {
+                value: 'details',
+                label: 'Details',
+                content: (
+                  <Card>
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="flex items-center gap-3">
+                        <ProductStatusBadge status={product.status} />
+                        <span className="text-sm text-gray-500">SKU: {product.sku}</span>
+                      </div>
+                      {product.description !== null && product.description !== undefined && (
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          {product.description}
+                        </p>
+                      )}
+                      {product.brand !== null && product.brand !== undefined && (
+                        <p className="text-sm text-gray-500">Brand: {product.brand}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ),
+              },
+              {
+                value: 'variants',
+                label: 'Variants',
+                content: (
+                  <VariantList
+                    productId={product.id}
+                    variants={product.variants}
+                    canEdit={canEditCatalog}
+                  />
+                ),
+              },
+            ]}
+          />
 
           <Dialog
             open={isConfirmingDelete}

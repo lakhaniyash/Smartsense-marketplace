@@ -11,6 +11,25 @@ query GetProductById($id: ID!) {
       name
       slug
     }
+    variants {
+      id
+      sku
+      price
+      status
+      isDefault
+      attributes {
+        key
+        value
+      }
+      inventory {
+        quantityOnHand
+        quantityReserved
+        sellableQuantity
+        reorderThreshold
+        updatedAt
+      }
+      createdAt
+    }
     createdAt
     publishedAt
   }

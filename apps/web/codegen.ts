@@ -11,6 +11,12 @@ const config: CodegenConfig = {
         gqlTagName: 'gql',
         fragmentMasking: { unmaskFunctionName: 'getFragmentData' },
       },
+      config: {
+        // Matches the backend's DecimalScalar (apps/api/src/common/graphql/decimal.scalar.ts),
+        // which serializes/parses as a string end-to-end — without this, an
+        // unmapped custom scalar defaults to `any` (banned, docs/coding-standards.md § 3).
+        scalars: { Decimal: 'string' },
+      },
     },
   },
   ignoreNoDocuments: true,

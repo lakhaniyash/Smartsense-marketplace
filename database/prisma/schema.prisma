@@ -346,6 +346,15 @@ model Product {
 // lookup. Kept in sync by the service layer whenever a Product's owning
 // Partner would change (in practice, never: Products are not reassigned
 // across Partners).
+//
+// `isDefault`: exactly one non-deleted Variant per Product may be the
+// default (the one a Product-level view like `ProductOutput.sku` resolves
+// through). Not enforceable as a plain Prisma `@@unique` — enforced by a
+// hand-written partial unique index in the migration (see
+// docs/database-schema.md), mirroring `Address.isDefault`'s pattern.
+// `price > 0` is likewise enforced both by service-layer validation and a
+// hand-written `CHECK` constraint, for the same defense-in-depth reason as
+// Inventory's quantity constraints below.
 model ProductVariant {
   id         String               @id @default(uuid()) @db.Uuid
   productId  String               @map("product_id") @db.Uuid
@@ -354,6 +363,7 @@ model ProductVariant {
   attributes Json                 @default("{}") @db.JsonB
   price      Decimal              @db.Decimal(12, 2)
   status     ProductVariantStatus @default(ACTIVE)
+  isDefault  Boolean              @default(false) @map("is_default")
   createdAt  DateTime             @default(now()) @map("created_at")
   updatedAt  DateTime             @updatedAt @map("updated_at")
   deletedAt  DateTime?            @map("deleted_at")

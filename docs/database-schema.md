@@ -1,7 +1,7 @@
 # SmartSense Marketplace — Database Schema
 
-Version: 1.1
-Status: Schema designed, validated, initial migration generated with hand-written constraints (`prisma migrate dev --create-only`) — **not yet applied** (awaiting approval — see [Next Steps](#next-steps))
+Version: 1.2
+Status: Applied. The initial migration (`20260701110512_init`) and the M12 Variant/Inventory follow-up (`20260706121303_add_variant_default_flag`) are both applied to the local development database and seeded — see [Next Steps](#next-steps).
 
 ## Purpose
 
@@ -149,19 +149,21 @@ Every relationship in the schema, why it exists, and how it's enforced.
 
 ## Constraints Added by Hand to the Migration
 
-Prisma's schema language cannot express every rule in `docs/domain-model.md` (no `CHECK` syntax, no partial/filtered unique indexes, no exclusion constraints). These are documented in-line as comments in `schema.prisma` at the relevant field, and were added as raw SQL to the bottom of `database/prisma/migrations/20260701110512_init/migration.sql` (in a clearly marked "hand-written additions" section that `prisma migrate dev` will not regenerate or overwrite on future schema changes):
+Prisma's schema language cannot express every rule in `docs/domain-model.md` (no `CHECK` syntax, no partial/filtered unique indexes, no exclusion constraints). These are documented in-line as comments in `schema.prisma` at the relevant field, and were added as raw SQL to the bottom of the relevant generated migration file (in a clearly marked "hand-written additions" section that `prisma migrate dev` will not regenerate or overwrite on future schema changes) — the initial set in `database/prisma/migrations/20260701110512_init/migration.sql`, the M12 Variant/Inventory additions in `database/prisma/migrations/20260706121303_add_variant_default_flag/migration.sql`:
 
-| Rule                                                                                           | Where           | Fix applied                                                                                                                                                                            |
-| ---------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `User`: exactly one of (`partnerId`, `customerId`) is set, consistent with `ownerType`         | `User`          | `CHECK` constraint `users_owner_type_consistency_check`                                                                                                                                |
-| `Address`: exactly one of (`partnerId`, `customerId`) is set, consistent with `ownerType`      | `Address`       | `CHECK` constraint `addresses_owner_type_consistency_check`                                                                                                                            |
-| `OrderItem.quantity > 0`                                                                       | `OrderItem`     | `CHECK` constraint `order_items_quantity_positive_check`                                                                                                                               |
-| `Inventory.quantityOnHand >= 0`, `quantityReserved >= 0`, `quantityReserved <= quantityOnHand` | `Inventory`     | Three `CHECK` constraints (`inventory_quantity_on_hand_non_negative_check`, `inventory_quantity_reserved_non_negative_check`, `inventory_quantity_reserved_le_on_hand_check`)          |
-| `Partner.commissionRate` between 0 and 100                                                     | `Partner`       | `CHECK` constraint `partners_commission_rate_range_check`                                                                                                                              |
-| Only one `isDefault = true` Address per (owner, type)                                          | `Address`       | Two partial unique indexes (`addresses_partner_default_unique`, `addresses_customer_default_unique`) — split in two because exactly one of `partner_id`/`customer_id` is ever non-null |
-| `BillingReport` periods must not _overlap_ (not just not be identical) for the same Partner    | `BillingReport` | GiST exclusion constraint `billing_reports_no_overlapping_periods_excl` (requires the `btree_gist` extension, also added by the migration)                                             |
+| Rule                                                                                           | Where            | Fix applied                                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `User`: exactly one of (`partnerId`, `customerId`) is set, consistent with `ownerType`         | `User`           | `CHECK` constraint `users_owner_type_consistency_check`                                                                                                                                |
+| `Address`: exactly one of (`partnerId`, `customerId`) is set, consistent with `ownerType`      | `Address`        | `CHECK` constraint `addresses_owner_type_consistency_check`                                                                                                                            |
+| `OrderItem.quantity > 0`                                                                       | `OrderItem`      | `CHECK` constraint `order_items_quantity_positive_check`                                                                                                                               |
+| `Inventory.quantityOnHand >= 0`, `quantityReserved >= 0`, `quantityReserved <= quantityOnHand` | `Inventory`      | Three `CHECK` constraints (`inventory_quantity_on_hand_non_negative_check`, `inventory_quantity_reserved_non_negative_check`, `inventory_quantity_reserved_le_on_hand_check`)          |
+| `Partner.commissionRate` between 0 and 100                                                     | `Partner`        | `CHECK` constraint `partners_commission_rate_range_check`                                                                                                                              |
+| Only one `isDefault = true` Address per (owner, type)                                          | `Address`        | Two partial unique indexes (`addresses_partner_default_unique`, `addresses_customer_default_unique`) — split in two because exactly one of `partner_id`/`customer_id` is ever non-null |
+| `BillingReport` periods must not _overlap_ (not just not be identical) for the same Partner    | `BillingReport`  | GiST exclusion constraint `billing_reports_no_overlapping_periods_excl` (requires the `btree_gist` extension, also added by the migration)                                             |
+| Only one `isDefault = true` `ProductVariant` per Product, among non-deleted Variants (M12)     | `ProductVariant` | Partial unique index `product_variants_one_default_per_product` on `(product_id) WHERE is_default = true AND deleted_at IS NULL`, added in `20260706121303_add_variant_default_flag`   |
+| `ProductVariant.price > 0` (M12)                                                               | `ProductVariant` | `CHECK` constraint `product_variants_price_positive_check`, added in `20260706121303_add_variant_default_flag`                                                                         |
 
-Verified against a scratch PostgreSQL 17 database (not through `prisma migrate`, so nothing was marked as applied): all seven constraints correctly reject invalid inserts/updates (overlapping billing periods, out-of-range commission rate, inconsistent owner-type/FK combination, duplicate default address per owner+type) while valid rows still succeed.
+Verified against the local development PostgreSQL 17 database: all nine constraints correctly reject invalid inserts/updates (overlapping billing periods, out-of-range commission rate, inconsistent owner-type/FK combination, duplicate default address per owner+type, a second default Variant per Product, a non-positive Variant price) while valid rows still succeed.
 
 ### Constraints Not Enforceable at the Database Level
 
@@ -204,7 +206,7 @@ The schema at ../../database/prisma/schema.prisma is valid 🚀
 
 An independent review pass (via the `database-architect` agent) was run against `docs/domain-model.md` after the first draft; its findings (missing FK indexes on `Order.shippingAddressId` and `Address.partnerId`/`customerId`, and four additional un-enforceable business rules) are incorporated into the schema and the tables above.
 
-The initial migration has been generated (`prisma migrate dev --create-only`) and hand-extended with the raw-SQL constraints, then verified against a scratch PostgreSQL 17 database — all seven constraints correctly reject invalid data while valid rows succeed (see [Constraints Added by Hand to the Migration](#constraints-added-by-hand-to-the-migration)). It has **not** been applied to any persistent database. See [Next Steps](#next-steps).
+Both migrations (initial + the M12 Variant/Inventory follow-up) have been generated, hand-extended with the raw-SQL constraints, applied to the local development PostgreSQL 17 database, and verified in place — all nine constraints correctly reject invalid data while valid rows succeed (see [Constraints Added by Hand to the Migration](#constraints-added-by-hand-to-the-migration)).
 
 ---
 
@@ -231,9 +233,7 @@ npm run prisma:seed
 
 ## Next Steps
 
-The initial migration (`database/prisma/migrations/20260701110512_init/migration.sql`) has been generated via `prisma migrate dev --create-only` and hand-extended with the raw-SQL constraints from the table above. It has been syntax- and behavior-verified against a scratch PostgreSQL 17 database, but **has not been applied** — per the milestone instructions, that step is on hold pending review. Once approved:
+Both the initial migration and the M12 Variant/Inventory follow-up are applied to the local development database and the seed script has been run against it. Remaining before a shared/staging environment exists:
 
-1. Review the final migration SQL (`database/prisma/migrations/20260701110512_init/migration.sql`), in particular the "hand-written additions" section at the bottom.
-2. Run `npx prisma migrate dev` (from `apps/api/`) to apply it against a local PostgreSQL 17 instance — Prisma will detect the migration already exists and simply mark it applied, then generate the client.
-3. Run `npm run prisma:seed` (from `apps/api/`) to populate baseline data.
-4. Implement the soft-delete query filter (Prisma Client extension) at the service layer — flagged above as a backend task, not a schema task.
+1. Apply both migrations to any newly provisioned environment via `npx prisma migrate deploy` (from `apps/api/`), never `migrate dev`, and run `npm run prisma:seed` against it.
+2. Implement the soft-delete query filter (Prisma Client extension) at the service layer — flagged above as a backend task, not a schema task.

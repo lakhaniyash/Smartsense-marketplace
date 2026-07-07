@@ -23,6 +23,25 @@ function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
   }
 }
 
+function variantFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'variant-1',
+    sku: 'SKU-1',
+    attributes: {},
+    price: new Prisma.Decimal(19.99),
+    status: 'ACTIVE',
+    isDefault: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    inventory: {
+      quantityOnHand: 0,
+      quantityReserved: 0,
+      reorderThreshold: null,
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+    ...overrides,
+  }
+}
+
 function productFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: 'product-1',
@@ -41,7 +60,7 @@ function productFixture(overrides: Record<string, unknown> = {}) {
       parentCategoryId: null,
       displayOrder: 0,
     },
-    variants: [{ sku: 'SKU-1' }],
+    variants: [variantFixture()],
     ...overrides,
   }
 }
@@ -234,9 +253,9 @@ describe('CatalogService', () => {
       )
     })
 
-    it('flattens the SKU from the single internal variant onto each node', async () => {
+    it('flattens the SKU from the default variant onto each node', async () => {
       prisma.product.findMany.mockResolvedValueOnce([
-        productFixture({ variants: [{ sku: 'ABC-123' }] }),
+        productFixture({ variants: [variantFixture({ sku: 'ABC-123' })] }),
       ])
 
       const result = await service.findProducts(user(), {})
@@ -278,17 +297,22 @@ describe('CatalogService', () => {
       ).resolves.toMatchObject({ id: 'product-1' })
     })
 
-    it('fails loudly if a Product is missing its internal variant', async () => {
+    it('fails loudly if a Product is missing its default variant', async () => {
       prisma.product.findFirst.mockResolvedValueOnce(productFixture({ variants: [] }))
 
       await expect(service.findProductById(user(), 'product-1')).rejects.toThrow(
-        'has no internal ProductVariant',
+        'has no ProductVariant',
       )
     })
   })
 
   describe('createProduct', () => {
-    const createInput = { title: 'New Mouse', categoryId: 'cat-1', sku: 'NEW-SKU' }
+    const createInput = {
+      title: 'New Mouse',
+      categoryId: 'cat-1',
+      sku: 'NEW-SKU',
+      price: '19.99',
+    }
 
     it('rejects a caller with no owning Partner', async () => {
       await expect(service.createProduct(user({ partnerId: null }), createInput)).rejects.toThrow(
@@ -306,7 +330,7 @@ describe('CatalogService', () => {
       expect(prisma.product.create).not.toHaveBeenCalled()
     })
 
-    it('creates the Product, its singleton variant, and Inventory in one transaction', async () => {
+    it('creates the Product, its default variant, and Inventory in one transaction', async () => {
       prisma.partner.findUnique.mockResolvedValueOnce({ status: PartnerStatus.ACTIVE })
       prisma.product.create.mockResolvedValueOnce({ id: 'product-1' })
       prisma.productVariant.create.mockResolvedValueOnce({ id: 'variant-1' })
@@ -324,7 +348,13 @@ describe('CatalogService', () => {
         },
       })
       expect(prisma.productVariant.create).toHaveBeenCalledWith({
-        data: { productId: 'product-1', partnerId: 'partner-1', sku: 'NEW-SKU', price: 0 },
+        data: {
+          productId: 'product-1',
+          partnerId: 'partner-1',
+          sku: 'NEW-SKU',
+          price: createInput.price,
+          isDefault: true,
+        },
       })
       expect(prisma.inventory.create).toHaveBeenCalledWith({
         data: { productVariantId: 'variant-1' },
@@ -391,23 +421,6 @@ describe('CatalogService', () => {
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'product-1' },
         data: { title: 'Renamed Mouse' },
-      })
-      expect(prisma.productVariant.updateMany).not.toHaveBeenCalled()
-    })
-
-    it('updates the internal variant sku, not the Product, when sku is supplied', async () => {
-      prisma.product.findFirst
-        .mockResolvedValueOnce(productFixture())
-        .mockResolvedValueOnce(productFixture())
-
-      await service.updateProduct(user({ partnerId: 'partner-1' }), {
-        id: 'product-1',
-        sku: 'UPDATED-SKU',
-      })
-
-      expect(prisma.productVariant.updateMany).toHaveBeenCalledWith({
-        where: { productId: 'product-1' },
-        data: { sku: 'UPDATED-SKU' },
       })
     })
 

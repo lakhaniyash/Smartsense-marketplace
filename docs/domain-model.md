@@ -297,8 +297,9 @@ Notes on the diagram:
 | productId  |                                                                |
 | sku        | Unique per Partner                                             |
 | attributes | Structured key/value set, e.g., `{ size: "M", color: "Blue" }` |
-| price      | Current sell price                                             |
+| price      | Current sell price. Must be strictly positive.                 |
 | status     | `Active`, `OutOfStock`, `Discontinued`                         |
+| isDefault  | Exactly one per Product (see below)                            |
 
 **Relationships**
 
@@ -309,10 +310,12 @@ Notes on the diagram:
 **Business rules**
 
 - `sku` unique within a Partner's catalog (not necessarily platform-wide).
-- `status = OutOfStock` is derived from `Inventory.quantityOnHand == 0` and should not be independently editable — it's a computed/reflected state, not a source of truth.
-- Price changes do not retroactively affect existing `OrderItem`s, which snapshot price at order time (see `OrderItem`).
+- `price` must be strictly positive (`> 0`) — enforced by the API's Input DTO validation and, as a backstop, a database `CHECK` constraint (docs/database-schema.md).
+- `status = OutOfStock` is derived from `Inventory.quantityOnHand == 0` and should not be independently editable — it's a computed/reflected state, not a source of truth. The only client-settable transition is to `Discontinued`.
+- Exactly one non-deleted `ProductVariant` per `Product` has `isDefault = true` at any time — enforced by a partial unique index (docs/database-schema.md). It is the Variant a Product-level view (e.g. a catalog list's flattened `sku`) resolves through. Setting a new default unsets the previous one in the same transaction.
+- A Product's default Variant, and a Product's last remaining non-deleted Variant, cannot be archived — every Product must always have at least one Variant (see `Product`'s business rules). Promote a different Variant to default first.
 
-**Lifecycle.** Created with its parent Product → `Active` ⇄ `OutOfStock` (automatic, based on Inventory) → `Discontinued` (manual, terminal — Partner stops selling it, but past Orders remain intact).
+**Lifecycle.** Created with its parent Product (the first one is always the default) → `Active` ⇄ `OutOfStock` (automatic, based on Inventory) → `Discontinued` (manual, terminal — Partner stops selling it, but past Orders remain intact). Archiving (soft-delete) is independent of this status lifecycle and is blocked while the Variant is the Product's default or only remaining one.
 
 ---
 
@@ -338,7 +341,7 @@ Notes on the diagram:
 **Business rules**
 
 - `quantityOnHand - quantityReserved` is the sellable quantity; it must never go negative.
-- Stock decrements happen at Order confirmation, not at cart-add, to avoid overselling from abandoned carts (reservation is time-boxed).
+- Stock decrements happen at Order confirmation, not at cart-add, to avoid overselling from abandoned carts (reservation is time-boxed). This reservation flow is Order-driven and lands with M13 — M12 exposes only direct, Partner-initiated stock adjustments (`adjustInventory`: increase, decrease, or set `quantityOnHand` outright), which are rejected if the result would go negative or drop below `quantityReserved`.
 - Every `ProductVariant` has exactly one `Inventory` record, created at the same time as the Variant (even if quantity starts at zero).
 
 **Lifecycle.** Created alongside its Variant with `quantityOnHand = 0` → updated by Partner stock adjustments and Order confirmations/cancellations for the life of the Variant. Not independently deleted; it's removed only when its Variant is.

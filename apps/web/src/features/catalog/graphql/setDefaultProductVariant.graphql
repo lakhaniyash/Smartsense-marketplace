@@ -1,0 +1,6 @@
+mutation SetDefaultProductVariant($id: ID!) {
+  setDefaultProductVariant(id: $id) {
+    id
+    isDefault
+  }
+}

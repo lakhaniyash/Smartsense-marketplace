@@ -1,0 +1,13 @@
+mutation AdjustInventory($input: AdjustInventoryInput!) {
+  adjustInventory(input: $input) {
+    id
+    status
+    inventory {
+      quantityOnHand
+      quantityReserved
+      sellableQuantity
+      reorderThreshold
+      updatedAt
+    }
+  }
+}
