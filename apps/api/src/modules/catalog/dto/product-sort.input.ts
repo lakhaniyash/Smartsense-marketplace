@@ -1,6 +1,7 @@
 import { Field, InputType } from '@nestjs/graphql'
 import { IsEnum, IsOptional } from 'class-validator'
-import { ProductSortField, SortDirection } from './product-sort.enum'
+import { SortDirection } from '../../../common/graphql/sort-direction.enum'
+import { ProductSortField } from './product-sort.enum'
 
 @InputType()
 export class ProductSortInput {

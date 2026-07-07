@@ -342,6 +342,22 @@ describe('Catalog (e2e)', () => {
       expect(res.body.errors).toBeUndefined()
       expect(res.body.data.products.pageInfo.hasPreviousPage).toBe(false)
     })
+
+    // Regression test: every ProductFilterInput field is `nullable: true`,
+    // so a client can send `search: null`/`status: null`/`categoryId: null`
+    // inside a non-null `filter` object (not just omit `filter` itself) —
+    // this previously crashed with "Cannot read properties of null (reading
+    // 'trim')" because CatalogService.buildWhere only checked `!== undefined`.
+    it('does not crash when the client explicitly sends filter fields as null', async () => {
+      const token = adminToken()
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${token}`)
+        .send(productsQuery({ filter: { status: null, categoryId: null, search: null } }))
+        .expect(200)
+
+      expect(res.body.errors).toBeUndefined()
+    })
   })
 
   describe('productById', () => {
