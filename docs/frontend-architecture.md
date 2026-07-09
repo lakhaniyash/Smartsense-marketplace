@@ -124,7 +124,7 @@ A feature's folder anatomy is defined in [folder-structure.md § features](./fol
 | **Services**   | Imperative, non-hook operations (the auth feature's Keycloak orchestration is the canonical case) and logic shared by several hooks | Holding React state                                  |
 | **graphql/**   | The feature's operation documents — codegen input, per [graphql.md § File Organization](./graphql.md#file-organization)             | Hand-written types                                   |
 
-Features never import each other; cross-feature needs route through `shared/` or compose at the page/router level ([folder-structure.md § Import Rules](./folder-structure.md#import-rules-frontend)).
+Features never import each other; cross-feature needs route through `shared/` or compose at the page/router level — except `usePermissions`/`useCurrentUser` from `@features/auth`, a deliberately narrow, documented exception ([folder-structure.md § Import Rules](./folder-structure.md#import-rules-frontend)).
 
 ---
 

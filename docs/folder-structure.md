@@ -230,6 +230,16 @@ app  →  features  →  shared
 
 - `shared/*` must never import from `features/*` or `app/*`.
 - `features/*` must never import from `app/*`, and must never import another feature.
+- **Sanctioned exception:** any feature may import `usePermissions`/`useCurrentUser` from
+  `@features/auth`. Identity and permission state are the one cross-cutting concern every
+  feature legitimately needs (`docs/authentication.md` § Permission Strategy already treats
+  permission-checking as universal, not auth-specific), but promoting the two hooks to
+  `shared/` isn't a clean move: `useCurrentUser` depends on `useAuth`, which depends on
+  `AuthContext` — the Keycloak-backed provider that legitimately belongs to the auth feature
+  (login/logout, token lifecycle). Promoting the hooks would mean promoting that whole chain,
+  which would gut the feature rather than fix a boundary violation. No other cross-feature
+  import is permitted under this exception — if a future need looks similar, promote the
+  capability to `shared/` on its second real consumer (per `CLAUDE.md`), don't extend this list.
 - Always import via absolute aliases (`@shared/components`), never deep relative paths that cross folder boundaries (`../../../shared/components`). Relative imports are acceptable only _within_ the same feature or folder.
 - Always import via a barrel (`index.ts`) — never reach into another folder's internal file path.
 
