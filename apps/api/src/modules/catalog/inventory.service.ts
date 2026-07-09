@@ -7,6 +7,7 @@ import {
 import { Prisma, ProductVariantStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
+import { AuditLogService } from '../../common/services/audit-log.service'
 import { AdjustInventoryInput } from './dto/adjust-inventory.input'
 import { InventoryAdjustmentType } from './dto/inventory-adjustment-type.enum'
 import { ProductVariantOutput } from './dto/product-variant.output'
@@ -16,7 +17,10 @@ const VARIANT_WITH_INVENTORY_INCLUDE = { inventory: true } satisfies Prisma.Prod
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   /**
    * Adjusts a Variant's `quantityOnHand` and returns the updated Variant.
@@ -69,6 +73,17 @@ export class InventoryService {
           },
         })
       }
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'INVENTORY_ADJUSTED',
+        entityType: 'ProductVariant',
+        entityId: variant.id,
+        metadata: {
+          adjustmentType: input.adjustmentType,
+          quantity: input.quantity,
+          newQuantityOnHand,
+        },
+      })
       return tx.productVariant.findUniqueOrThrow({
         where: { id: variant.id },
         include: VARIANT_WITH_INVENTORY_INCLUDE,

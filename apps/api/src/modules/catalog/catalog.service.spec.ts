@@ -76,6 +76,7 @@ describe('CatalogService', () => {
     partner: { findUnique: jest.Mock }
     $transaction: jest.Mock
   }
+  let auditLogService: { record: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -92,7 +93,8 @@ describe('CatalogService', () => {
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
-    service = new CatalogService(prisma as never)
+    auditLogService = { record: jest.fn() }
+    service = new CatalogService(prisma as never, auditLogService as never)
   })
 
   describe('getStatus', () => {
@@ -461,7 +463,7 @@ describe('CatalogService', () => {
       expect(prisma.product.update).not.toHaveBeenCalled()
     })
 
-    it('transitions status to ARCHIVED without touching deletedAt', async () => {
+    it('transitions status to ARCHIVED and records an audit log entry, atomically', async () => {
       prisma.product.findFirst
         .mockResolvedValueOnce(productFixture())
         .mockResolvedValueOnce(productFixture({ status: ProductStatus.ARCHIVED }))
@@ -471,6 +473,13 @@ describe('CatalogService', () => {
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'product-1' },
         data: { status: ProductStatus.ARCHIVED },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(prisma, {
+        actorUserId: 'user-1',
+        action: 'PRODUCT_ARCHIVED',
+        entityType: 'Product',
+        entityId: 'product-1',
+        metadata: { title: 'Wireless Mouse' },
       })
     })
   })

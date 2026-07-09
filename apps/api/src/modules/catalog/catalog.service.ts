@@ -8,6 +8,7 @@ import { PartnerStatus, Prisma, ProductStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
+import { AuditLogService } from '../../common/services/audit-log.service'
 import { CategoryOutput } from './dto/category.output'
 import { CreateProductInput } from './dto/create-product.input'
 import { ProductConnectionOutput, ProductEdgeOutput } from './dto/product-connection.output'
@@ -43,7 +44,10 @@ export interface FindProductsArgs {
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   getStatus(): string {
     return 'catalog module initialized'
@@ -214,7 +218,16 @@ export class CatalogService {
       throw new NotFoundException('Product not found')
     }
 
-    await this.prisma.product.update({ where: { id }, data: { status: ProductStatus.ARCHIVED } })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.product.update({ where: { id }, data: { status: ProductStatus.ARCHIVED } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'PRODUCT_ARCHIVED',
+        entityType: 'Product',
+        entityId: id,
+        metadata: { title: existing.title },
+      })
+    })
     return this.findProductById(user, id)
   }
 

@@ -62,6 +62,8 @@ describe('InventoryService', () => {
     $transaction: jest.Mock
   }
 
+  let auditLogService: { record: jest.Mock }
+
   beforeEach(() => {
     prisma = {
       productVariant: { findFirst: jest.fn(), findUniqueOrThrow: jest.fn(), update: jest.fn() },
@@ -69,7 +71,8 @@ describe('InventoryService', () => {
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
-    service = new InventoryService(prisma as never)
+    auditLogService = { record: jest.fn() }
+    service = new InventoryService(prisma as never, auditLogService as never)
   })
 
   it('throws NOT_FOUND when the variant does not belong to the caller', async () => {
@@ -105,6 +108,17 @@ describe('InventoryService', () => {
     expect(prisma.productVariant.update).toHaveBeenCalledWith({
       where: { id: 'variant-1' },
       data: { status: ProductVariantStatus.ACTIVE },
+    })
+    expect(auditLogService.record).toHaveBeenCalledWith(prisma, {
+      actorUserId: 'user-1',
+      action: 'INVENTORY_ADJUSTED',
+      entityType: 'ProductVariant',
+      entityId: 'variant-1',
+      metadata: {
+        adjustmentType: InventoryAdjustmentType.INCREASE,
+        quantity: 10,
+        newQuantityOnHand: 10,
+      },
     })
   })
 

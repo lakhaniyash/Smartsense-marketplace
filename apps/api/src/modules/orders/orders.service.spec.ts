@@ -108,6 +108,7 @@ describe('OrdersService', () => {
   }
   let eventEmitter: { emit: jest.Mock }
   let inventoryService: { reserve: jest.Mock; release: jest.Mock }
+  let auditLogService: { record: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -120,7 +121,13 @@ describe('OrdersService', () => {
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     eventEmitter = { emit: jest.fn() }
     inventoryService = { reserve: jest.fn(), release: jest.fn() }
-    service = new OrdersService(prisma as never, eventEmitter as never, inventoryService as never)
+    auditLogService = { record: jest.fn() }
+    service = new OrdersService(
+      prisma as never,
+      eventEmitter as never,
+      inventoryService as never,
+      auditLogService as never,
+    )
   })
 
   describe('findOrderById', () => {
@@ -390,6 +397,13 @@ describe('OrdersService', () => {
           reason: null,
         },
       })
+      expect(auditLogService.record).toHaveBeenCalledWith(prisma, {
+        actorUserId: 'user-1',
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'Order',
+        entityId: 'order-1',
+        metadata: { fromStatus: OrderStatus.DRAFT, toStatus: OrderStatus.CONFIRMED, reason: null },
+      })
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         InventoryReservedEvent.EVENT_NAME,
         expect.objectContaining({ orderId: 'order-1' }),
@@ -428,6 +442,7 @@ describe('OrdersService', () => {
       ).rejects.toThrow(BadRequestException)
       expect(prisma.order.update).not.toHaveBeenCalled()
       expect(prisma.orderStatusHistory.create).not.toHaveBeenCalled()
+      expect(auditLogService.record).not.toHaveBeenCalled()
     })
 
     it('lets the vendor Partner advance CONFIRMED->PROCESSING (no inventory effect)', async () => {

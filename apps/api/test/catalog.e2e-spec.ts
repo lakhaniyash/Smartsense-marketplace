@@ -207,6 +207,12 @@ describe('Catalog (e2e)', () => {
     await prisma.userRole.deleteMany({
       where: { userId: { in: [testUserId, partnerUserId, adminUserId] } },
     })
+    // AuditLog.actor is onDelete: Restrict (docs/database-schema.md) — the
+    // archiveProduct/adjustInventory tests now write audit rows for these
+    // users, which must go before the users themselves can be deleted.
+    await prisma.auditLog.deleteMany({
+      where: { actorUserId: { in: [testUserId, partnerUserId, adminUserId] } },
+    })
     await prisma.user.deleteMany({
       where: { id: { in: [testUserId, partnerUserId, adminUserId] } },
     })

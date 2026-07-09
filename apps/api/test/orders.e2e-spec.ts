@@ -340,6 +340,10 @@ describe('Orders (e2e)', () => {
       noPermissionUserId,
     ]
     await prisma.userRole.deleteMany({ where: { userId: { in: userIds } } })
+    // AuditLog.actor is onDelete: Restrict (docs/database-schema.md) — the
+    // updateOrderStatus tests now write audit rows for these users, which
+    // must go before the users themselves can be deleted.
+    await prisma.auditLog.deleteMany({ where: { actorUserId: { in: userIds } } })
     await prisma.user.deleteMany({ where: { id: { in: userIds } } })
     // Order -> OrderItem/OrderStatusHistory cascade; Product -> ProductVariant/Inventory cascade.
     await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } })

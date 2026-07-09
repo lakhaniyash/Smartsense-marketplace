@@ -11,6 +11,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
+import { AuditLogService } from '../../common/services/audit-log.service'
 import { InventoryReleasedEvent } from '../catalog/events/inventory-released.event'
 import { InventoryReservedEvent } from '../catalog/events/inventory-reserved.event'
 import { InventoryService } from '../catalog/inventory.service'
@@ -101,6 +102,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly inventoryService: InventoryService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   getStatus(): string {
@@ -323,6 +325,13 @@ export class OrdersService {
           changedByUserId: user.id,
           reason: reason ?? null,
         },
+      })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'Order',
+        entityId: orderId,
+        metadata: { fromStatus: previousStatus, toStatus: targetStatus, reason: reason ?? null },
       })
     })
 
