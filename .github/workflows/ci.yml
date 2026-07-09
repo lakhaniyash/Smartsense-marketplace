@@ -12,8 +12,38 @@ concurrency:
 
 jobs:
   ci:
-    name: Lint · Type Check · Build
+    name: Lint · Type Check · Test · Build
     runs-on: ubuntu-latest
+
+    # Real Postgres for apps/api's Jest e2e suite (docs/testing.md § Test
+    # Database Strategy — never SQLite/in-memory, same engine as prod).
+    # Keycloak itself is never needed here: the e2e suite replaces it with a
+    # local, throwaway JWKS HTTP server per test run (see
+    # apps/api/test/auth.e2e-spec.ts) — only KEYCLOAK_URL/REALM/CLIENT_ID
+    # need to resolve to *something*, since the app never actually calls out
+    # to them once the JWKS URI is overridden.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: smartsense_marketplace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/smartsense_marketplace
+      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_REALM: smartsense-marketplace
+      KEYCLOAK_API_CLIENT_ID: smartsense-api
+      KEYCLOAK_API_CLIENT_SECRET: smartsense-api-dev-secret-change-me
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +63,25 @@ jobs:
 
       - name: Type check
         run: npm run typecheck
+
+      - name: Unit tests (apps/api Jest, apps/web Vitest)
+        run: npm run test
+
+      - name: Apply database migrations
+        run: npm run prisma:migrate:deploy --workspace=@smartsense/api
+
+      - name: Seed reference data
+        # The e2e suite maps JWT realm roles onto real Role/Permission rows
+        # (docs/database-schema.md § Seed Data) — without this, every
+        # permission check in the suite below fails closed on a fresh DB.
+        run: npm run prisma:seed --workspace=@smartsense/api
+
+      - name: Backend integration tests (real Postgres + mocked JWKS)
+        # Deliberately `--workspace=@smartsense/api`, not the root
+        # `npm run test:e2e` (which would also try apps/web's Playwright
+        # suite — that needs a live Keycloak + API + frontend stack this
+        # job doesn't stand up yet). Scoped here until that's wired in.
+        run: npm run test:e2e --workspace=@smartsense/api
 
       - name: Build
         run: npm run build
