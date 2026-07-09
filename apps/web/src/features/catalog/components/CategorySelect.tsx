@@ -27,17 +27,22 @@ export function CategorySelect({
   error,
   ...props
 }: CategorySelectProps) {
-  const { categories, isLoading } = useCategories()
+  const { categories, isLoading, error: queryError } = useCategories()
   const options = buildCategoryOptions(categories)
+  // The caller's own validation error (a required field left empty) always
+  // wins over the query error — both indicate "invalid", but the caller's
+  // is the more specific, actionable one when both happen to be present.
+  const resolvedError =
+    error ?? (queryError !== undefined ? 'Failed to load categories' : undefined)
 
   return (
     <Select
       label={label}
-      placeholder={placeholder}
+      placeholder={isLoading ? 'Loading categories…' : placeholder}
       clearable={clearable}
       options={options}
       disabled={isLoading || disabled}
-      {...(error !== undefined && { error })}
+      {...(resolvedError !== undefined && { error: resolvedError })}
       {...props}
     />
   )

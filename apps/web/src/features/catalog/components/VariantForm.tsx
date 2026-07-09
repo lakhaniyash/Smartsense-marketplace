@@ -41,83 +41,90 @@ export function VariantForm({
     formState: { errors },
   } = useForm<VariantFormValues>({
     resolver: zodResolver(variantFormSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     defaultValues: { sku: '', price: '', isDefault: false, attributes: [], ...defaultValues },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'attributes' })
 
   return (
     <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
-        <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
-        <Input
-          label="Price"
-          required
-          helperText="e.g. 19.99"
-          {...register('price')}
-          {...errorProp(errors.price?.message)}
-        />
-      </div>
+      {/* `contents` keeps every field a direct flex child of <form> (preserving
+          the gap-6 layout) while still disabling every nested control — including
+          the add/remove-attribute buttons — while submitting. */}
+      <fieldset disabled={isSubmitting} className="contents">
+        <div className="flex flex-col gap-4">
+          <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+          <Input
+            label="Price"
+            required
+            helperText="e.g. 19.99"
+            {...register('price')}
+            {...errorProp(errors.price?.message)}
+          />
+        </div>
 
-      <div className="border-border-default flex flex-col gap-2 border-t pt-4">
-        <span className="text-fg-default text-sm font-medium">Attributes</span>
-        {fields.length === 0 && (
-          <p className="text-fg-muted text-sm">No attributes yet (e.g. size, color).</p>
-        )}
-        {fields.map((field, index) => (
-          <div key={field.id} className="flex items-start gap-2">
-            <Input
-              placeholder="Key (e.g. color)"
-              aria-label={`Attribute ${index + 1} key`}
-              {...register(`attributes.${index}.key`)}
-              {...errorProp(errors.attributes?.[index]?.key?.message)}
-            />
-            <Input
-              placeholder="Value (e.g. Blue)"
-              aria-label={`Attribute ${index + 1} value`}
-              {...register(`attributes.${index}.value`)}
-              {...errorProp(errors.attributes?.[index]?.value?.message)}
-            />
+        <div className="border-border-default flex flex-col gap-2 border-t pt-4">
+          <span className="text-fg-default text-sm font-medium">Attributes</span>
+          {fields.length === 0 && (
+            <p className="text-fg-muted text-sm">No attributes yet (e.g. size, color).</p>
+          )}
+          {fields.map((field, index) => (
+            <div key={field.id} className="flex items-start gap-2">
+              <Input
+                placeholder="Key (e.g. color)"
+                aria-label={`Attribute ${index + 1} key`}
+                {...register(`attributes.${index}.key`)}
+                {...errorProp(errors.attributes?.[index]?.key?.message)}
+              />
+              <Input
+                placeholder="Value (e.g. Blue)"
+                aria-label={`Attribute ${index + 1} value`}
+                {...register(`attributes.${index}.value`)}
+                {...errorProp(errors.attributes?.[index]?.value?.message)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Remove attribute"
+                onClick={() => remove(index)}
+              >
+                <CloseIcon className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <div>
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              aria-label="Remove attribute"
-              onClick={() => remove(index)}
+              onClick={() => append({ key: '', value: '' })}
             >
-              <CloseIcon className="size-4" aria-hidden="true" />
+              Add attribute
             </Button>
           </div>
-        ))}
+        </div>
+
+        <div className="border-border-default flex flex-col gap-1.5 border-t pt-4">
+          <Checkbox
+            label="Default variant"
+            disabled={disableDefaultToggle}
+            {...register('isDefault')}
+          />
+          {disableDefaultToggle && (
+            <p className="text-fg-muted text-sm">
+              This is already the default — set another variant as default to change it.
+            </p>
+          )}
+        </div>
+
         <div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => append({ key: '', value: '' })}
-          >
-            Add attribute
+          <Button type="submit" isLoading={isSubmitting}>
+            {submitLabel}
           </Button>
         </div>
-      </div>
-
-      <div className="border-border-default flex flex-col gap-1.5 border-t pt-4">
-        <Checkbox
-          label="Default variant"
-          disabled={disableDefaultToggle}
-          {...register('isDefault')}
-        />
-        {disableDefaultToggle && (
-          <p className="text-fg-muted text-sm">
-            This is already the default — set another variant as default to change it.
-          </p>
-        )}
-      </div>
-
-      <div>
-        <Button type="submit" isLoading={isSubmitting}>
-          {submitLabel}
-        </Button>
-      </div>
+      </fieldset>
     </form>
   )
 }
