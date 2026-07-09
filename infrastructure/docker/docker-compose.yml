@@ -9,7 +9,9 @@ services:
       PORT: 3000
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:password@db:5432/smartsense_marketplace
-      GRAPHQL_INTROSPECTION: 'true'
+      # No GRAPHQL_INTROSPECTION override — NODE_ENV=production above already
+      # makes configuration.ts default it off; an explicit 'true' here would
+      # unconditionally re-enable it and defeat that fail-closed default.
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
       KEYCLOAK_URL: http://keycloak:8080

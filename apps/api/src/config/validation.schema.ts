@@ -5,7 +5,13 @@ export const validationSchema = Joi.object({
   PORT: Joi.number().integer().min(1).max(65535).default(3000),
   DATABASE_URL: Joi.string().uri().required(),
   GRAPHQL_DEBUG: Joi.boolean().default(false),
-  GRAPHQL_INTROSPECTION: Joi.boolean().default(true),
+  // Matches configuration.ts's fail-closed default: off in production
+  // unless explicitly overridden, on everywhere else.
+  GRAPHQL_INTROSPECTION: Joi.boolean().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.boolean().default(false),
+    otherwise: Joi.boolean().default(true),
+  }),
   GRAPHQL_PLAYGROUND: Joi.boolean().default(false),
   KEYCLOAK_URL: Joi.string().uri().required(),
   KEYCLOAK_REALM: Joi.string().required(),
