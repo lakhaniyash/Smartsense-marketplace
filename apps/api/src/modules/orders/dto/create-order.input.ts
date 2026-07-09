@@ -1,15 +1,26 @@
 import { Field, ID, InputType } from '@nestjs/graphql'
 import { Type } from 'class-transformer'
-import { ArrayMinSize, IsArray, IsOptional, IsUUID, ValidateNested } from 'class-validator'
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator'
 import { DecimalScalar } from '../../../common/graphql/decimal.scalar'
 import { IsNonNegativeDecimal } from '../../../common/validators/is-non-negative-decimal.validator'
 import { CreateOrderItemInput } from './create-order-item.input'
 
 @InputType()
 export class CreateOrderInput {
+  // 100 is well beyond any real cart — the ceiling exists to stop a caller
+  // from forcing an oversized `IN (...)` clause and outsized validation
+  // work, not to model an expected order shape.
   @Field(() => [CreateOrderItemInput])
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemInput)
   items!: CreateOrderItemInput[]

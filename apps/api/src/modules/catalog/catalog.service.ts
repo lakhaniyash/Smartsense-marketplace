@@ -8,6 +8,7 @@ import { PartnerStatus, Prisma, ProductStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
+import { AuditLogService } from '../../common/services/audit-log.service'
 import { CategoryOutput } from './dto/category.output'
 import { CreateProductInput } from './dto/create-product.input'
 import { ProductConnectionOutput, ProductEdgeOutput } from './dto/product-connection.output'
@@ -43,7 +44,10 @@ export interface FindProductsArgs {
 
 @Injectable()
 export class CatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   getStatus(): string {
     return 'catalog module initialized'
@@ -110,8 +114,17 @@ export class CatalogService {
 
     // Ownership miss reads as NOT_FOUND, never FORBIDDEN — an id outside the
     // caller's scope must be indistinguishable from one that doesn't exist
-    // (docs/authorization.md § Ownership Rules).
-    if (product === null || (user.partnerId !== null && product.partnerId !== user.partnerId)) {
+    // (docs/authorization.md § Ownership Rules). For a Customer (no owning
+    // Partner) that floor is publish status, not ownership: an unpublished
+    // product is invisible to them by direct id lookup too, the same as it
+    // is via findProducts' buildWhere.
+    if (
+      product === null ||
+      (user.partnerId !== null && product.partnerId !== user.partnerId) ||
+      (user.partnerId === null &&
+        user.customerId !== null &&
+        product.status !== ProductStatus.PUBLISHED)
+    ) {
       throw new NotFoundException('Product not found')
     }
 
@@ -214,7 +227,16 @@ export class CatalogService {
       throw new NotFoundException('Product not found')
     }
 
-    await this.prisma.product.update({ where: { id }, data: { status: ProductStatus.ARCHIVED } })
+    await this.prisma.$transaction(async (tx) => {
+      await tx.product.update({ where: { id }, data: { status: ProductStatus.ARCHIVED } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'PRODUCT_ARCHIVED',
+        entityType: 'Product',
+        entityId: id,
+        metadata: { title: existing.title },
+      })
+    })
     return this.findProductById(user, id)
   }
 
@@ -251,8 +273,22 @@ export class CatalogService {
     const categoryId = filter?.categoryId ?? undefined
     const search = filter?.search ?? undefined
 
-    if (user.partnerId !== null) where.partnerId = user.partnerId
-    if (status !== undefined) where.status = status
+    if (user.partnerId !== null) {
+      // Partner: scoped to their own catalog, any status (they can browse
+      // their own Drafts) — unchanged from before.
+      where.partnerId = user.partnerId
+      if (status !== undefined) where.status = status
+    } else if (user.customerId !== null) {
+      // Customer: never scoped by ownership, but a client-supplied status
+      // is ignored rather than trusted — a Customer only ever sees the
+      // published catalog, never Draft/Archived by requesting it directly
+      // (docs/authorization.md § Ownership Rules).
+      where.status = ProductStatus.PUBLISHED
+    } else if (status !== undefined) {
+      // Admin (no partnerId, no customerId): unrestricted, same explicit
+      // status filter support as a Partner gets for their own catalog.
+      where.status = status
+    }
     if (categoryId !== undefined) where.categoryId = categoryId
     if (search !== undefined && search.trim() !== '') {
       where.OR = [
@@ -264,10 +300,15 @@ export class CatalogService {
     return where
   }
 
-  private buildOrderBy(sort: ProductSortInput | undefined): Prisma.ProductOrderByWithRelationInput {
+  // `id` breaks ties: two rows sharing the exact same title/createdAt could
+  // otherwise skip or repeat across cursor-paginated pages, since Prisma's
+  // cursor pagination requires orderBy to fully determine a total order.
+  private buildOrderBy(
+    sort: ProductSortInput | undefined,
+  ): Prisma.ProductOrderByWithRelationInput[] {
     const direction = sort?.direction === SortDirection.ASC ? 'asc' : 'desc'
-    if (sort?.field === ProductSortField.NAME) return { title: direction }
-    return { createdAt: direction }
+    if (sort?.field === ProductSortField.NAME) return [{ title: direction }, { id: 'asc' }]
+    return [{ createdAt: direction }, { id: 'asc' }]
   }
 
   private mapProductToOutput(product: ProductWithRelations): ProductOutput {

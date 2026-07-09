@@ -340,6 +340,10 @@ describe('Orders (e2e)', () => {
       noPermissionUserId,
     ]
     await prisma.userRole.deleteMany({ where: { userId: { in: userIds } } })
+    // AuditLog.actor is onDelete: Restrict (docs/database-schema.md) — the
+    // updateOrderStatus tests now write audit rows for these users, which
+    // must go before the users themselves can be deleted.
+    await prisma.auditLog.deleteMany({ where: { actorUserId: { in: userIds } } })
     await prisma.user.deleteMany({ where: { id: { in: userIds } } })
     // Order -> OrderItem/OrderStatusHistory cascade; Product -> ProductVariant/Inventory cascade.
     await prisma.order.deleteMany({ where: { id: { in: createdOrderIds } } })
@@ -533,6 +537,21 @@ describe('Orders (e2e)', () => {
       expect(res.body.errors[0].extensions.code).toBe('FORBIDDEN')
     })
 
+    it('rejects more than 100 order items at the input layer', async () => {
+      const items = Array.from({ length: 101 }, () => ({
+        productVariantId: ownVariantId,
+        quantity: 1,
+      }))
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownCustomerToken()}`)
+        .send({ query: CREATE_MUTATION, variables: { input: { items } } })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
     it('places an order for a Customer caller under their own customerId, in DRAFT', async () => {
       const res = await request(app.getHttpServer())
         .post('/graphql')
@@ -564,6 +583,53 @@ describe('Orders (e2e)', () => {
         subtotal: '150',
         total: '150',
       })
+    })
+
+    it('rejects a Customer ordering a variant of an unpublished product', async () => {
+      // A Draft product's variant id is otherwise a perfectly valid,
+      // in-stock variant — the only thing that should block this order is
+      // publish status, proving the fix actually closes the gap rather
+      // than something else (missing stock, wrong Partner) incidentally
+      // blocking it (docs/authorization.md § Ownership Rules).
+      const draftProduct = await prisma.product.create({
+        data: {
+          partnerId: ownPartnerId,
+          categoryId: (await prisma.category.findFirstOrThrow({ where: { slug: 'electronics' } }))
+            .id,
+          title: 'Orders E2E fixture DRAFT-VISIBILITY-SKU',
+          status: 'DRAFT',
+        },
+      })
+      createdProductIds.push(draftProduct.id)
+      const draftVariant = await prisma.productVariant.create({
+        data: {
+          productId: draftProduct.id,
+          partnerId: ownPartnerId,
+          sku: 'ORDERS-E2E-DRAFT-VISIBILITY-SKU',
+          price: 50,
+          isDefault: true,
+        },
+      })
+      await prisma.inventory.create({
+        data: { productVariantId: draftVariant.id, quantityOnHand: 10 },
+      })
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownCustomerToken()}`)
+        .send({
+          query: CREATE_MUTATION,
+          variables: {
+            input: {
+              items: [{ productVariantId: draftVariant.id, quantity: 1 }],
+              shippingAddressId: ownCustomerAddressId,
+            },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      expect(res.body.errors[0].message).toBe('One or more product variants do not exist')
     })
 
     it('lets a Partner place an order on behalf of a specified customerId', async () => {
@@ -763,6 +829,50 @@ describe('Orders (e2e)', () => {
 
       const unchangedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
       expect(unchangedOrder.status).toBe('DRAFT')
+    })
+
+    it('serializes two concurrent confirmations against the same scarce variant — never oversells', async () => {
+      // lowStockVariantId has exactly 3 units on hand and, at this point in
+      // the suite, zero reserved (the prior test's reservation rolled back).
+      // Two orders for 2 units each fit individually but not together — this
+      // is the exact lost-update race the inventory reservation fix closes
+      // (docs/testing.md § Transaction Testing): without the atomic
+      // compare-and-swap, both confirmations could read reserved=0 and both
+      // succeed, overselling the variant.
+      const [orderA, orderB] = await Promise.all([
+        createOrderWithItemsFixture(ownPartnerId, ownCustomerId, [
+          { variantId: lowStockVariantId, quantity: 2, unitPrice: 50 },
+        ]),
+        createOrderWithItemsFixture(ownPartnerId, ownCustomerId, [
+          { variantId: lowStockVariantId, quantity: 2, unitPrice: 50 },
+        ]),
+      ])
+
+      const [resA, resB] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${ownCustomerToken()}`)
+          .send({
+            query: UPDATE_STATUS_MUTATION,
+            variables: { id: orderA.id, status: 'CONFIRMED' },
+          }),
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${ownCustomerToken()}`)
+          .send({
+            query: UPDATE_STATUS_MUTATION,
+            variables: { id: orderB.id, status: 'CONFIRMED' },
+          }),
+      ])
+
+      const outcomes = [resA, resB].map((res) => (res.body.errors ? 'rejected' : 'confirmed'))
+      expect(outcomes.sort()).toEqual(['confirmed', 'rejected'])
+
+      const finalInventory = await prisma.inventory.findUniqueOrThrow({
+        where: { productVariantId: lowStockVariantId },
+      })
+      expect(finalInventory.quantityReserved).toBeLessThanOrEqual(finalInventory.quantityOnHand)
+      expect(finalInventory.quantityReserved).toBe(2)
     })
   })
 

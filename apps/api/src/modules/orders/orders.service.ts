@@ -11,6 +11,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
+import { AuditLogService } from '../../common/services/audit-log.service'
 import { InventoryReleasedEvent } from '../catalog/events/inventory-released.event'
 import { InventoryReservedEvent } from '../catalog/events/inventory-reserved.event'
 import { InventoryService } from '../catalog/inventory.service'
@@ -101,6 +102,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly inventoryService: InventoryService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   getStatus(): string {
@@ -180,7 +182,17 @@ export class OrdersService {
 
     const variantIds = input.items.map((item) => item.productVariantId)
     const variants = await this.prisma.productVariant.findMany({
-      where: { id: { in: variantIds }, deletedAt: null },
+      where: {
+        id: { in: variantIds },
+        deletedAt: null,
+        // A Customer (no owning Partner) can only order published products
+        // — same visibility floor as CatalogService.buildWhere/findProductById
+        // (docs/authorization.md § Ownership Rules). A missing variant here
+        // reads as "does not exist" below, the same as an actually-missing
+        // one, rather than leaking that an unpublished match was found.
+        ...(user.partnerId === null &&
+          user.customerId !== null && { product: { status: 'PUBLISHED' } }),
+      },
     })
     if (variants.length !== new Set(variantIds).size) {
       throw new BadRequestException('One or more product variants do not exist')
@@ -324,6 +336,13 @@ export class OrdersService {
           reason: reason ?? null,
         },
       })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'Order',
+        entityId: orderId,
+        metadata: { fromStatus: previousStatus, toStatus: targetStatus, reason: reason ?? null },
+      })
     })
 
     this.emitTransitionEvents(order, targetStatus, rule, items, reason)
@@ -461,10 +480,13 @@ export class OrdersService {
     return where
   }
 
-  private buildOrderBy(sort: OrderSortInput | undefined): Prisma.OrderOrderByWithRelationInput {
+  // `id` breaks ties: two rows sharing the exact same total/createdAt could
+  // otherwise skip or repeat across cursor-paginated pages, since Prisma's
+  // cursor pagination requires orderBy to fully determine a total order.
+  private buildOrderBy(sort: OrderSortInput | undefined): Prisma.OrderOrderByWithRelationInput[] {
     const direction = sort?.direction === SortDirection.ASC ? 'asc' : 'desc'
-    if (sort?.field === OrderSortField.TOTAL) return { total: direction }
-    return { createdAt: direction }
+    if (sort?.field === OrderSortField.TOTAL) return [{ total: direction }, { id: 'asc' }]
+    return [{ createdAt: direction }, { id: 'asc' }]
   }
 
   mapOrderToOutput(order: OrderWithRelations): OrderOutput {

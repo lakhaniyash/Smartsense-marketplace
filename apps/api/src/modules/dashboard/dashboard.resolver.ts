@@ -19,7 +19,7 @@ export class DashboardResolver {
     name: 'dashboardStats',
     description: 'Summary statistics for the dashboard overview.',
   })
-  dashboardStats(): DashboardStatsOutput {
+  dashboardStats(): Promise<DashboardStatsOutput> {
     return this.dashboardService.getStats()
   }
 }

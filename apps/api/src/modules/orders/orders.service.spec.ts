@@ -108,6 +108,7 @@ describe('OrdersService', () => {
   }
   let eventEmitter: { emit: jest.Mock }
   let inventoryService: { reserve: jest.Mock; release: jest.Mock }
+  let auditLogService: { record: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -120,7 +121,13 @@ describe('OrdersService', () => {
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     eventEmitter = { emit: jest.fn() }
     inventoryService = { reserve: jest.fn(), release: jest.fn() }
-    service = new OrdersService(prisma as never, eventEmitter as never, inventoryService as never)
+    auditLogService = { record: jest.fn() }
+    service = new OrdersService(
+      prisma as never,
+      eventEmitter as never,
+      inventoryService as never,
+      auditLogService as never,
+    )
   })
 
   describe('findOrderById', () => {
@@ -209,7 +216,7 @@ describe('OrdersService', () => {
       )
     })
 
-    it('sorts by total when requested, defaulting to createdAt otherwise', async () => {
+    it('sorts by total (with an id tiebreaker) when requested', async () => {
       prisma.order.findMany.mockResolvedValueOnce([])
 
       await service.findOrders(user(), {
@@ -217,7 +224,17 @@ describe('OrdersService', () => {
       })
 
       expect(prisma.order.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { total: 'asc' } }),
+        expect.objectContaining({ orderBy: [{ total: 'asc' }, { id: 'asc' }] }),
+      )
+    })
+
+    it('defaults to sorting by createdAt (with an id tiebreaker) otherwise', async () => {
+      prisma.order.findMany.mockResolvedValueOnce([])
+
+      await service.findOrders(user(), {})
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
       )
     })
 
@@ -250,6 +267,39 @@ describe('OrdersService', () => {
           data: expect.objectContaining({ customerId: 'customer-1', partnerId: 'partner-1' }),
         }),
       )
+    })
+
+    it('scopes the variant lookup to published products for a Customer caller', async () => {
+      prisma.productVariant.findMany.mockResolvedValueOnce([variantFixture()])
+      prisma.order.create.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+      prisma.order.findUnique.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+
+      await service.createOrder(user({ customerId: 'customer-1' }), {
+        items: [{ productVariantId: 'variant-1', quantity: 2 }],
+      })
+
+      expect(prisma.productVariant.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['variant-1'] },
+          deletedAt: null,
+          product: { status: 'PUBLISHED' },
+        },
+      })
+    })
+
+    it('does not restrict the variant lookup by product status for a Partner/Admin caller', async () => {
+      prisma.productVariant.findMany.mockResolvedValueOnce([variantFixture()])
+      prisma.order.create.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+      prisma.order.findUnique.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+
+      await service.createOrder(user({ partnerId: 'partner-1' }), {
+        items: [{ productVariantId: 'variant-1', quantity: 2 }],
+        customerId: 'customer-1',
+      })
+
+      expect(prisma.productVariant.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['variant-1'] }, deletedAt: null },
+      })
     })
 
     it('requires an explicit customerId when the caller is Partner/Admin (placing on behalf)', async () => {
@@ -390,6 +440,13 @@ describe('OrdersService', () => {
           reason: null,
         },
       })
+      expect(auditLogService.record).toHaveBeenCalledWith(prisma, {
+        actorUserId: 'user-1',
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'Order',
+        entityId: 'order-1',
+        metadata: { fromStatus: OrderStatus.DRAFT, toStatus: OrderStatus.CONFIRMED, reason: null },
+      })
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         InventoryReservedEvent.EVENT_NAME,
         expect.objectContaining({ orderId: 'order-1' }),
@@ -428,6 +485,7 @@ describe('OrdersService', () => {
       ).rejects.toThrow(BadRequestException)
       expect(prisma.order.update).not.toHaveBeenCalled()
       expect(prisma.orderStatusHistory.create).not.toHaveBeenCalled()
+      expect(auditLogService.record).not.toHaveBeenCalled()
     })
 
     it('lets the vendor Partner advance CONFIRMED->PROCESSING (no inventory effect)', async () => {

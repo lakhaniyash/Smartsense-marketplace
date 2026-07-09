@@ -2,8 +2,6 @@ import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   Button,
-  Card,
-  CardContent,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -47,6 +45,7 @@ export function CatalogPage() {
     error,
     setFilter,
     goToNextPage,
+    goToPreviousPage,
     hasPreviousPage,
     refetch,
   } = useCatalog()
@@ -55,7 +54,7 @@ export function CatalogPage() {
     filters.search !== undefined || filters.categoryId !== undefined || filters.status !== undefined
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full flex-col gap-6">
       <PageHeader
         title="Catalog"
         description="Products in your catalog."
@@ -70,18 +69,14 @@ export function CatalogPage() {
           )
         }
       />
-      <Card>
-        <CardContent className="p-4">
-          <ProductFilterBar
-            search={filters.search}
-            categoryId={filters.categoryId}
-            status={filters.status}
-            onSearchChange={(value) => setFilter('search', value)}
-            onCategoryChange={(value) => setFilter('categoryId', value)}
-            onStatusChange={(value) => setFilter('status', value)}
-          />
-        </CardContent>
-      </Card>
+      <ProductFilterBar
+        search={filters.search}
+        categoryId={filters.categoryId}
+        status={filters.status}
+        onSearchChange={(value) => setFilter('search', value)}
+        onCategoryChange={(value) => setFilter('categoryId', value)}
+        onStatusChange={(value) => setFilter('status', value)}
+      />
 
       {isLoading && (
         <Table>
@@ -140,36 +135,44 @@ export function CatalogPage() {
       )}
 
       {!isLoading && error === undefined && products.length > 0 && (
-        <>
-          <Table>
-            <ProductTableHead />
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell label="Title">
-                    <Link
-                      to={`${ROUTES.CATALOG}/${product.id}`}
-                      className="text-fg-default hover:text-fg-secondary font-medium hover:underline"
-                    >
-                      {product.title}
-                    </Link>
-                  </TableCell>
-                  <TableCell label="SKU">{product.sku}</TableCell>
-                  <TableCell label="Category">{product.category.name}</TableCell>
-                  <TableCell label="Status">
-                    <ProductStatusBadge status={product.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <Pagination
-            hasPreviousPage={hasPreviousPage}
-            hasNextPage={pageInfo?.hasNextPage ?? false}
-            onPrevious={() => window.history.back()}
-            onNext={goToNextPage}
-          />
-        </>
+        // The table scrolls in its own bounded region; Pagination is a
+        // plain, non-scrolling sibling below it, not layered on top of it
+        // (see Pagination.tsx's doc comment for why `position: sticky`
+        // was tried and reverted here).
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <Table>
+              <ProductTableHead />
+              <TableBody>
+                {products.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell label="Title">
+                      <Link
+                        to={`${ROUTES.CATALOG}/${product.id}`}
+                        className="text-fg-default hover:text-fg-secondary font-medium hover:underline"
+                      >
+                        {product.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell label="SKU">{product.sku}</TableCell>
+                    <TableCell label="Category">{product.category.name}</TableCell>
+                    <TableCell label="Status">
+                      <ProductStatusBadge status={product.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="border-border-default border-t pt-3">
+            <Pagination
+              hasPreviousPage={hasPreviousPage}
+              hasNextPage={pageInfo?.hasNextPage ?? false}
+              onPrevious={goToPreviousPage}
+              onNext={goToNextPage}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

@@ -46,63 +46,71 @@ export function ProductForm({
     formState: { errors },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(buildProductFormSchema(mode)),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
     ...(defaultValues !== undefined && { defaultValues }),
   })
 
   return (
     <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
-        <p className="text-fg-default text-sm font-medium">Basic information</p>
-        <Input
-          label="Title"
-          required
-          {...register('title')}
-          {...errorProp(errors.title?.message)}
-        />
-        <CategorySelect
-          required
-          {...register('categoryId')}
-          {...errorProp(errors.categoryId?.message)}
-        />
-      </div>
-
-      {mode === 'create' && (
-        <div className="border-border-default flex flex-col gap-4 border-t pt-4">
-          <p className="text-fg-default text-sm font-medium">Pricing &amp; identification</p>
-          <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+      {/* `contents` keeps every field a direct flex child of <form> (preserving
+          the gap-6 layout) while still disabling every nested control while
+          submitting — a native <fieldset disabled> behavior React can't get
+          any other way without threading the flag through each field. */}
+      <fieldset disabled={isSubmitting} className="contents">
+        <div className="flex flex-col gap-4">
+          <p className="text-fg-default text-sm font-medium">Basic information</p>
           <Input
-            label="Price"
+            label="Title"
             required
-            helperText="e.g. 19.99"
-            {...register('price')}
-            {...errorProp(errors.price?.message)}
+            {...register('title')}
+            {...errorProp(errors.title?.message)}
+          />
+          <CategorySelect
+            required
+            {...register('categoryId')}
+            {...errorProp(errors.categoryId?.message)}
           />
         </div>
-      )}
 
-      <div className="border-border-default flex flex-col gap-4 border-t pt-4">
-        <p className="text-fg-default text-sm font-medium">Additional details</p>
-        <Textarea
-          label="Description"
-          {...register('description')}
-          {...errorProp(errors.description?.message)}
-        />
-        <Input label="Brand" {...register('brand')} {...errorProp(errors.brand?.message)} />
-        {mode === 'edit' && (
-          <Select
-            label="Status"
-            options={STATUS_OPTIONS}
-            {...register('status')}
-            {...errorProp(errors.status?.message)}
-          />
+        {mode === 'create' && (
+          <div className="border-border-default flex flex-col gap-4 border-t pt-4">
+            <p className="text-fg-default text-sm font-medium">Pricing &amp; identification</p>
+            <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+            <Input
+              label="Price"
+              required
+              helperText="e.g. 19.99"
+              {...register('price')}
+              {...errorProp(errors.price?.message)}
+            />
+          </div>
         )}
-      </div>
 
-      <div>
-        <Button type="submit" isLoading={isSubmitting}>
-          {submitLabel}
-        </Button>
-      </div>
+        <div className="border-border-default flex flex-col gap-4 border-t pt-4">
+          <p className="text-fg-default text-sm font-medium">Additional details</p>
+          <Textarea
+            label="Description"
+            {...register('description')}
+            {...errorProp(errors.description?.message)}
+          />
+          <Input label="Brand" {...register('brand')} {...errorProp(errors.brand?.message)} />
+          {mode === 'edit' && (
+            <Select
+              label="Status"
+              options={STATUS_OPTIONS}
+              {...register('status')}
+              {...errorProp(errors.status?.message)}
+            />
+          )}
+        </div>
+
+        <div>
+          <Button type="submit" isLoading={isSubmitting}>
+            {submitLabel}
+          </Button>
+        </div>
+      </fieldset>
     </form>
   )
 }

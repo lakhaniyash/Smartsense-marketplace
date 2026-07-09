@@ -34,7 +34,15 @@ export default (): AppConfig => {
     },
     graphql: {
       debug: process.env['GRAPHQL_DEBUG'] === 'true',
-      introspection: process.env['GRAPHQL_INTROSPECTION'] !== 'false',
+      // Fail closed in production: introspection exposes the full schema
+      // (every field, every description) to anyone who can reach the
+      // endpoint, so an unset env var must default off there, not on —
+      // only a non-production environment defaults it on for developer
+      // convenience. An explicit GRAPHQL_INTROSPECTION always wins.
+      introspection:
+        process.env['GRAPHQL_INTROSPECTION'] === undefined
+          ? process.env['NODE_ENV'] !== 'production'
+          : process.env['GRAPHQL_INTROSPECTION'] === 'true',
       playground: process.env['GRAPHQL_PLAYGROUND'] === 'true',
     },
     keycloak: {

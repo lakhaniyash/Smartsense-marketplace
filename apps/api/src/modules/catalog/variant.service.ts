@@ -117,6 +117,15 @@ export class VariantService {
    * Soft-deletes a Variant. Rejected if it is the Product's default (set a
    * new default first) or its only remaining non-deleted Variant — a
    * Product must always have at least one (docs/domain-model.md § Product).
+   *
+   * The "at least one remains" check and the archive write are one atomic
+   * conditional `updateMany` — a separate count-then-update here would be
+   * the same TOCTOU race the inventory reservation fix closes elsewhere
+   * (two concurrent archives on a product's last two Variants could each
+   * read "1 remaining" and both succeed). Expressing "a sibling Variant
+   * exists" as a relation filter turns it into a single `EXISTS` subquery
+   * inside one `UPDATE`, which Postgres evaluates and applies atomically —
+   * no separate read step for a concurrent writer to race against.
    */
   async archiveProductVariant(user: AuthenticatedUser, id: string): Promise<ProductVariantOutput> {
     const existing = await this.findOwnedVariant(user, id)
@@ -127,16 +136,20 @@ export class VariantService {
       )
     }
 
-    const remaining = await this.prisma.productVariant.count({
-      where: { productId: existing.productId, deletedAt: null, id: { not: id } },
+    const { count } = await this.prisma.productVariant.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        product: { variants: { some: { id: { not: id }, deletedAt: null } } },
+      },
+      data: { deletedAt: new Date() },
     })
-    if (remaining === 0) {
+    if (count === 0) {
       throw new BadRequestException('A Product must have at least one ProductVariant')
     }
 
-    const archived = await this.prisma.productVariant.update({
+    const archived = await this.prisma.productVariant.findUniqueOrThrow({
       where: { id },
-      data: { deletedAt: new Date() },
       include: VARIANT_INCLUDE,
     })
     return mapVariantToOutput(archived)

@@ -14,6 +14,7 @@ export class CreateProductInput {
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   description?: string
 
   @Field({ nullable: true })

@@ -206,29 +206,38 @@ describe('VariantService', () => {
       await expect(service.archiveProductVariant(user(), 'variant-1')).rejects.toThrow(
         BadRequestException,
       )
-      expect(prisma.productVariant.update).not.toHaveBeenCalled()
+      expect(prisma.productVariant.updateMany).not.toHaveBeenCalled()
     })
 
-    it("rejects archiving a Product's only remaining variant", async () => {
+    it("rejects archiving a Product's only remaining variant, atomically", async () => {
       prisma.productVariant.findFirst.mockResolvedValueOnce(variantFixture({ isDefault: false }))
-      prisma.productVariant.count.mockResolvedValueOnce(0)
+      prisma.productVariant.updateMany.mockResolvedValueOnce({ count: 0 })
 
       await expect(service.archiveProductVariant(user(), 'variant-1')).rejects.toThrow(
         BadRequestException,
       )
-      expect(prisma.productVariant.update).not.toHaveBeenCalled()
+      expect(prisma.productVariant.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'variant-1',
+          deletedAt: null,
+          product: { variants: { some: { id: { not: 'variant-1' }, deletedAt: null } } },
+        },
+        data: { deletedAt: expect.any(Date) },
+      })
+      expect(prisma.productVariant.findUniqueOrThrow).not.toHaveBeenCalled()
     })
 
     it('soft-deletes a non-default variant when another remains', async () => {
       prisma.productVariant.findFirst.mockResolvedValueOnce(variantFixture({ isDefault: false }))
-      prisma.productVariant.count.mockResolvedValueOnce(1)
-      prisma.productVariant.update.mockResolvedValueOnce(variantFixture({ deletedAt: new Date() }))
+      prisma.productVariant.updateMany.mockResolvedValueOnce({ count: 1 })
+      prisma.productVariant.findUniqueOrThrow.mockResolvedValueOnce(
+        variantFixture({ deletedAt: new Date() }),
+      )
 
       await service.archiveProductVariant(user(), 'variant-1')
 
-      expect(prisma.productVariant.update).toHaveBeenCalledWith({
+      expect(prisma.productVariant.findUniqueOrThrow).toHaveBeenCalledWith({
         where: { id: 'variant-1' },
-        data: { deletedAt: expect.any(Date) },
         include: { inventory: true },
       })
     })

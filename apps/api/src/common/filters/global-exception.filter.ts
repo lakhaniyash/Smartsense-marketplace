@@ -34,12 +34,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   }
 
   private handleGraphqlException(exception: unknown): never {
-    const message = this.extractMessage(exception)
+    const logMessage = this.extractLogMessage(exception)
+    const clientMessage = this.extractClientMessage(exception)
     const code = this.extractCode(exception)
 
-    this.logger.error(`GraphQL error: ${message}`, undefined, GlobalExceptionFilter.name)
+    this.logger.error(`GraphQL error: ${logMessage}`, undefined, GlobalExceptionFilter.name)
 
-    throw new GraphQLError(message, {
+    throw new GraphQLError(clientMessage, {
       extensions: { code },
     })
   }
@@ -52,17 +53,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const status =
       exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR
 
-    const message = this.extractMessage(exception)
+    const logMessage = this.extractLogMessage(exception)
+    const clientMessage = this.extractClientMessage(exception)
 
     this.logger.error(
-      `HTTP ${status} error on ${request.url}: ${message}`,
+      `HTTP ${status} error on ${request.url}: ${logMessage}`,
       undefined,
       GlobalExceptionFilter.name,
     )
 
     const errorResponse: ErrorResponse = {
       statusCode: status,
-      message,
+      message: clientMessage,
       timestamp: new Date().toISOString(),
       path: request.url,
     }
@@ -70,7 +72,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse)
   }
 
-  private extractMessage(exception: unknown): string {
+  /**
+   * The message returned to the client. Only an already-typed
+   * `HttpException` — meaning some Service deliberately chose this message
+   * as user-facing — gets its real text through. Everything else (an
+   * untranslated Prisma error, a bug that threw a raw `Error`, a
+   * connectivity failure) gets a fixed generic message instead: its real
+   * text can contain table/column names, ids, or stack fragments, and
+   * `extractLogMessage` below still captures it server-side for debugging.
+   */
+  private extractClientMessage(exception: unknown): string {
     if (exception instanceof HttpException) {
       const response = exception.getResponse()
       if (typeof response === 'string') return response
@@ -82,6 +93,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
       return exception.message
     }
+    return 'Internal server error'
+  }
+
+  /** The message written to the server-side log — always the real detail. */
+  private extractLogMessage(exception: unknown): string {
+    if (exception instanceof HttpException) return this.extractClientMessage(exception)
     if (exception instanceof Error) return exception.message
     if (typeof exception === 'string') return exception
     return 'Internal server error'

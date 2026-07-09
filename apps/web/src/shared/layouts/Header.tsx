@@ -21,7 +21,7 @@ export function Header({ title, subtitle, onOpenSearch, leading, className }: He
   return (
     <header
       className={cn(
-        'border-border-default bg-surface flex items-center justify-between gap-4 border-b px-6 py-4',
+        'border-border-default bg-surface flex shrink-0 items-center justify-between gap-4 border-b px-6 py-4',
         className,
       )}
     >

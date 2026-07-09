@@ -1,0 +1,456 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+input AdjustInventoryInput {
+  adjustmentType: InventoryAdjustmentType!
+  productVariantId: ID!
+
+  """Non-negative. Interpreted per adjustmentType."""
+  quantity: Int!
+  reason: String
+}
+
+"""
+A node in the global product category taxonomy, owned and maintained by Admin (docs/domain-model.md § Category). Returned as a flat list — clients build the parent/child tree from parentCategoryId.
+"""
+type Category {
+  """Sort position among sibling categories."""
+  displayOrder: Int!
+  id: ID!
+  name: String!
+
+  """Parent category id, or null for a top-level category."""
+  parentCategoryId: ID
+  slug: String!
+}
+
+input CreateOrderInput {
+  """
+  Required when the caller is Admin; ignored (overridden by the caller's own customerId) for a Customer-scoped caller.
+  """
+  customerId: ID
+  items: [CreateOrderItemInput!]!
+  shippingAddressId: ID
+
+  """Defaults to 0."""
+  shippingCost: Decimal
+
+  """Defaults to 0."""
+  tax: Decimal
+}
+
+input CreateOrderItemInput {
+  productVariantId: ID!
+  quantity: Int!
+}
+
+input CreateProductInput {
+  brand: String
+  categoryId: ID!
+  description: String
+
+  """The initial default ProductVariant's price."""
+  price: Decimal!
+
+  """
+  Stored on the Product's initial (default) ProductVariant, unique per Partner.
+  """
+  sku: String!
+  title: String!
+}
+
+input CreateProductVariantInput {
+  attributes: [ProductVariantAttributeInput!]
+
+  """
+  Marks this Variant as the Product's default, unsetting any existing default.
+  """
+  isDefault: Boolean
+  price: Decimal!
+  productId: ID!
+  sku: String!
+}
+
+"""The authenticated caller, plus their resolved roles and permissions."""
+type CurrentUser {
+  email: String!
+  fullName: String!
+  id: ID!
+
+  """Permission.key values, e.g. ["catalog:write"]"""
+  permissions: [String!]!
+
+  """Role.name values, e.g. ["Admin"]"""
+  roles: [String!]!
+}
+
+"""Marketplace-wide summary counts shown on the dashboard overview."""
+type DashboardStats {
+  """Total non-deleted Customer count, marketplace-wide."""
+  totalCustomers: Int!
+
+  """Total Order count, marketplace-wide."""
+  totalOrders: Int!
+
+  """Total non-deleted Product count, marketplace-wide."""
+  totalProducts: Int!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+"""
+Arbitrary-precision decimal (money, percentages), transported as a string to avoid floating-point precision loss.
+"""
+scalar Decimal
+
+"""
+Stock levels for a ProductVariant (docs/domain-model.md § Inventory). sellableQuantity = quantityOnHand - quantityReserved, never negative.
+"""
+type Inventory {
+  quantityOnHand: Int!
+  quantityReserved: Int!
+
+  """Optional low-stock alert threshold."""
+  reorderThreshold: Int
+
+  """Derived: quantityOnHand - quantityReserved."""
+  sellableQuantity: Int!
+  updatedAt: DateTime!
+}
+
+"""
+How AdjustInventoryInput.quantity is applied to the current quantityOnHand.
+"""
+enum InventoryAdjustmentType {
+  DECREASE
+  INCREASE
+  SET
+}
+
+type Mutation {
+  """
+  Adjusts a ProductVariant's stock on hand and returns the updated Variant.
+  """
+  adjustInventory(input: AdjustInventoryInput!): ProductVariant!
+
+  """Transitions a Product owned by the caller to ARCHIVED status."""
+  archiveProduct(id: ID!): Product!
+
+  """
+  Soft-deletes a ProductVariant. Rejected if it is the Product's default Variant or its only remaining Variant.
+  """
+  archiveProductVariant(id: ID!): ProductVariant!
+
+  """
+  Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory.
+  """
+  cancelOrder(id: ID!, reason: String): Order!
+
+  """
+  Places a new Order in DRAFT status for the caller (Customer: self; Partner/Admin: on behalf of a specified customerId). No inventory effect yet — reservation happens when the order is confirmed via updateOrderStatus.
+  """
+  createOrder(input: CreateOrderInput!): Order!
+
+  """Creates a Product under the caller's own Partner."""
+  createProduct(input: CreateProductInput!): Product!
+
+  """Adds a ProductVariant to a Product owned by the caller."""
+  createProductVariant(input: CreateProductVariantInput!): ProductVariant!
+
+  """
+  Marks a ProductVariant as its Product's default, unsetting any previous default.
+  """
+  setDefaultProductVariant(id: ID!): ProductVariant!
+
+  """
+  Transitions an Order to a new status per the allowed transition matrix (docs/authorization.md § Orders). Rejects any other requested transition as invalid.
+  """
+  updateOrderStatus(id: ID!, reason: String, status: OrderStatus!): Order!
+
+  """Updates a Product owned by the caller."""
+  updateProduct(input: UpdateProductInput!): Product!
+
+  """Updates a ProductVariant owned by the caller."""
+  updateProductVariant(input: UpdateProductVariantInput!): ProductVariant!
+}
+
+"""A single-Partner order (docs/domain-model.md § Order)."""
+type Order {
+  createdAt: DateTime!
+  customerId: ID!
+  id: ID!
+  items: [OrderItem!]!
+  orderNumber: String!
+  partnerId: ID!
+  placedAt: DateTime
+  shippingAddressId: ID
+  shippingCost: Decimal!
+  status: OrderStatus!
+
+  """Oldest first."""
+  statusHistory: [OrderStatusHistoryEntry!]!
+  subtotal: Decimal!
+  tax: Decimal!
+  total: Decimal!
+  updatedAt: DateTime!
+}
+
+type OrderConnection {
+  edges: [OrderEdge!]!
+  pageInfo: PageInfo!
+}
+
+type OrderEdge {
+  cursor: String!
+  node: Order!
+}
+
+input OrderFilterInput {
+  createdAfter: DateTime
+  createdBefore: DateTime
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  customerId: ID
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+  status: OrderStatus
+}
+
+"""
+An immutable line item on an Order (docs/domain-model.md § Order Item). unitPriceSnapshot is captured at order placement and never recalculated from the live ProductVariant.price.
+"""
+type OrderItem {
+  id: ID!
+  lineTotal: Decimal!
+  productVariant: ProductVariant!
+  productVariantId: ID!
+  quantity: Int!
+  unitPriceSnapshot: Decimal!
+}
+
+"""Fields the order list can be sorted by."""
+enum OrderSortField {
+  CREATED_AT
+  TOTAL
+}
+
+input OrderSortInput {
+  direction: SortDirection!
+  field: OrderSortField!
+}
+
+"""
+Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 only implements transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED — the remaining values exist in the schema for future milestones (fulfillment, billing) and are not yet reachable.
+"""
+enum OrderStatus {
+  CANCELLED
+  COMPLETED
+  CONFIRMED
+  DELIVERED
+  DRAFT
+  PENDING_PAYMENT
+  PROCESSING
+  REFUNDED
+  RETURN_REQUESTED
+  SHIPPED
+}
+
+"""
+One row of an Order's status timeline (docs/domain-model.md § OrderStatusHistory).
+"""
+type OrderStatusHistoryEntry {
+  changedByUserId: ID
+  createdAt: DateTime!
+
+  """Null for the initial creation row."""
+  fromStatus: OrderStatus
+  id: ID!
+  reason: String
+  toStatus: OrderStatus!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
+"""
+A Partner catalog listing. Always has at least one ProductVariant (docs/domain-model.md § Product Variant); `sku` is flattened from the default one for convenience, and `variants` carries the full list for management.
+"""
+type Product {
+  brand: String
+  category: Category!
+  createdAt: DateTime!
+  description: String
+  id: ID!
+  publishedAt: DateTime
+
+  """Flattened from the default ProductVariant."""
+  sku: String!
+  status: ProductStatus!
+  title: String!
+  variants: [ProductVariant!]!
+}
+
+type ProductConnection {
+  edges: [ProductEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProductEdge {
+  cursor: String!
+  node: Product!
+}
+
+input ProductFilterInput {
+  categoryId: ID
+
+  """Free-text match against the product title and its SKU."""
+  search: String
+  status: ProductStatus
+}
+
+"""Fields the product list can be sorted by."""
+enum ProductSortField {
+  CREATED_AT
+  NAME
+}
+
+input ProductSortInput {
+  direction: SortDirection!
+  field: ProductSortField!
+}
+
+"""Lifecycle state per docs/domain-model.md § Catalog Management."""
+enum ProductStatus {
+  ARCHIVED
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+}
+
+"""
+The sellable SKU beneath a Product (docs/domain-model.md § Product Variant).
+"""
+type ProductVariant {
+  attributes: [ProductVariantAttribute!]!
+  createdAt: DateTime!
+  id: ID!
+  inventory: Inventory!
+
+  """
+  Whether this is the Product's default Variant. Exactly one per Product.
+  """
+  isDefault: Boolean!
+  price: Decimal!
+  sku: String!
+  status: ProductVariantStatus!
+}
+
+type ProductVariantAttribute {
+  key: String!
+  value: String!
+}
+
+input ProductVariantAttributeInput {
+  key: String!
+  value: String!
+}
+
+"""
+ACTIVE/OUT_OF_STOCK are derived automatically from Inventory and cannot be set directly. DISCONTINUED is a manual, terminal Partner action (docs/domain-model.md § Product Variant).
+"""
+enum ProductVariantStatus {
+  ACTIVE
+  DISCONTINUED
+  OUT_OF_STOCK
+}
+
+type Query {
+  """Auth module status"""
+  authStatus: String!
+
+  """Billing module status"""
+  billingStatus: String!
+
+  """Catalog module status"""
+  catalogStatus: String!
+
+  """Active categories in the global taxonomy, flat."""
+  categories: [Category!]!
+
+  """Summary statistics for the dashboard overview."""
+  dashboardStats: DashboardStats!
+
+  """Dashboard module status"""
+  dashboardStatus: String!
+
+  """The authenticated caller and their resolved roles/permissions."""
+  me: CurrentUser!
+
+  """
+  A single order by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
+  """
+  order(id: ID!): Order!
+
+  """
+  A page of the caller's visible orders (Admin: all; Partner: own as vendor; Customer: own as buyer).
+  """
+  orders(after: String, filter: OrderFilterInput, first: Int, sort: OrderSortInput): OrderConnection!
+
+  """Orders module status"""
+  ordersStatus: String!
+
+  """
+  A single product by id, scoped to the caller (Admin: any; Partner: own). Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
+  """
+  productById(id: ID!): Product!
+
+  """A page of the caller's visible products (Admin: all; Partner: own)."""
+  products(after: String, filter: ProductFilterInput, first: Int, sort: ProductSortInput): ProductConnection!
+
+  """Users module status"""
+  usersStatus: String!
+}
+
+enum SortDirection {
+  ASC
+  DESC
+}
+
+input UpdateProductInput {
+  brand: String
+  categoryId: ID
+  description: String
+  id: ID!
+  status: ProductStatus
+  title: String
+}
+
+input UpdateProductVariantInput {
+  attributes: [ProductVariantAttributeInput!]
+  id: ID!
+
+  """
+  Marks this Variant as the Product's default, unsetting any existing default.
+  """
+  isDefault: Boolean
+  price: Decimal
+  sku: String
+
+  """
+  Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here.
+  """
+  status: ProductVariantStatus
+}

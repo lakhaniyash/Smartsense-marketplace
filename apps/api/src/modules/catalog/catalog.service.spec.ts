@@ -76,6 +76,7 @@ describe('CatalogService', () => {
     partner: { findUnique: jest.Mock }
     $transaction: jest.Mock
   }
+  let auditLogService: { record: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -92,7 +93,8 @@ describe('CatalogService', () => {
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
-    service = new CatalogService(prisma as never)
+    auditLogService = { record: jest.fn() }
+    service = new CatalogService(prisma as never, auditLogService as never)
   })
 
   describe('getStatus', () => {
@@ -153,6 +155,20 @@ describe('CatalogService', () => {
       )
     })
 
+    it('forces status: PUBLISHED for a Customer caller, ignoring a client-supplied status', async () => {
+      prisma.product.findMany.mockResolvedValueOnce([])
+
+      await service.findProducts(user({ partnerId: null, customerId: 'customer-1' }), {
+        filter: { status: ProductStatus.DRAFT },
+      })
+
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deletedAt: null, status: ProductStatus.PUBLISHED },
+        }),
+      )
+    })
+
     it('maps status and categoryId filters onto the where clause', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
@@ -197,17 +213,17 @@ describe('CatalogService', () => {
       )
     })
 
-    it('defaults to sorting by createdAt descending', async () => {
+    it('defaults to sorting by createdAt descending, with an id tiebreaker', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
       await service.findProducts(user(), {})
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+        expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
       )
     })
 
-    it('sorts by title when NAME is requested, honoring direction', async () => {
+    it('sorts by title when NAME is requested, honoring direction, with an id tiebreaker', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
       await service.findProducts(user(), {
@@ -215,7 +231,7 @@ describe('CatalogService', () => {
       })
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { title: 'asc' } }),
+        expect.objectContaining({ orderBy: [{ title: 'asc' }, { id: 'asc' }] }),
       )
     })
 
@@ -295,6 +311,26 @@ describe('CatalogService', () => {
 
       await expect(
         service.findProductById(user({ partnerId: null }), 'product-1'),
+      ).resolves.toMatchObject({ id: 'product-1' })
+    })
+
+    it('throws NOT_FOUND when a Customer requests an unpublished product by id', async () => {
+      prisma.product.findFirst.mockResolvedValueOnce(
+        productFixture({ status: ProductStatus.DRAFT }),
+      )
+
+      await expect(
+        service.findProductById(user({ partnerId: null, customerId: 'customer-1' }), 'product-1'),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('allows a Customer to fetch a published product by id', async () => {
+      prisma.product.findFirst.mockResolvedValueOnce(
+        productFixture({ status: ProductStatus.PUBLISHED }),
+      )
+
+      await expect(
+        service.findProductById(user({ partnerId: null, customerId: 'customer-1' }), 'product-1'),
       ).resolves.toMatchObject({ id: 'product-1' })
     })
 
@@ -461,7 +497,7 @@ describe('CatalogService', () => {
       expect(prisma.product.update).not.toHaveBeenCalled()
     })
 
-    it('transitions status to ARCHIVED without touching deletedAt', async () => {
+    it('transitions status to ARCHIVED and records an audit log entry, atomically', async () => {
       prisma.product.findFirst
         .mockResolvedValueOnce(productFixture())
         .mockResolvedValueOnce(productFixture({ status: ProductStatus.ARCHIVED }))
@@ -471,6 +507,13 @@ describe('CatalogService', () => {
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'product-1' },
         data: { status: ProductStatus.ARCHIVED },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(prisma, {
+        actorUserId: 'user-1',
+        action: 'PRODUCT_ARCHIVED',
+        entityType: 'Product',
+        entityId: 'product-1',
+        metadata: { title: 'Wireless Mouse' },
       })
     })
   })
