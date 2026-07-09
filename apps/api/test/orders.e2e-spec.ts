@@ -537,6 +537,21 @@ describe('Orders (e2e)', () => {
       expect(res.body.errors[0].extensions.code).toBe('FORBIDDEN')
     })
 
+    it('rejects more than 100 order items at the input layer', async () => {
+      const items = Array.from({ length: 101 }, () => ({
+        productVariantId: ownVariantId,
+        quantity: 1,
+      }))
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownCustomerToken()}`)
+        .send({ query: CREATE_MUTATION, variables: { input: { items } } })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
     it('places an order for a Customer caller under their own customerId, in DRAFT', async () => {
       const res = await request(app.getHttpServer())
         .post('/graphql')

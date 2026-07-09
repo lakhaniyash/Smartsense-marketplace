@@ -480,6 +480,27 @@ describe('Catalog (e2e)', () => {
       expect(verify.body.errors).toBeUndefined()
     })
 
+    it('rejects a description over 5000 characters at the input layer', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_MUTATION,
+          variables: {
+            input: {
+              title: 'Catalog E2E Too-Long Description',
+              categoryId: electronicsCategoryId,
+              sku: 'CATALOG-E2E-LONG-DESC-SKU',
+              price: '9.99',
+              description: 'x'.repeat(5001),
+            },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
     it('translates a duplicate SKU within the same Partner into CONFLICT', async () => {
       const res = await request(app.getHttpServer())
         .post('/graphql')
@@ -690,6 +711,28 @@ describe('Catalog (e2e)', () => {
           query: CREATE_VARIANT_MUTATION,
           variables: {
             input: { productId: ownProductId, sku: 'CATALOG-E2E-ZERO-PRICE', price: '0' },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+    })
+
+    it('rejects more than 20 variant attributes at the input layer', async () => {
+      const attributes = Array.from({ length: 21 }, (_, i) => ({ key: `attr-${i}`, value: 'v' }))
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${partnerToken()}`)
+        .send({
+          query: CREATE_VARIANT_MUTATION,
+          variables: {
+            input: {
+              productId: ownProductId,
+              sku: 'CATALOG-E2E-TOO-MANY-ATTRS',
+              price: '10',
+              attributes,
+            },
           },
         })
         .expect(200)

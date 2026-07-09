@@ -1,6 +1,7 @@
 import { Field, ID, InputType } from '@nestjs/graphql'
 import { Type } from 'class-transformer'
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsOptional,
@@ -26,9 +27,13 @@ export class CreateProductVariantInput {
   @MaxLength(64)
   sku!: string
 
+  // 20 is well beyond any real variant's attribute set (color, size,
+  // material, ...) — same "stop an oversized request, don't model an
+  // expected shape" reasoning as CreateOrderInput.items' ceiling.
   @Field(() => [ProductVariantAttributeInput], { nullable: true })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => ProductVariantAttributeInput)
   attributes?: ProductVariantAttributeInput[]
