@@ -34,3 +34,16 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   }
   globalThis.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver
 }
+if (typeof window.matchMedia === 'undefined') {
+  // jsdom has no layout engine, so it can't evaluate a real media query —
+  // ThemeProvider (shared/services/theme.service.ts) calls this to resolve
+  // "system" mode. Default to "no preference matches" (light); specs that
+  // need to exercise dark/system behavior override window.matchMedia
+  // themselves (see ThemeToggle.spec.tsx).
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })) as unknown as typeof window.matchMedia
+}

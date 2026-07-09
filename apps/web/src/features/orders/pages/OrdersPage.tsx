@@ -2,6 +2,8 @@ import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   Button,
+  Card,
+  CardContent,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -26,7 +28,7 @@ function OrderTableHead() {
       <TableRow>
         <TableHead>Order #</TableHead>
         <TableHead>Status</TableHead>
-        <TableHead>Total</TableHead>
+        <TableHead className="md:text-right">Total</TableHead>
         <TableHead>Placed</TableHead>
       </TableRow>
     </TableHeader>
@@ -59,17 +61,21 @@ export function OrdersPage() {
           canCreateOrders && (
             <Link
               to={`${ROUTES.ORDERS}/new`}
-              className="inline-flex h-10 items-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
+              className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               Create Order
             </Link>
           )
         }
       />
-      <OrderFilterBar
-        status={filters.status}
-        onStatusChange={(value) => setFilter('status', value)}
-      />
+      <Card>
+        <CardContent className="p-4">
+          <OrderFilterBar
+            status={filters.status}
+            onStatusChange={(value) => setFilter('status', value)}
+          />
+        </CardContent>
+      </Card>
 
       {isLoading && (
         <Table>
@@ -90,10 +96,32 @@ export function OrdersPage() {
         />
       )}
 
-      {!isLoading && error === undefined && orders.length === 0 && (
+      {!isLoading && error === undefined && orders.length === 0 && filters.status !== undefined && (
+        <EmptyState
+          title="No orders match this filter"
+          description="Try a different status, or clear the filter to see all orders."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setFilter('status', undefined)}>
+              Clear filter
+            </Button>
+          }
+        />
+      )}
+
+      {!isLoading && error === undefined && orders.length === 0 && filters.status === undefined && (
         <EmptyState
           title="No orders yet"
           description="Orders you place or receive will show up here."
+          action={
+            canCreateOrders && (
+              <Link
+                to={`${ROUTES.ORDERS}/new`}
+                className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Create Order
+              </Link>
+            )
+          }
         />
       )}
 
@@ -107,7 +135,7 @@ export function OrdersPage() {
                   <TableCell label="Order #">
                     <Link
                       to={`${ROUTES.ORDERS}/${order.id}`}
-                      className="text-primary font-medium hover:underline"
+                      className="text-fg-default hover:text-fg-secondary font-medium hover:underline"
                     >
                       {order.orderNumber}
                     </Link>
@@ -115,7 +143,9 @@ export function OrdersPage() {
                   <TableCell label="Status">
                     <OrderStatusBadge status={order.status} />
                   </TableCell>
-                  <TableCell label="Total">${order.total}</TableCell>
+                  <TableCell label="Total" className="md:text-right">
+                    ${order.total}
+                  </TableCell>
                   <TableCell label="Placed">
                     {order.placedAt !== null && order.placedAt !== undefined
                       ? new Date(order.placedAt as string).toLocaleDateString()

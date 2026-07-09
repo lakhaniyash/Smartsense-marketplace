@@ -26,8 +26,8 @@ export function ErrorState({
       )}
     >
       <DangerIcon className="text-danger size-10" aria-hidden="true" />
-      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{title}</p>
-      <p className="max-w-sm text-sm text-gray-500">{description}</p>
+      <p className="text-fg-default text-sm font-medium">{title}</p>
+      <p className="text-fg-muted max-w-sm text-sm">{description}</p>
       {action !== undefined && <div className="mt-2">{action}</div>}
     </div>
   )

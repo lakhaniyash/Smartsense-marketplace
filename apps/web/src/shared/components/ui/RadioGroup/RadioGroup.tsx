@@ -31,7 +31,7 @@ export function RadioGroup({ name, label, value, onChange, children, className }
 
   return (
     <fieldset className={className}>
-      <legend className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</legend>
+      <legend className="text-fg-default text-sm font-medium">{label}</legend>
       <div className="mt-2 flex flex-col gap-2">
         <RadioGroupContext.Provider value={{ name: name ?? generatedName, value, onChange }}>
           {children}

@@ -14,7 +14,7 @@ export interface AppLayoutProps {
 // § Layout Architecture).
 export function AppLayout({ header, sidebar, children, className }: AppLayoutProps) {
   return (
-    <div className={cn('flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950', className)}>
+    <div className={cn('bg-canvas flex min-h-screen flex-col', className)}>
       {header}
       <div className="flex flex-1">
         {sidebar}

@@ -329,11 +329,11 @@ Regardless of module, every end-to-end suite includes at least one scenario per:
 
 ## Test Environment
 
-| Environment        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Local**          | A developer runs `npm run test`/`test:e2e` against the Dockerized `db`/`keycloak` services from `infrastructure/docker/docker-compose.yml` or `apps/api/docker-compose.yml` ([keycloak-setup.md § Docker Architecture](./keycloak-setup.md#docker-architecture)) — or, for backend integration tests, the mocked-JWKS approach above, which needs no live Keycloak at all.                                                                                                 |
-| **CI**             | GitHub Actions (`.github/workflows/ci.yml`). **Current state:** the pipeline runs install → Prisma client generation → lint → typecheck → build; it does **not** currently invoke `npm run test` or `npm run test:e2e` for either workspace. This is a stated, current gap — see [CI Testing Pipeline](#ci-testing-pipeline) for the target pipeline this should evolve into, and treat closing this gap as a near-term priority rather than an aspirational future state. |
-| **Future Staging** | Not yet provisioned — [deployment.md](./deployment.md) is itself still a placeholder document at time of writing. Once a staging environment exists, it is the target for end-to-end smoke tests run against a real deployed instance (as opposed to CI's ephemeral, locally-orchestrated services), verifying the deployed build in an environment closer to production.                                                                                                  |
+| Environment        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local**          | A developer runs `npm run test`/`test:e2e` against the Dockerized `db`/`keycloak` services from `infrastructure/docker/docker-compose.yml` or `apps/api/docker-compose.yml` ([keycloak-setup.md § Docker Architecture](./keycloak-setup.md#docker-architecture)) — or, for backend integration tests, the mocked-JWKS approach above, which needs no live Keycloak at all.                                                                                              |
+| **CI**             | GitHub Actions (`.github/workflows/ci.yml`) runs install → Prisma client generation → lint → typecheck → **unit tests** (`npm run test`, both workspaces) → **migrate deploy + seed** → **backend integration tests** (`npm run test:e2e --workspace=@smartsense/api`, against a real `postgres:17-alpine` service container, mocked JWKS as above) → build. Playwright is not yet wired in — see [CI Testing Pipeline](#ci-testing-pipeline) for why and what remains. |
+| **Future Staging** | Not yet provisioned — [deployment.md](./deployment.md) is itself still a placeholder document at time of writing. Once a staging environment exists, it is the target for end-to-end smoke tests run against a real deployed instance (as opposed to CI's ephemeral, locally-orchestrated services), verifying the deployed build in an environment closer to production.                                                                                               |
 
 ---
 
@@ -373,13 +373,18 @@ flowchart TD
     G --> H["Build"]
 
     style E fill:#d7f5d7,color:#111
-    style F fill:#fff3d6,color:#111
+    style F fill:#d7f5d7,color:#111
     style G fill:#ffe0e0,color:#111
 ```
 
 ### Current State vs. Target
 
-`.github/workflows/ci.yml` currently implements only **Install → Generate Prisma Client → Lint → Typecheck → Build** — the Unit Tests, Integration Tests, and Playwright stages above are not yet wired into CI, even though the underlying `npm run test` / `npm run test:e2e` scripts and Turborepo tasks (`turbo.json`'s `test`/`test:e2e`, with `outputs: ["coverage/**"]` / `["playwright-report/**"]`) already exist and work locally. Closing this gap — adding `test` and `test:e2e` steps to the CI workflow, in the position shown above (after typecheck, before build, since a broken build is a distinct failure mode from a broken test) — is the immediate next step for this pipeline, not a future enhancement.
+`.github/workflows/ci.yml` implements **Install → Generate Prisma Client → Lint → Typecheck → Unit Tests → Apply Migrations → Seed → Integration Tests → Build**, matching the target pipeline through the Integration Tests stage. Two deliberate scoping decisions:
+
+- The job's Postgres is a plain `postgres:17-alpine` service container, not the full `docker-compose.yml` stack — Keycloak is never started, because the integration suite already replaces it with a self-signed, throwaway JWKS server per [Authentication mocking](#test-data-strategy) and never contacts a real Keycloak.
+- The Integration Tests step runs `npm run test:e2e --workspace=@smartsense/api` explicitly, not the root `npm run test:e2e` — the root command also fans out to `apps/web`'s Playwright suite, which still has no specs and would need a live Keycloak + API + frontend stack this job doesn't provision. That stage remains the last unclosed gap in this pipeline, tracked as its own item rather than folded into this fix.
+
+`turbo.json`'s `test` task now declares `outputs: []` (neither `jest` nor `vitest run` emits a `coverage/**` directory without an explicit `--coverage` flag, so the prior declaration didn't match reality) and `test:e2e` is `cache: false` — its correctness depends on live Postgres state that Turbo's source-hash-based caching can't account for, and a stale cache hit on a CI gate would silently skip a real test run.
 
 ---
 

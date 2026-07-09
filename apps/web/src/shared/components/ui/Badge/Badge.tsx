@@ -11,7 +11,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 // Philosophy) — the same variant reads as the same status everywhere it's
 // used, whether on a Badge, an Alert, or a Button.
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  neutral: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  neutral: 'bg-surface-subtle text-fg-secondary',
   success: 'bg-success-subtle text-success-emphasis',
   warning: 'bg-warning-subtle text-warning-emphasis',
   danger: 'bg-danger-subtle text-danger-emphasis',

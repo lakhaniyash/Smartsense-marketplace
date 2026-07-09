@@ -2,6 +2,8 @@ import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   Button,
+  Card,
+  CardContent,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -49,6 +51,8 @@ export function CatalogPage() {
     refetch,
   } = useCatalog()
   const { canEditCatalog } = usePermissions()
+  const hasActiveFilters =
+    filters.search !== undefined || filters.categoryId !== undefined || filters.status !== undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,21 +63,25 @@ export function CatalogPage() {
           canEditCatalog && (
             <Link
               to={`${ROUTES.CATALOG}/new`}
-              className="inline-flex h-10 items-center rounded-md bg-gray-900 px-4 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
+              className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               New Product
             </Link>
           )
         }
       />
-      <ProductFilterBar
-        search={filters.search}
-        categoryId={filters.categoryId}
-        status={filters.status}
-        onSearchChange={(value) => setFilter('search', value)}
-        onCategoryChange={(value) => setFilter('categoryId', value)}
-        onStatusChange={(value) => setFilter('status', value)}
-      />
+      <Card>
+        <CardContent className="p-4">
+          <ProductFilterBar
+            search={filters.search}
+            categoryId={filters.categoryId}
+            status={filters.status}
+            onSearchChange={(value) => setFilter('search', value)}
+            onCategoryChange={(value) => setFilter('categoryId', value)}
+            onStatusChange={(value) => setFilter('status', value)}
+          />
+        </CardContent>
+      </Card>
 
       {isLoading && (
         <Table>
@@ -94,8 +102,41 @@ export function CatalogPage() {
         />
       )}
 
-      {!isLoading && error === undefined && products.length === 0 && (
-        <EmptyState title="No products found" description="Try adjusting your search or filters." />
+      {!isLoading && error === undefined && products.length === 0 && hasActiveFilters && (
+        <EmptyState
+          title="No products found"
+          description="Try adjusting your search or filters."
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setFilter('search', undefined)
+                setFilter('categoryId', undefined)
+                setFilter('status', undefined)
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
+      )}
+
+      {!isLoading && error === undefined && products.length === 0 && !hasActiveFilters && (
+        <EmptyState
+          title="No products yet"
+          description="Products you add to your catalog will show up here."
+          action={
+            canEditCatalog && (
+              <Link
+                to={`${ROUTES.CATALOG}/new`}
+                className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                New Product
+              </Link>
+            )
+          }
+        />
       )}
 
       {!isLoading && error === undefined && products.length > 0 && (
@@ -108,7 +149,7 @@ export function CatalogPage() {
                   <TableCell label="Title">
                     <Link
                       to={`${ROUTES.CATALOG}/${product.id}`}
-                      className="text-primary font-medium hover:underline"
+                      className="text-fg-default hover:text-fg-secondary font-medium hover:underline"
                     >
                       {product.title}
                     </Link>

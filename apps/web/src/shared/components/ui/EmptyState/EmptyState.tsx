@@ -22,11 +22,11 @@ export function EmptyState({ icon, title, description, action, className }: Empt
         className,
       )}
     >
-      <div className="text-gray-400" aria-hidden="true">
+      <div className="text-fg-muted" aria-hidden="true">
         {icon ?? <EmptyIcon className="size-10" />}
       </div>
-      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{title}</p>
-      {description !== undefined && <p className="max-w-sm text-sm text-gray-500">{description}</p>}
+      <p className="text-fg-default text-sm font-medium">{title}</p>
+      {description !== undefined && <p className="text-fg-muted max-w-sm text-sm">{description}</p>}
       {action !== undefined && <div className="mt-2">{action}</div>}
     </div>
   )

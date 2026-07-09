@@ -9,7 +9,6 @@ import {
   UpdateOrderStatusDocument,
 } from '@lib/graphql/__generated__/graphql'
 import {
-  Breadcrumb,
   Button,
   Card,
   CardContent,
@@ -26,18 +25,20 @@ import {
   Tabs,
   useToast,
 } from '@shared/components'
-import { ROUTES } from '@shared/constants'
+import { useBreadcrumb } from '@shared/layouts'
 import { OrderStatusBadge, OrderTimeline } from '../components'
 import { useOrder } from '../hooks'
 
-// Nested more than one level under /orders, so it gets a Breadcrumb per
-// docs/ui-guidelines.md § Navigation — same pattern as ProductDetailPage.
+// The shell renders its breadcrumb automatically from route metadata
+// (shared/layouts/Breadcrumbs.tsx) — same pattern as ProductDetailPage;
+// useBreadcrumb below only supplies the real order number once it loads.
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { order, isLoading, error } = useOrder(id)
   const { canCreateOrders, canEditOrders } = usePermissions()
   const { toast } = useToast()
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
+  useBreadcrumb(order !== undefined ? `Order #${order.orderNumber}` : undefined)
 
   const [updateOrderStatus, { loading: isUpdatingStatus }] = useMutation(
     UpdateOrderStatusDocument,
@@ -84,17 +85,15 @@ export function OrderDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Orders', href: ROUTES.ORDERS },
-          { label: order !== undefined ? `Order #${order.orderNumber}` : 'Order' },
-        ]}
-      />
-
       {isLoading && (
         <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-4 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+          <Skeleton className="h-40 w-full rounded-lg" />
         </div>
       )}
 
@@ -159,33 +158,51 @@ export function OrderDetailPage() {
                     <CardContent className="flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                         <OrderStatusBadge status={order.status} />
-                        <span className="text-sm text-gray-500">Total: ${order.total}</span>
+                        <span className="text-fg-muted text-sm">Total: ${order.total}</span>
                       </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>SKU</TableHead>
-                            <TableHead>Quantity</TableHead>
-                            <TableHead>Unit Price</TableHead>
-                            <TableHead>Line Total</TableHead>
+                            <TableHead className="md:text-right">Quantity</TableHead>
+                            <TableHead className="md:text-right">Unit Price</TableHead>
+                            <TableHead className="md:text-right">Line Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {order.items.map((item) => (
                             <TableRow key={item.id}>
                               <TableCell label="SKU">{item.productVariant.sku}</TableCell>
-                              <TableCell label="Quantity">{item.quantity}</TableCell>
-                              <TableCell label="Unit Price">${item.unitPriceSnapshot}</TableCell>
-                              <TableCell label="Line Total">${item.lineTotal}</TableCell>
+                              <TableCell label="Quantity" className="md:text-right">
+                                {item.quantity}
+                              </TableCell>
+                              <TableCell label="Unit Price" className="md:text-right">
+                                ${item.unitPriceSnapshot}
+                              </TableCell>
+                              <TableCell label="Line Total" className="md:text-right">
+                                ${item.lineTotal}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
-                      <div className="flex flex-col gap-1 text-sm text-gray-700 dark:text-gray-300">
-                        <span>Subtotal: ${order.subtotal}</span>
-                        <span>Tax: ${order.tax}</span>
-                        <span>Shipping: ${order.shippingCost}</span>
-                        <span className="font-medium">Total: ${order.total}</span>
+                      <div className="flex w-full max-w-xs flex-col gap-1.5 self-end">
+                        <div className="text-fg-secondary flex justify-between text-sm">
+                          <span>Subtotal</span>
+                          <span>${order.subtotal}</span>
+                        </div>
+                        <div className="text-fg-secondary flex justify-between text-sm">
+                          <span>Tax</span>
+                          <span>${order.tax}</span>
+                        </div>
+                        <div className="text-fg-secondary flex justify-between text-sm">
+                          <span>Shipping</span>
+                          <span>${order.shippingCost}</span>
+                        </div>
+                        <div className="border-border-default text-fg-default mt-1 flex justify-between border-t pt-1.5 text-sm font-semibold">
+                          <span>Total</span>
+                          <span>${order.total}</span>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

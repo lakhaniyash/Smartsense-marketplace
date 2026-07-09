@@ -50,15 +50,25 @@ export function ProductForm({
   })
 
   return (
-    <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-4">
-      <Input label="Title" required {...register('title')} {...errorProp(errors.title?.message)} />
-      <CategorySelect
-        required
-        {...register('categoryId')}
-        {...errorProp(errors.categoryId?.message)}
-      />
+    <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
+        <p className="text-fg-default text-sm font-medium">Basic information</p>
+        <Input
+          label="Title"
+          required
+          {...register('title')}
+          {...errorProp(errors.title?.message)}
+        />
+        <CategorySelect
+          required
+          {...register('categoryId')}
+          {...errorProp(errors.categoryId?.message)}
+        />
+      </div>
+
       {mode === 'create' && (
-        <>
+        <div className="border-border-default flex flex-col gap-4 border-t pt-4">
+          <p className="text-fg-default text-sm font-medium">Pricing &amp; identification</p>
           <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
           <Input
             label="Price"
@@ -67,22 +77,27 @@ export function ProductForm({
             {...register('price')}
             {...errorProp(errors.price?.message)}
           />
-        </>
+        </div>
       )}
-      <Textarea
-        label="Description"
-        {...register('description')}
-        {...errorProp(errors.description?.message)}
-      />
-      <Input label="Brand" {...register('brand')} {...errorProp(errors.brand?.message)} />
-      {mode === 'edit' && (
-        <Select
-          label="Status"
-          options={STATUS_OPTIONS}
-          {...register('status')}
-          {...errorProp(errors.status?.message)}
+
+      <div className="border-border-default flex flex-col gap-4 border-t pt-4">
+        <p className="text-fg-default text-sm font-medium">Additional details</p>
+        <Textarea
+          label="Description"
+          {...register('description')}
+          {...errorProp(errors.description?.message)}
         />
-      )}
+        <Input label="Brand" {...register('brand')} {...errorProp(errors.brand?.message)} />
+        {mode === 'edit' && (
+          <Select
+            label="Status"
+            options={STATUS_OPTIONS}
+            {...register('status')}
+            {...errorProp(errors.status?.message)}
+          />
+        )}
+      </div>
+
       <div>
         <Button type="submit" isLoading={isSubmitting}>
           {submitLabel}

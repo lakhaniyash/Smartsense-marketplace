@@ -14,12 +14,12 @@ export function AuthLayout({ children, footer, className }: AuthLayoutProps) {
   return (
     <div
       className={cn(
-        'flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 dark:bg-gray-950',
+        'bg-canvas flex min-h-screen flex-col items-center justify-center px-4',
         className,
       )}
     >
       <div className="w-full max-w-sm">{children}</div>
-      {footer !== undefined && <div className="mt-8 text-sm text-gray-500">{footer}</div>}
+      {footer !== undefined && <div className="text-fg-muted mt-8 text-sm">{footer}</div>}
     </div>
   )
 }

@@ -11,12 +11,12 @@ export function DashboardStatCard({ card }: DashboardStatCardProps) {
   return (
     <Card>
       <CardContent className="flex items-center gap-4">
-        <div className="rounded-md bg-gray-100 p-3 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+        <div className="bg-surface-hover text-fg-muted rounded-lg p-3">
           <Icon className="size-5" aria-hidden="true" />
         </div>
         <div>
-          <p className="text-sm text-gray-500">{card.label}</p>
-          <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+          <p className="text-fg-muted text-xs font-medium tracking-wide uppercase">{card.label}</p>
+          <p className="text-fg-default text-3xl font-semibold tracking-tight">
             {card.value.toLocaleString()}
           </p>
         </div>

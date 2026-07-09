@@ -18,10 +18,7 @@ export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>)
 export function TableHeader({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <thead
-      className={cn(
-        'hidden border-b border-gray-200 md:table-header-group dark:border-gray-800',
-        className,
-      )}
+      className={cn('border-border-default hidden border-b md:table-header-group', className)}
       {...props}
     />
   )
@@ -35,7 +32,7 @@ export function TableFooter({ className, ...props }: HTMLAttributes<HTMLTableSec
   return (
     <tfoot
       className={cn(
-        'hidden border-t border-gray-200 font-medium md:table-footer-group dark:border-gray-800',
+        'border-border-default hidden border-t font-medium md:table-footer-group',
         className,
       )}
       {...props}
@@ -47,7 +44,7 @@ export function TableRow({ className, ...props }: HTMLAttributes<HTMLTableRowEle
   return (
     <tr
       className={cn(
-        'mb-3 block rounded-lg border border-gray-200 p-4 last:mb-0 md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:p-0 md:last:border-b-0 dark:border-gray-800',
+        'border-border-default md:hover:bg-surface-hover mb-3 block rounded-lg border p-4 last:mb-0 md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:p-0 md:last:border-b-0',
         className,
       )}
       {...props}
@@ -59,10 +56,7 @@ export function TableHead({ className, ...props }: ThHTMLAttributes<HTMLTableCel
   return (
     <th
       scope="col"
-      className={cn(
-        'px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-400',
-        className,
-      )}
+      className={cn('text-fg-muted px-4 py-3 text-left text-sm font-medium', className)}
       {...props}
     />
   )
@@ -76,15 +70,13 @@ export function TableCell({ label, className, children, ...props }: TableCellPro
   return (
     <td
       className={cn(
-        'flex items-center justify-between gap-4 py-1.5 text-gray-700 md:table-cell md:justify-start md:px-4 md:py-3 dark:text-gray-300',
+        'text-fg-secondary flex items-center justify-between gap-4 py-1.5 md:table-cell md:justify-start md:px-4 md:py-3',
         className,
       )}
       {...props}
     >
       {label !== undefined && (
-        <span className="text-xs font-medium text-gray-500 md:hidden dark:text-gray-400">
-          {label}
-        </span>
+        <span className="text-fg-muted text-xs font-medium md:hidden">{label}</span>
       )}
       {children}
     </td>
@@ -92,5 +84,5 @@ export function TableCell({ label, className, children, ...props }: TableCellPro
 }
 
 export function TableCaption({ className, ...props }: HTMLAttributes<HTMLTableCaptionElement>) {
-  return <caption className={cn('mt-4 text-sm text-gray-500', className)} {...props} />
+  return <caption className={cn('text-fg-muted mt-4 text-sm', className)} {...props} />
 }

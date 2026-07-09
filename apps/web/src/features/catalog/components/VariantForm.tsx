@@ -46,20 +46,22 @@ export function VariantForm({
   const { fields, append, remove } = useFieldArray({ control, name: 'attributes' })
 
   return (
-    <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-4">
-      <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
-      <Input
-        label="Price"
-        required
-        helperText="e.g. 19.99"
-        {...register('price')}
-        {...errorProp(errors.price?.message)}
-      />
+    <form onSubmit={(event) => void handleSubmit(onSubmit)(event)} className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
+        <Input label="SKU" required {...register('sku')} {...errorProp(errors.sku?.message)} />
+        <Input
+          label="Price"
+          required
+          helperText="e.g. 19.99"
+          {...register('price')}
+          {...errorProp(errors.price?.message)}
+        />
+      </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Attributes</span>
+      <div className="border-border-default flex flex-col gap-2 border-t pt-4">
+        <span className="text-fg-default text-sm font-medium">Attributes</span>
         {fields.length === 0 && (
-          <p className="text-sm text-gray-500">No attributes yet (e.g. size, color).</p>
+          <p className="text-fg-muted text-sm">No attributes yet (e.g. size, color).</p>
         )}
         {fields.map((field, index) => (
           <div key={field.id} className="flex items-start gap-2">
@@ -98,14 +100,14 @@ export function VariantForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="border-border-default flex flex-col gap-1.5 border-t pt-4">
         <Checkbox
           label="Default variant"
           disabled={disableDefaultToggle}
           {...register('isDefault')}
         />
         {disableDefaultToggle && (
-          <p className="text-sm text-gray-500">
+          <p className="text-fg-muted text-sm">
             This is already the default — set another variant as default to change it.
           </p>
         )}

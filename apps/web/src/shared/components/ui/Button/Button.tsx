@@ -15,11 +15,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    'bg-gray-900 text-white hover:bg-gray-700 focus-visible:outline-gray-900 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300',
+    'bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring',
   secondary:
-    'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:outline-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800',
-  ghost:
-    'text-gray-700 hover:bg-gray-100 focus-visible:outline-gray-400 dark:text-gray-200 dark:hover:bg-gray-800',
+    'border border-border-control bg-surface text-fg-secondary hover:bg-surface-subtle focus-visible:outline-focus-ring',
+  ghost: 'text-fg-secondary hover:bg-surface-hover focus-visible:outline-focus-ring',
   danger: 'bg-danger text-white hover:bg-danger-emphasis focus-visible:outline-danger',
 }
 

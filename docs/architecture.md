@@ -260,6 +260,8 @@ Customer Layout
 
 All routes are lazy loaded.
 
+A route that isn't a top-level list page declares a `handle.crumb` (route metadata, React Router's `useMatches()`/`handle` mechanism) — the shell derives the breadcrumb trail from this once, rather than each page rendering its own. See [ui-guidelines.md § Navigation](./ui-guidelines.md#navigation).
+
 ---
 
 # Authentication
@@ -525,15 +527,16 @@ Form.tsx
 
 # Styling
 
-Tailwind CSS
+Tailwind CSS, with a centralized semantic design-token layer (`apps/web/src/index.css`) — see [ui-guidelines.md § Design Tokens](./ui-guidelines.md#design-tokens) for the full token set and mechanism.
 
 Guidelines
 
 - Utility-first approach
 - No inline styles unless dynamic
+- No raw neutral color utility (`gray-*`/`white`/`black`) in component markup — semantic tokens only
 - Shared component variants
 - Responsive by default
-- Dark mode ready
+- Dark mode implemented (class-based, token-driven — see [ui-guidelines.md § Dark Mode](./ui-guidelines.md#dark-mode))
 
 ---
 

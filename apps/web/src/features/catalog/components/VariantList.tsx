@@ -105,11 +105,11 @@ export function VariantList({ productId, variants, canEdit }: VariantListProps) 
           <TableHeader>
             <TableRow>
               <TableHead>SKU</TableHead>
-              <TableHead>Price</TableHead>
+              <TableHead className="md:text-right">Price</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>On hand</TableHead>
-              <TableHead>Reserved</TableHead>
-              <TableHead>Sellable</TableHead>
+              <TableHead className="md:text-right">On hand</TableHead>
+              <TableHead className="md:text-right">Reserved</TableHead>
+              <TableHead className="md:text-right">Sellable</TableHead>
               <TableHead>Default</TableHead>
               {canEdit && <TableHead>Actions</TableHead>}
             </TableRow>
@@ -118,13 +118,21 @@ export function VariantList({ productId, variants, canEdit }: VariantListProps) 
             {variants.map((variant) => (
               <TableRow key={variant.id}>
                 <TableCell label="SKU">{variant.sku}</TableCell>
-                <TableCell label="Price">{variant.price}</TableCell>
+                <TableCell label="Price" className="md:text-right">
+                  {variant.price}
+                </TableCell>
                 <TableCell label="Status">
                   <VariantStatusBadge status={variant.status} />
                 </TableCell>
-                <TableCell label="On hand">{variant.inventory.quantityOnHand}</TableCell>
-                <TableCell label="Reserved">{variant.inventory.quantityReserved}</TableCell>
-                <TableCell label="Sellable">{variant.inventory.sellableQuantity}</TableCell>
+                <TableCell label="On hand" className="md:text-right">
+                  {variant.inventory.quantityOnHand}
+                </TableCell>
+                <TableCell label="Reserved" className="md:text-right">
+                  {variant.inventory.quantityReserved}
+                </TableCell>
+                <TableCell label="Sellable" className="md:text-right">
+                  {variant.inventory.sellableQuantity}
+                </TableCell>
                 <TableCell label="Default">
                   {variant.isDefault ? (
                     <Badge variant="info">Default</Badge>

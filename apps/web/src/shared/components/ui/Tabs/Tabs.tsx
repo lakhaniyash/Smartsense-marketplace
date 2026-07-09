@@ -29,12 +29,12 @@ export function Tabs({ items, defaultValue, value, onValueChange, className }: T
 
   return (
     <RadixTabs.Root {...rootProps}>
-      <RadixTabs.List className="flex gap-4 border-b border-gray-200 dark:border-gray-800">
+      <RadixTabs.List className="border-border-default flex gap-4 border-b">
         {items.map((item) => (
           <RadixTabs.Trigger
             key={item.value}
             value={item.value}
-            className="border-b-2 border-transparent px-1 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 data-[state=active]:border-gray-900 data-[state=active]:text-gray-900 dark:hover:text-gray-300 dark:data-[state=active]:border-gray-100 dark:data-[state=active]:text-gray-100"
+            className="text-fg-muted hover:text-fg-secondary focus-visible:outline-focus-ring data-[state=active]:border-neutral-emphasis data-[state=active]:text-fg-default border-b-2 border-transparent px-1 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             {item.label}
           </RadixTabs.Trigger>

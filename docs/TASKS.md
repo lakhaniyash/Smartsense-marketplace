@@ -196,12 +196,12 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 | Task ID | Task                                                                                                       | Priority | Status     | Dependencies |
 | ------- | ---------------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------ |
-| M10-T1  | Design-token + icon-library decisions (`@theme`, per [ui-guidelines.md](./ui-guidelines.md#design-system)) | High     | ⬜ Backlog | —            |
+| M10-T1  | Design-token + icon-library decisions (`@theme`, per [ui-guidelines.md](./ui-guidelines.md#design-system)) | High     | ✅ Done    | —            |
 | M10-T2  | Introduce frontend test tooling (Vitest + React Testing Library) — closes TD-3                             | High     | ⬜ Backlog | —            |
 | M10-T3  | Form + action primitives: Button, Input, Select, Modal                                                     | High     | ⬜ Backlog | M10-T1, T2   |
 | M10-T4  | Data primitives: Table, Pagination, Card, Badge                                                            | High     | ⬜ Backlog | M10-T1, T2   |
 | M10-T5  | State primitives: Skeleton, Empty State, Error State, Toast                                                | High     | ⬜ Backlog | M10-T1, T2   |
-| M10-T6  | App shell: sidebar, header, role-parameterized layout                                                      | High     | ⬜ Backlog | M10-T3–T5    |
+| M10-T6  | App shell: sidebar, header, role-parameterized layout                                                      | High     | ✅ Done    | M10-T3–T5    |
 
 ### M11 — Dashboard
 
@@ -276,12 +276,12 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 ### M18 — Playwright Testing
 
-| Task ID | Task                                                      | Priority | Status     | Dependencies |
-| ------- | --------------------------------------------------------- | -------- | ---------- | ------------ |
-| M18-T1  | Wire unit + integration test stages into CI — closes TD-2 | High     | ⬜ Backlog | —            |
-| M18-T2  | Auth journey suite + page object foundation               | High     | ⬜ Backlog | M8           |
-| M18-T3  | Module suites: dashboard, catalog, orders, billing        | High     | ⬜ Backlog | M11–M14      |
-| M18-T4  | Playwright stage in CI, stable (zero tolerated flakes)    | High     | ⬜ Backlog | M18-T1–T3    |
+| Task ID | Task                                                      | Priority | Status       | Dependencies |
+| ------- | --------------------------------------------------------- | -------- | ------------ | ------------ |
+| M18-T1  | Wire unit + integration test stages into CI — closes TD-2 | High     | ✅ Completed | —            |
+| M18-T2  | Auth journey suite + page object foundation               | High     | ⬜ Backlog   | M8           |
+| M18-T3  | Module suites: dashboard, catalog, orders, billing        | High     | ⬜ Backlog   | M11–M14      |
+| M18-T4  | Playwright stage in CI, stable (zero tolerated flakes)    | High     | ⬜ Backlog   | M18-T1–T3    |
 
 ### M19 — Performance Optimization
 
@@ -310,17 +310,17 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 Known, deliberately tracked debt — each item names its planned resolution point rather than floating indefinitely:
 
-| ID   | Item                                                                                      | Priority | Reason it exists                                                   | Impact if unaddressed                                            | Planned resolution           |
-| ---- | ----------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------- |
-| TD-1 | Docker build-context fix unmerged ([deployment.md](./deployment.md), Assumption 3)        | Critical | Fix landed on `chore/claude-agents`, never merged to `development` | `docker compose up --build` fails from the main line             | M20-T1 (do not wait for M20) |
-| TD-2 | CI runs no tests ([testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline))   | High     | Test stages deferred while suites were small                       | Working test suites cannot fail a PR; regressions merge silently | M18-T1                       |
-| TD-3 | No frontend unit/component test tooling ([testing.md](./testing.md), tooling assumption)  | High     | Frontend has had no logic worth testing yet                        | M10+ components would ship untested; retrofitting is costlier    | M10-T2                       |
-| TD-4 | `/health` verifies nothing (`health.check([])`)                                           | Medium   | Endpoint scaffolded before dependencies existed                    | Orchestrators see "healthy" while the database is unreachable    | M20-T5                       |
-| TD-5 | `api` Compose service has no container healthcheck                                        | Low      | Depends on TD-4 being meaningful first                             | Compose cannot gate on API readiness                             | M20-T5                       |
-| TD-6 | No correlation IDs in logs ([api-conventions.md § Logging](./api-conventions.md#logging)) | Medium   | Deferred until log aggregation exists                              | Multi-request debugging in aggregated logs is guesswork          | With M20-T6                  |
-| TD-7 | Root `package.json` lacks `"type": "module"` — Node re-parse warning on every commit hook | Low      | Harmless warning, never prioritized                                | Hook-output noise; masks real warnings                           | Opportunistic                |
-| TD-8 | Design-session transcripts (`conversation.txt`, `database-conversation.txt`) at repo root | Low      | Working artifacts committed during design sessions                 | Repo hygiene; confuses newcomers about what is authoritative     | Opportunistic                |
-| TD-9 | Root `TASKS.md` historical checklist overlaps this document                               | Low      | Predates this tracker (Assumption 1)                               | Two task sources drift; ambiguity about which is canonical       | Retire after M8 lands        |
+| ID   | Item                                                                                                                                                                                                                                               | Priority | Reason it exists                                                   | Impact if unaddressed                                                | Planned resolution           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------- |
+| TD-1 | Docker build-context fix unmerged ([deployment.md](./deployment.md), Assumption 3)                                                                                                                                                                 | Critical | Fix landed on `chore/claude-agents`, never merged to `development` | `docker compose up --build` fails from the main line                 | M20-T1 (do not wait for M20) |
+| TD-2 | ~~CI runs no tests~~ — **Resolved** by M18-T1: unit + backend integration tests now gate every PR ([testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)). Playwright remains a separate gap, tracked as M18-T4, not reopened here. | High     | Test stages deferred while suites were small                       | ~~Working test suites cannot fail a PR; regressions merge silently~~ | M18-T1 — Done                |
+| TD-3 | No frontend unit/component test tooling ([testing.md](./testing.md), tooling assumption)                                                                                                                                                           | High     | Frontend has had no logic worth testing yet                        | M10+ components would ship untested; retrofitting is costlier        | M10-T2                       |
+| TD-4 | `/health` verifies nothing (`health.check([])`)                                                                                                                                                                                                    | Medium   | Endpoint scaffolded before dependencies existed                    | Orchestrators see "healthy" while the database is unreachable        | M20-T5                       |
+| TD-5 | `api` Compose service has no container healthcheck                                                                                                                                                                                                 | Low      | Depends on TD-4 being meaningful first                             | Compose cannot gate on API readiness                                 | M20-T5                       |
+| TD-6 | No correlation IDs in logs ([api-conventions.md § Logging](./api-conventions.md#logging))                                                                                                                                                          | Medium   | Deferred until log aggregation exists                              | Multi-request debugging in aggregated logs is guesswork              | With M20-T6                  |
+| TD-7 | Root `package.json` lacks `"type": "module"` — Node re-parse warning on every commit hook                                                                                                                                                          | Low      | Harmless warning, never prioritized                                | Hook-output noise; masks real warnings                               | Opportunistic                |
+| TD-8 | Design-session transcripts (`conversation.txt`, `database-conversation.txt`) at repo root                                                                                                                                                          | Low      | Working artifacts committed during design sessions                 | Repo hygiene; confuses newcomers about what is authoritative         | Opportunistic                |
+| TD-9 | Root `TASKS.md` historical checklist overlaps this document                                                                                                                                                                                        | Low      | Predates this tracker (Assumption 1)                               | Two task sources drift; ambiguity about which is canonical           | Retire after M8 lands        |
 
 ---
 
@@ -340,7 +340,7 @@ Enhancements to existing, working functionality (distinct from debt — nothing 
 
 | ID  | Improvement                                                                             | Priority | Status     | Milestone | Notes                                                                                |
 | --- | --------------------------------------------------------------------------------------- | -------- | ---------- | --------- | ------------------------------------------------------------------------------------ |
-| I-1 | Dark mode implementation ([ui-guidelines.md § Dark Mode](./ui-guidelines.md#dark-mode)) | Future   | ⬜ Backlog | Post-M10  | Variant scaffold exists; components must ship `dark:` styles together                |
+| I-1 | Dark mode implementation ([ui-guidelines.md § Dark Mode](./ui-guidelines.md#dark-mode)) | Future   | ✅ Done    | Post-M10  | Token-driven (`:root`/`.dark` + `@theme inline`), theme service + toggle in header   |
 | I-2 | Storybook (or equivalent) for the shared component library                              | Future   | ⬜ Backlog | Post-M10  | Per [ui-guidelines.md § Future Enhancements](./ui-guidelines.md#future-enhancements) |
 
 ## Refactoring
@@ -435,3 +435,4 @@ Guidelines for writing tasks in this tracker:
 | Version | Date       | Author       | Changes                                                                                                                                                       |
 | ------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0     | 2026-07-02 | Yash Lakhani | Initial tracker — replaces placeholder; supersedes the root-level historical checklist; M1–M7 task history carried over; TD-1–TD-9 debt register established. |
+| 1.1     | 2026-07-09 | Yash Lakhani | M18-T1 completed: CI now runs unit + backend integration tests as a merge gate; closes TD-2. Playwright stage (M18-T4) remains open.                          |

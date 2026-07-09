@@ -17,7 +17,7 @@ export function Spinner({ label = 'Loading', className, ...props }: SpinnerProps
       className={cn('inline-flex items-center', className)}
       {...props}
     >
-      <SpinnerIcon className="size-4 animate-spin text-gray-500" aria-hidden="true" />
+      <SpinnerIcon className="text-fg-muted size-4 animate-spin" aria-hidden="true" />
     </span>
   )
 }

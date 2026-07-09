@@ -29,26 +29,28 @@ export function Drawer({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-gray-900/50 transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
+        <RadixDialog.Overlay className="z-overlay bg-overlay/50 fixed inset-0 transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100 motion-reduce:transition-none" />
         <RadixDialog.Content
           className={cn(
-            'fixed inset-y-0 z-50 flex w-full max-w-sm flex-col bg-white p-6 shadow-xl focus:outline-none dark:bg-gray-900',
+            'z-modal bg-surface fixed inset-y-0 flex w-full max-w-sm flex-col p-6 shadow-xl focus:outline-none',
             side === 'right' ? 'right-0' : 'left-0',
             className,
           )}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <RadixDialog.Title className="text-fg-default text-xl font-semibold">
                 {title}
               </RadixDialog.Title>
               {description !== undefined && (
-                <RadixDialog.Description className="mt-1 text-sm text-gray-500">
+                <RadixDialog.Description className="text-fg-muted mt-1 text-sm">
                   {description}
                 </RadixDialog.Description>
               )}
             </div>
-            <RadixDialog.Close aria-label="Close" className="text-gray-400 hover:text-gray-600">
+            {/* gray-400 → gray-600 hover had no dedicated token; fg-secondary is the
+                closest role-match for the darker hover state. */}
+            <RadixDialog.Close aria-label="Close" className="text-fg-muted hover:text-fg-secondary">
               <CloseIcon className="size-5" aria-hidden="true" />
             </RadixDialog.Close>
           </div>
