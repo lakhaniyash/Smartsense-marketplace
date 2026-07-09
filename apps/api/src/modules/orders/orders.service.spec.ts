@@ -216,7 +216,7 @@ describe('OrdersService', () => {
       )
     })
 
-    it('sorts by total when requested, defaulting to createdAt otherwise', async () => {
+    it('sorts by total (with an id tiebreaker) when requested', async () => {
       prisma.order.findMany.mockResolvedValueOnce([])
 
       await service.findOrders(user(), {
@@ -224,7 +224,17 @@ describe('OrdersService', () => {
       })
 
       expect(prisma.order.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { total: 'asc' } }),
+        expect.objectContaining({ orderBy: [{ total: 'asc' }, { id: 'asc' }] }),
+      )
+    })
+
+    it('defaults to sorting by createdAt (with an id tiebreaker) otherwise', async () => {
+      prisma.order.findMany.mockResolvedValueOnce([])
+
+      await service.findOrders(user(), {})
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
       )
     })
 

@@ -480,10 +480,13 @@ export class OrdersService {
     return where
   }
 
-  private buildOrderBy(sort: OrderSortInput | undefined): Prisma.OrderOrderByWithRelationInput {
+  // `id` breaks ties: two rows sharing the exact same total/createdAt could
+  // otherwise skip or repeat across cursor-paginated pages, since Prisma's
+  // cursor pagination requires orderBy to fully determine a total order.
+  private buildOrderBy(sort: OrderSortInput | undefined): Prisma.OrderOrderByWithRelationInput[] {
     const direction = sort?.direction === SortDirection.ASC ? 'asc' : 'desc'
-    if (sort?.field === OrderSortField.TOTAL) return { total: direction }
-    return { createdAt: direction }
+    if (sort?.field === OrderSortField.TOTAL) return [{ total: direction }, { id: 'asc' }]
+    return [{ createdAt: direction }, { id: 'asc' }]
   }
 
   mapOrderToOutput(order: OrderWithRelations): OrderOutput {

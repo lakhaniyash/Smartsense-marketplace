@@ -300,10 +300,15 @@ export class CatalogService {
     return where
   }
 
-  private buildOrderBy(sort: ProductSortInput | undefined): Prisma.ProductOrderByWithRelationInput {
+  // `id` breaks ties: two rows sharing the exact same title/createdAt could
+  // otherwise skip or repeat across cursor-paginated pages, since Prisma's
+  // cursor pagination requires orderBy to fully determine a total order.
+  private buildOrderBy(
+    sort: ProductSortInput | undefined,
+  ): Prisma.ProductOrderByWithRelationInput[] {
     const direction = sort?.direction === SortDirection.ASC ? 'asc' : 'desc'
-    if (sort?.field === ProductSortField.NAME) return { title: direction }
-    return { createdAt: direction }
+    if (sort?.field === ProductSortField.NAME) return [{ title: direction }, { id: 'asc' }]
+    return [{ createdAt: direction }, { id: 'asc' }]
   }
 
   private mapProductToOutput(product: ProductWithRelations): ProductOutput {

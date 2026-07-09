@@ -213,17 +213,17 @@ describe('CatalogService', () => {
       )
     })
 
-    it('defaults to sorting by createdAt descending', async () => {
+    it('defaults to sorting by createdAt descending, with an id tiebreaker', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
       await service.findProducts(user(), {})
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+        expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
       )
     })
 
-    it('sorts by title when NAME is requested, honoring direction', async () => {
+    it('sorts by title when NAME is requested, honoring direction, with an id tiebreaker', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
       await service.findProducts(user(), {
@@ -231,7 +231,7 @@ describe('CatalogService', () => {
       })
 
       expect(prisma.product.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { title: 'asc' } }),
+        expect.objectContaining({ orderBy: [{ title: 'asc' }, { id: 'asc' }] }),
       )
     })
 

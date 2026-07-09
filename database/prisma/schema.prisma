@@ -338,6 +338,9 @@ model Product {
   @@index([partnerId, status])
   @@index([categoryId, status])
   @@index([deletedAt])
+  // Backs ProductSortField.NAME (catalog.service.ts's buildOrderBy) — same
+  // full-table-sort reasoning as Order.total above.
+  @@index([title])
   @@map("products")
 }
 
@@ -403,6 +406,10 @@ model Inventory {
 // Orders & Fulfillment
 // ---------------------------------------------------------------------------
 
+// `subtotal >= 0`, `tax >= 0`, `shippingCost >= 0`, `total >= 0`
+// (domain-model.md) are not enforceable in Prisma's schema language — add
+// the equivalent `CHECK` constraints by hand to a migration, following the
+// existing `product_variants_price_positive_check` pattern.
 model Order {
   id                String      @id @default(uuid()) @db.Uuid
   orderNumber       String      @unique @map("order_number")
@@ -432,6 +439,10 @@ model Order {
   @@index([partnerId, status])
   @@index([shippingAddressId])
   @@index([status, placedAt])
+  // Backs OrderSortField.TOTAL (orders.service.ts's buildOrderBy) — an Admin
+  // caller has no partner/customer filter narrowing the row count, so
+  // sorting the full table by total would otherwise be a sequential scan.
+  @@index([total])
   @@map("orders")
 }
 
@@ -475,6 +486,10 @@ model OrderStatusHistory {
   changedByUser User? @relation(fields: [changedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([orderId, createdAt])
+  // `changedByUserId` had no index of its own — needed to look up an
+  // actor's status-change history without a full scan (same shape of gap
+  // AuditLog's own `@@index([actorUserId])` avoids for that table).
+  @@index([changedByUserId])
   @@map("order_status_history")
 }
 
@@ -486,6 +501,9 @@ model OrderStatusHistory {
 // == amountDue ⇒ Paid) are cross-row invariants spanning Invoice and
 // Payment. Postgres CHECK constraints can't express aggregates across
 // rows, so these are service-layer-only guarantees, never DB-enforced.
+// `amountDue >= 0` (single-row, unlike the above) is enforceable, though —
+// add the equivalent `CHECK` constraint by hand to a migration, following
+// the existing `product_variants_price_positive_check` pattern.
 model Invoice {
   id            String        @id @default(uuid()) @db.Uuid
   invoiceNumber String        @unique @map("invoice_number")
@@ -507,6 +525,9 @@ model Invoice {
   @@map("invoices")
 }
 
+// `amount >= 0` is not enforceable in Prisma's schema language — add the
+// equivalent `CHECK` constraint by hand to a migration, following the
+// existing `product_variants_price_positive_check` pattern.
 model Payment {
   id                    String        @id @default(uuid()) @db.Uuid
   invoiceId             String        @map("invoice_id") @db.Uuid
