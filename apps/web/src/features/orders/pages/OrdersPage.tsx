@@ -47,6 +47,7 @@ export function OrdersPage() {
     error,
     setFilter,
     goToNextPage,
+    goToPreviousPage,
     hasPreviousPage,
     refetch,
   } = useOrders()
@@ -158,7 +159,7 @@ export function OrdersPage() {
           <Pagination
             hasPreviousPage={hasPreviousPage}
             hasNextPage={pageInfo?.hasNextPage ?? false}
-            onPrevious={() => window.history.back()}
+            onPrevious={goToPreviousPage}
             onNext={goToNextPage}
           />
         </>

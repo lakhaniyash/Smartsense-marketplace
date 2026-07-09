@@ -47,6 +47,7 @@ export function CatalogPage() {
     error,
     setFilter,
     goToNextPage,
+    goToPreviousPage,
     hasPreviousPage,
     refetch,
   } = useCatalog()
@@ -166,7 +167,7 @@ export function CatalogPage() {
           <Pagination
             hasPreviousPage={hasPreviousPage}
             hasNextPage={pageInfo?.hasNextPage ?? false}
-            onPrevious={() => window.history.back()}
+            onPrevious={goToPreviousPage}
             onNext={goToNextPage}
           />
         </>
