@@ -764,6 +764,50 @@ describe('Orders (e2e)', () => {
       const unchangedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } })
       expect(unchangedOrder.status).toBe('DRAFT')
     })
+
+    it('serializes two concurrent confirmations against the same scarce variant — never oversells', async () => {
+      // lowStockVariantId has exactly 3 units on hand and, at this point in
+      // the suite, zero reserved (the prior test's reservation rolled back).
+      // Two orders for 2 units each fit individually but not together — this
+      // is the exact lost-update race the inventory reservation fix closes
+      // (docs/testing.md § Transaction Testing): without the atomic
+      // compare-and-swap, both confirmations could read reserved=0 and both
+      // succeed, overselling the variant.
+      const [orderA, orderB] = await Promise.all([
+        createOrderWithItemsFixture(ownPartnerId, ownCustomerId, [
+          { variantId: lowStockVariantId, quantity: 2, unitPrice: 50 },
+        ]),
+        createOrderWithItemsFixture(ownPartnerId, ownCustomerId, [
+          { variantId: lowStockVariantId, quantity: 2, unitPrice: 50 },
+        ]),
+      ])
+
+      const [resA, resB] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${ownCustomerToken()}`)
+          .send({
+            query: UPDATE_STATUS_MUTATION,
+            variables: { id: orderA.id, status: 'CONFIRMED' },
+          }),
+        request(app.getHttpServer())
+          .post('/graphql')
+          .set('Authorization', `Bearer ${ownCustomerToken()}`)
+          .send({
+            query: UPDATE_STATUS_MUTATION,
+            variables: { id: orderB.id, status: 'CONFIRMED' },
+          }),
+      ])
+
+      const outcomes = [resA, resB].map((res) => (res.body.errors ? 'rejected' : 'confirmed'))
+      expect(outcomes.sort()).toEqual(['confirmed', 'rejected'])
+
+      const finalInventory = await prisma.inventory.findUniqueOrThrow({
+        where: { productVariantId: lowStockVariantId },
+      })
+      expect(finalInventory.quantityReserved).toBeLessThanOrEqual(finalInventory.quantityOnHand)
+      expect(finalInventory.quantityReserved).toBe(2)
+    })
   })
 
   describe('cancelOrder', () => {

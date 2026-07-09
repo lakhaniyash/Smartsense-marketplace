@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { Prisma, ProductVariantStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
@@ -90,19 +95,7 @@ export class InventoryService {
     items: Array<{ productVariantId: string; quantity: number }>,
   ): Promise<void> {
     for (const item of items) {
-      const inventory = await tx.inventory.findUniqueOrThrow({
-        where: { productVariantId: item.productVariantId },
-      })
-      const newQuantityReserved = inventory.quantityReserved + item.quantity
-      if (newQuantityReserved > inventory.quantityOnHand) {
-        throw new BadRequestException(
-          `Insufficient available stock for product variant ${item.productVariantId}`,
-        )
-      }
-      await tx.inventory.update({
-        where: { productVariantId: item.productVariantId },
-        data: { quantityReserved: newQuantityReserved },
-      })
+      await this.adjustReservation(tx, item.productVariantId, item.quantity)
     }
   }
 
@@ -118,15 +111,47 @@ export class InventoryService {
     items: Array<{ productVariantId: string; quantity: number }>,
   ): Promise<void> {
     for (const item of items) {
-      const inventory = await tx.inventory.findUniqueOrThrow({
-        where: { productVariantId: item.productVariantId },
-      })
-      const newQuantityReserved = Math.max(0, inventory.quantityReserved - item.quantity)
-      await tx.inventory.update({
-        where: { productVariantId: item.productVariantId },
+      await this.adjustReservation(tx, item.productVariantId, -item.quantity)
+    }
+  }
+
+  /**
+   * Applies `delta` to `quantityReserved` as an optimistic compare-and-swap:
+   * read the current value, compute the target, then write it back gated on
+   * the row still holding the value just read (`updateMany`'s `where` can
+   * carry that extra equality check; a unique-keyed `update` cannot). Two
+   * concurrent callers reading the same starting value can no longer both
+   * "win" — Postgres's row lock during the `UPDATE` serializes them, and the
+   * loser's `where` no longer matches once the winner has committed, so it
+   * retries against the now-current row instead of silently overwriting it.
+   * Bounded at 5 attempts as a safety valve against pathological contention;
+   * ordinary traffic never needs more than one.
+   */
+  private async adjustReservation(
+    tx: Prisma.TransactionClient,
+    productVariantId: string,
+    delta: number,
+  ): Promise<void> {
+    const MAX_ATTEMPTS = 5
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const inventory = await tx.inventory.findUniqueOrThrow({ where: { productVariantId } })
+      const newQuantityReserved = Math.max(0, inventory.quantityReserved + delta)
+      if (delta > 0 && newQuantityReserved > inventory.quantityOnHand) {
+        throw new BadRequestException(
+          `Insufficient available stock for product variant ${productVariantId}`,
+        )
+      }
+      const { count } = await tx.inventory.updateMany({
+        where: { productVariantId, quantityReserved: inventory.quantityReserved },
         data: { quantityReserved: newQuantityReserved },
       })
+      if (count === 1) {
+        return
+      }
     }
+    throw new ConflictException(
+      `Could not update stock reservation for product variant ${productVariantId} — too many concurrent updates`,
+    )
   }
 
   private computeNewQuantity(current: number, input: AdjustInventoryInput): number {
