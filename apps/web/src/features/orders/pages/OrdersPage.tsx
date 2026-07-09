@@ -2,8 +2,6 @@ import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   Button,
-  Card,
-  CardContent,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -69,14 +67,10 @@ export function OrdersPage() {
           )
         }
       />
-      <Card>
-        <CardContent className="p-4">
-          <OrderFilterBar
-            status={filters.status}
-            onStatusChange={(value) => setFilter('status', value)}
-          />
-        </CardContent>
-      </Card>
+      <OrderFilterBar
+        status={filters.status}
+        onStatusChange={(value) => setFilter('status', value)}
+      />
 
       {isLoading && (
         <Table>

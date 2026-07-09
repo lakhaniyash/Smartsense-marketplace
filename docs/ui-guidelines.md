@@ -182,7 +182,7 @@ A page (rendered inside a layout's content region) follows a consistent internal
 
 The page header always contains the page title ([Typography Hierarchy](#typography-hierarchy)); it contains a primary action button only when the page has exactly one obvious primary action (e.g. "Create Order" on an Orders list) — a page with several equally-weighted actions places them in a toolbar instead, not stacked in the header.
 
-The filters/toolbar region is visually contained in a `Card` (border + background, matching any other grouped content on the page) rather than floating as bare form controls directly above the table — this reads as one distinct "controls" region separate from the data below it, consistent with [Design System § Elevation & Shadows](#elevation--shadows)'s flat-container treatment (a border, never a shadow, for an in-flow region).
+The filters/toolbar region renders as bare controls directly above the table (CatalogPage, OrdersPage), not boxed in a `Card` — an earlier version of this guideline called for a bordered container here, but in practice a filter row is short enough (especially once its controls dropped their [visible labels](#tables) for aria-only ones) that a full border/background box around it reads as more visual weight than the content underneath actually needs; the table's own header row already provides the "distinct region" separation the box was trying to add. Reserve `Card` for content that's genuinely grouped data (a stat, a form section), not a one-row toolbar.
 
 ### Container Widths
 

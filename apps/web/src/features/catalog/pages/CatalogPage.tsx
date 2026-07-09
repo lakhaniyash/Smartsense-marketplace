@@ -2,8 +2,6 @@ import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   Button,
-  Card,
-  CardContent,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -71,18 +69,14 @@ export function CatalogPage() {
           )
         }
       />
-      <Card>
-        <CardContent className="p-4">
-          <ProductFilterBar
-            search={filters.search}
-            categoryId={filters.categoryId}
-            status={filters.status}
-            onSearchChange={(value) => setFilter('search', value)}
-            onCategoryChange={(value) => setFilter('categoryId', value)}
-            onStatusChange={(value) => setFilter('status', value)}
-          />
-        </CardContent>
-      </Card>
+      <ProductFilterBar
+        search={filters.search}
+        categoryId={filters.categoryId}
+        status={filters.status}
+        onSearchChange={(value) => setFilter('search', value)}
+        onCategoryChange={(value) => setFilter('categoryId', value)}
+        onStatusChange={(value) => setFilter('status', value)}
+      />
 
       {isLoading && (
         <Table>

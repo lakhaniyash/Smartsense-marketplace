@@ -18,9 +18,13 @@ export interface OrderFilterBarProps {
 // comment), so filtering by them would only ever return an empty list.
 export function OrderFilterBar({ status, onStatusChange }: OrderFilterBarProps) {
   return (
+    // No visible label — see ProductFilterBar's comment on this same
+    // pattern (docs/ui-guidelines.md § Tables — Filtering): the
+    // placeholder already discloses the filter's purpose, and aria-label
+    // keeps the same accessible name a visible label would have given.
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <Select
-        label="Status"
+        aria-label="Status"
         placeholder="All statuses"
         clearable
         options={STATUS_OPTIONS}
