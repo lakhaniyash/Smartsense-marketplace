@@ -60,7 +60,7 @@ export function Sidebar({
         className,
       )}
     >
-      <ul className="flex flex-1 flex-col gap-1">
+      <ul className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {items.map((item) => (
           <li key={item.href}>
             <NavLink
