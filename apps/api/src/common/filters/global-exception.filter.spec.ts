@@ -41,4 +41,30 @@ describe('GlobalExceptionFilter', () => {
     const error = catchAsGraphql(new Error('boom'))
     expect(error.extensions?.['code']).toBe('INTERNAL_SERVER_ERROR')
   })
+
+  it('never forwards a raw, non-HttpException message to the client', () => {
+    const error = catchAsGraphql(
+      new Error('relation "products" does not exist at column 3, id=af31...'),
+    )
+    expect(error.message).toBe('Internal server error')
+  })
+
+  it('still logs the real message server-side for a raw exception', () => {
+    catchAsGraphql(new Error('relation "products" does not exist'))
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('relation "products" does not exist'),
+      undefined,
+      GlobalExceptionFilter.name,
+    )
+  })
+
+  it('genericizes a bare string throw the same way', () => {
+    const error = catchAsGraphql('unexpected internal detail')
+    expect(error.message).toBe('Internal server error')
+  })
+
+  it('still forwards an HttpException message verbatim (deliberately user-facing)', () => {
+    const error = catchAsGraphql(new NotFoundException('Order not found'))
+    expect(error.message).toBe('Order not found')
+  })
 })
