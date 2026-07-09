@@ -15,9 +15,6 @@ build/
 # Turborepo
 .turbo/
 
-# GraphQL schema — auto-generated at runtime
-apps/api/src/schema.gql
-
 # Testing artifacts
 apps/web/playwright-report/
 apps/web/test-results/
