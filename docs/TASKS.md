@@ -194,14 +194,14 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 ### M10 — Shared Component Library
 
-| Task ID | Task                                                                                                       | Priority | Status     | Dependencies |
-| ------- | ---------------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------ |
-| M10-T1  | Design-token + icon-library decisions (`@theme`, per [ui-guidelines.md](./ui-guidelines.md#design-system)) | High     | ✅ Done    | —            |
-| M10-T2  | Introduce frontend test tooling (Vitest + React Testing Library) — closes TD-3                             | High     | ⬜ Backlog | —            |
-| M10-T3  | Form + action primitives: Button, Input, Select, Modal                                                     | High     | ⬜ Backlog | M10-T1, T2   |
-| M10-T4  | Data primitives: Table, Pagination, Card, Badge                                                            | High     | ⬜ Backlog | M10-T1, T2   |
-| M10-T5  | State primitives: Skeleton, Empty State, Error State, Toast                                                | High     | ⬜ Backlog | M10-T1, T2   |
-| M10-T6  | App shell: sidebar, header, role-parameterized layout                                                      | High     | ✅ Done    | M10-T3–T5    |
+| Task ID | Task                                                                                                       | Priority | Status  | Dependencies |
+| ------- | ---------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------ |
+| M10-T1  | Design-token + icon-library decisions (`@theme`, per [ui-guidelines.md](./ui-guidelines.md#design-system)) | High     | ✅ Done | —            |
+| M10-T2  | Introduce frontend test tooling (Vitest + React Testing Library) — closes TD-3                             | High     | ✅ Done | —            |
+| M10-T3  | Form + action primitives: Button, Input, Select, Modal                                                     | High     | ✅ Done | M10-T1, T2   |
+| M10-T4  | Data primitives: Table, Pagination, Card, Badge                                                            | High     | ✅ Done | M10-T1, T2   |
+| M10-T5  | State primitives: Skeleton, Empty State, Error State, Toast                                                | High     | ✅ Done | M10-T1, T2   |
+| M10-T6  | App shell: sidebar, header, role-parameterized layout                                                      | High     | ✅ Done | M10-T3–T5    |
 
 ### M11 — Dashboard
 
@@ -314,7 +314,7 @@ Known, deliberately tracked debt — each item names its planned resolution poin
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------- |
 | TD-1 | Docker build-context fix unmerged ([deployment.md](./deployment.md), Assumption 3)                                                                                                                                                                 | Critical | Fix landed on `chore/claude-agents`, never merged to `development` | `docker compose up --build` fails from the main line                 | M20-T1 (do not wait for M20) |
 | TD-2 | ~~CI runs no tests~~ — **Resolved** by M18-T1: unit + backend integration tests now gate every PR ([testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)). Playwright remains a separate gap, tracked as M18-T4, not reopened here. | High     | Test stages deferred while suites were small                       | ~~Working test suites cannot fail a PR; regressions merge silently~~ | M18-T1 — Done                |
-| TD-3 | No frontend unit/component test tooling ([testing.md](./testing.md), tooling assumption)                                                                                                                                                           | High     | Frontend has had no logic worth testing yet                        | M10+ components would ship untested; retrofitting is costlier        | M10-T2                       |
+| TD-3 | ~~No frontend unit/component test tooling~~ — **Resolved** by M10-T2: Vitest + React Testing Library + `jest-axe` are in place, 148 passing specs across the shared component library ([testing.md](./testing.md)).                                | High     | Frontend has had no logic worth testing yet                        | ~~M10+ components would ship untested; retrofitting is costlier~~    | M10-T2 — Done                |
 | TD-4 | `/health` verifies nothing (`health.check([])`)                                                                                                                                                                                                    | Medium   | Endpoint scaffolded before dependencies existed                    | Orchestrators see "healthy" while the database is unreachable        | M20-T5                       |
 | TD-5 | `api` Compose service has no container healthcheck                                                                                                                                                                                                 | Low      | Depends on TD-4 being meaningful first                             | Compose cannot gate on API readiness                                 | M20-T5                       |
 | TD-6 | No correlation IDs in logs ([api-conventions.md § Logging](./api-conventions.md#logging))                                                                                                                                                          | Medium   | Deferred until log aggregation exists                              | Multi-request debugging in aggregated logs is guesswork              | With M20-T6                  |
@@ -436,3 +436,4 @@ Guidelines for writing tasks in this tracker:
 | ------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0     | 2026-07-02 | Yash Lakhani | Initial tracker — replaces placeholder; supersedes the root-level historical checklist; M1–M7 task history carried over; TD-1–TD-9 debt register established. |
 | 1.1     | 2026-07-09 | Yash Lakhani | M18-T1 completed: CI now runs unit + backend integration tests as a merge gate; closes TD-2. Playwright stage (M18-T4) remains open.                          |
+| 1.2     | 2026-07-09 | Yash Lakhani | M10-T2–T5 flipped to Completed, matching already-shipped Vitest/RTL tooling and shared primitives (milestones.md already marked M10 complete); closes TD-3.   |
