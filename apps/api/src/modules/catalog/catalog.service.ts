@@ -114,8 +114,17 @@ export class CatalogService {
 
     // Ownership miss reads as NOT_FOUND, never FORBIDDEN — an id outside the
     // caller's scope must be indistinguishable from one that doesn't exist
-    // (docs/authorization.md § Ownership Rules).
-    if (product === null || (user.partnerId !== null && product.partnerId !== user.partnerId)) {
+    // (docs/authorization.md § Ownership Rules). For a Customer (no owning
+    // Partner) that floor is publish status, not ownership: an unpublished
+    // product is invisible to them by direct id lookup too, the same as it
+    // is via findProducts' buildWhere.
+    if (
+      product === null ||
+      (user.partnerId !== null && product.partnerId !== user.partnerId) ||
+      (user.partnerId === null &&
+        user.customerId !== null &&
+        product.status !== ProductStatus.PUBLISHED)
+    ) {
       throw new NotFoundException('Product not found')
     }
 
@@ -264,8 +273,22 @@ export class CatalogService {
     const categoryId = filter?.categoryId ?? undefined
     const search = filter?.search ?? undefined
 
-    if (user.partnerId !== null) where.partnerId = user.partnerId
-    if (status !== undefined) where.status = status
+    if (user.partnerId !== null) {
+      // Partner: scoped to their own catalog, any status (they can browse
+      // their own Drafts) — unchanged from before.
+      where.partnerId = user.partnerId
+      if (status !== undefined) where.status = status
+    } else if (user.customerId !== null) {
+      // Customer: never scoped by ownership, but a client-supplied status
+      // is ignored rather than trusted — a Customer only ever sees the
+      // published catalog, never Draft/Archived by requesting it directly
+      // (docs/authorization.md § Ownership Rules).
+      where.status = ProductStatus.PUBLISHED
+    } else if (status !== undefined) {
+      // Admin (no partnerId, no customerId): unrestricted, same explicit
+      // status filter support as a Partner gets for their own catalog.
+      where.status = status
+    }
     if (categoryId !== undefined) where.categoryId = categoryId
     if (search !== undefined && search.trim() !== '') {
       where.OR = [

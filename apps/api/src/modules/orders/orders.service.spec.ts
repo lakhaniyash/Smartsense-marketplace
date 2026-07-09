@@ -259,6 +259,39 @@ describe('OrdersService', () => {
       )
     })
 
+    it('scopes the variant lookup to published products for a Customer caller', async () => {
+      prisma.productVariant.findMany.mockResolvedValueOnce([variantFixture()])
+      prisma.order.create.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+      prisma.order.findUnique.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+
+      await service.createOrder(user({ customerId: 'customer-1' }), {
+        items: [{ productVariantId: 'variant-1', quantity: 2 }],
+      })
+
+      expect(prisma.productVariant.findMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['variant-1'] },
+          deletedAt: null,
+          product: { status: 'PUBLISHED' },
+        },
+      })
+    })
+
+    it('does not restrict the variant lookup by product status for a Partner/Admin caller', async () => {
+      prisma.productVariant.findMany.mockResolvedValueOnce([variantFixture()])
+      prisma.order.create.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+      prisma.order.findUnique.mockResolvedValueOnce(orderFixture({ id: 'new-order' }))
+
+      await service.createOrder(user({ partnerId: 'partner-1' }), {
+        items: [{ productVariantId: 'variant-1', quantity: 2 }],
+        customerId: 'customer-1',
+      })
+
+      expect(prisma.productVariant.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['variant-1'] }, deletedAt: null },
+      })
+    })
+
     it('requires an explicit customerId when the caller is Partner/Admin (placing on behalf)', async () => {
       await expect(
         service.createOrder(user({ partnerId: 'partner-1' }), {

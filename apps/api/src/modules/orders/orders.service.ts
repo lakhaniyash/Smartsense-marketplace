@@ -182,7 +182,17 @@ export class OrdersService {
 
     const variantIds = input.items.map((item) => item.productVariantId)
     const variants = await this.prisma.productVariant.findMany({
-      where: { id: { in: variantIds }, deletedAt: null },
+      where: {
+        id: { in: variantIds },
+        deletedAt: null,
+        // A Customer (no owning Partner) can only order published products
+        // — same visibility floor as CatalogService.buildWhere/findProductById
+        // (docs/authorization.md § Ownership Rules). A missing variant here
+        // reads as "does not exist" below, the same as an actually-missing
+        // one, rather than leaking that an unpublished match was found.
+        ...(user.partnerId === null &&
+          user.customerId !== null && { product: { status: 'PUBLISHED' } }),
+      },
     })
     if (variants.length !== new Set(variantIds).size) {
       throw new BadRequestException('One or more product variants do not exist')

@@ -570,6 +570,53 @@ describe('Orders (e2e)', () => {
       })
     })
 
+    it('rejects a Customer ordering a variant of an unpublished product', async () => {
+      // A Draft product's variant id is otherwise a perfectly valid,
+      // in-stock variant — the only thing that should block this order is
+      // publish status, proving the fix actually closes the gap rather
+      // than something else (missing stock, wrong Partner) incidentally
+      // blocking it (docs/authorization.md § Ownership Rules).
+      const draftProduct = await prisma.product.create({
+        data: {
+          partnerId: ownPartnerId,
+          categoryId: (await prisma.category.findFirstOrThrow({ where: { slug: 'electronics' } }))
+            .id,
+          title: 'Orders E2E fixture DRAFT-VISIBILITY-SKU',
+          status: 'DRAFT',
+        },
+      })
+      createdProductIds.push(draftProduct.id)
+      const draftVariant = await prisma.productVariant.create({
+        data: {
+          productId: draftProduct.id,
+          partnerId: ownPartnerId,
+          sku: 'ORDERS-E2E-DRAFT-VISIBILITY-SKU',
+          price: 50,
+          isDefault: true,
+        },
+      })
+      await prisma.inventory.create({
+        data: { productVariantId: draftVariant.id, quantityOnHand: 10 },
+      })
+
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownCustomerToken()}`)
+        .send({
+          query: CREATE_MUTATION,
+          variables: {
+            input: {
+              items: [{ productVariantId: draftVariant.id, quantity: 1 }],
+              shippingAddressId: ownCustomerAddressId,
+            },
+          },
+        })
+        .expect(200)
+
+      expect(res.body.errors[0].extensions.code).toBe('BAD_USER_INPUT')
+      expect(res.body.errors[0].message).toBe('One or more product variants do not exist')
+    })
+
     it('lets a Partner place an order on behalf of a specified customerId', async () => {
       const res = await request(app.getHttpServer())
         .post('/graphql')

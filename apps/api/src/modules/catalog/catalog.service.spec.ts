@@ -155,6 +155,20 @@ describe('CatalogService', () => {
       )
     })
 
+    it('forces status: PUBLISHED for a Customer caller, ignoring a client-supplied status', async () => {
+      prisma.product.findMany.mockResolvedValueOnce([])
+
+      await service.findProducts(user({ partnerId: null, customerId: 'customer-1' }), {
+        filter: { status: ProductStatus.DRAFT },
+      })
+
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deletedAt: null, status: ProductStatus.PUBLISHED },
+        }),
+      )
+    })
+
     it('maps status and categoryId filters onto the where clause', async () => {
       prisma.product.findMany.mockResolvedValueOnce([])
 
@@ -297,6 +311,26 @@ describe('CatalogService', () => {
 
       await expect(
         service.findProductById(user({ partnerId: null }), 'product-1'),
+      ).resolves.toMatchObject({ id: 'product-1' })
+    })
+
+    it('throws NOT_FOUND when a Customer requests an unpublished product by id', async () => {
+      prisma.product.findFirst.mockResolvedValueOnce(
+        productFixture({ status: ProductStatus.DRAFT }),
+      )
+
+      await expect(
+        service.findProductById(user({ partnerId: null, customerId: 'customer-1' }), 'product-1'),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('allows a Customer to fetch a published product by id', async () => {
+      prisma.product.findFirst.mockResolvedValueOnce(
+        productFixture({ status: ProductStatus.PUBLISHED }),
+      )
+
+      await expect(
+        service.findProductById(user({ partnerId: null, customerId: 'customer-1' }), 'product-1'),
       ).resolves.toMatchObject({ id: 'product-1' })
     })
 
