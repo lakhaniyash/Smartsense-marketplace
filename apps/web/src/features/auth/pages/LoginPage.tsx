@@ -20,12 +20,12 @@ export function LoginPage() {
   }, [status, login, location.state])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="bg-canvas flex min-h-screen items-center justify-center">
       <div className="text-center">
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+        <h1 className="text-fg-default text-3xl font-bold tracking-tight">
           Redirecting to sign in&hellip;
         </h1>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="text-fg-muted mt-2 text-sm">
           You are being sent to SmartSense Marketplace&apos;s sign-in page.
         </p>
       </div>

@@ -82,6 +82,9 @@ const router = createBrowserRouter([
               {
                 path: `${ROUTES.CATALOG.slice(1)}/:id`,
                 element: withSuspense(<ProductDetailPage />),
+                handle: {
+                  crumb: [{ label: 'Catalog', href: ROUTES.CATALOG }, { label: 'Product' }],
+                },
               },
             ],
           },
@@ -91,10 +94,16 @@ const router = createBrowserRouter([
               {
                 path: `${ROUTES.CATALOG.slice(1)}/new`,
                 element: withSuspense(<ProductFormPage />),
+                handle: {
+                  crumb: [{ label: 'Catalog', href: ROUTES.CATALOG }, { label: 'New product' }],
+                },
               },
               {
                 path: `${ROUTES.CATALOG.slice(1)}/:id/edit`,
                 element: withSuspense(<ProductFormPage />),
+                handle: {
+                  crumb: [{ label: 'Catalog', href: ROUTES.CATALOG }, { label: 'Edit product' }],
+                },
               },
             ],
           },
@@ -105,6 +114,7 @@ const router = createBrowserRouter([
               {
                 path: `${ROUTES.ORDERS.slice(1)}/:id`,
                 element: withSuspense(<OrderDetailPage />),
+                handle: { crumb: [{ label: 'Orders', href: ROUTES.ORDERS }, { label: 'Order' }] },
               },
             ],
           },
@@ -114,6 +124,9 @@ const router = createBrowserRouter([
               {
                 path: `${ROUTES.ORDERS.slice(1)}/new`,
                 element: withSuspense(<OrderFormPage />),
+                handle: {
+                  crumb: [{ label: 'Orders', href: ROUTES.ORDERS }, { label: 'New order' }],
+                },
               },
             ],
           },

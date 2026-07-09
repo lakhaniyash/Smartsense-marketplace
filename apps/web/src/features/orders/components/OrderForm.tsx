@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useFieldArray, useForm } from 'react-hook-form'
-import { Button, Input, Select } from '@shared/components'
+import { Button, Card, CardContent, Input, Select } from '@shared/components'
 import { CloseIcon } from '@shared/icons'
 import { useOrderableVariants } from '../hooks'
 import { orderFormSchema, type OrderFormValues } from './orderForm.schema'
@@ -60,66 +60,71 @@ export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
         onChange={(event) => setVariantSearch(event.target.value || undefined)}
       />
 
-      <div className="flex flex-col gap-3">
-        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Items</span>
-        {typeof errors.items?.message === 'string' && (
-          <p className="text-sm text-red-600 dark:text-red-400">{errors.items.message}</p>
-        )}
-        {fields.map((field, index) => (
-          <div key={field.id} className="flex items-start gap-2">
-            <Select
-              aria-label={`Item ${index + 1} product`}
-              placeholder="Select a product"
-              options={variantSelectOptions}
-              {...register(`items.${index}.productVariantId`)}
-              {...errorProp(errors.items?.[index]?.productVariantId?.message)}
-            />
-            <Input
-              aria-label={`Item ${index + 1} quantity`}
-              type="number"
-              min={1}
-              className="w-24"
-              {...register(`items.${index}.quantity`)}
-              {...errorProp(errors.items?.[index]?.quantity?.message)}
-            />
+      <Card>
+        <CardContent className="flex flex-col gap-3">
+          <span className="text-fg-default text-sm font-medium">Items</span>
+          {typeof errors.items?.message === 'string' && (
+            <p className="text-danger text-sm">{errors.items.message}</p>
+          )}
+          {fields.map((field, index) => (
+            <div key={field.id} className="flex items-start gap-2">
+              <Select
+                aria-label={`Item ${index + 1} product`}
+                placeholder="Select a product"
+                options={variantSelectOptions}
+                {...register(`items.${index}.productVariantId`)}
+                {...errorProp(errors.items?.[index]?.productVariantId?.message)}
+              />
+              <Input
+                aria-label={`Item ${index + 1} quantity`}
+                type="number"
+                min={1}
+                className="w-24"
+                {...register(`items.${index}.quantity`)}
+                {...errorProp(errors.items?.[index]?.quantity?.message)}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Remove item"
+                disabled={fields.length === 1}
+                onClick={() => remove(index)}
+              >
+                <CloseIcon className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          ))}
+          <div>
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              aria-label="Remove item"
-              disabled={fields.length === 1}
-              onClick={() => remove(index)}
+              onClick={() => append({ productVariantId: '', quantity: '1' })}
             >
-              <CloseIcon className="size-4" aria-hidden="true" />
+              Add item
             </Button>
           </div>
-        ))}
-        <div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => append({ productVariantId: '', quantity: '1' })}
-          >
-            Add item
-          </Button>
-        </div>
+        </CardContent>
+      </Card>
+
+      <div className="border-border-default flex flex-col gap-4 border-t pt-4">
+        <p className="text-fg-default text-sm font-medium">Delivery details</p>
+        <Input
+          label="Customer ID"
+          helperText="Only required when placing an order on behalf of a customer (Partner/Admin). Leave blank to order for yourself."
+          {...register('customerId')}
+          {...errorProp(errors.customerId?.message)}
+        />
+        <Input
+          label="Shipping address ID"
+          helperText="Optional."
+          {...register('shippingAddressId')}
+          {...errorProp(errors.shippingAddressId?.message)}
+        />
       </div>
 
-      <Input
-        label="Customer ID"
-        helperText="Only required when placing an order on behalf of a customer (Partner/Admin). Leave blank to order for yourself."
-        {...register('customerId')}
-        {...errorProp(errors.customerId?.message)}
-      />
-      <Input
-        label="Shipping address ID"
-        helperText="Optional."
-        {...register('shippingAddressId')}
-        {...errorProp(errors.shippingAddressId?.message)}
-      />
-
-      <p className="text-sm text-gray-500">
+      <p className="text-fg-muted text-sm">
         Estimated subtotal: ${subtotalPreview.toFixed(2)} (tax/shipping computed at checkout)
       </p>
 

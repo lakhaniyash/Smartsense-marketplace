@@ -50,7 +50,7 @@ export function Select({
   return (
     <div className="flex flex-col gap-1.5">
       {label !== undefined && (
-        <label htmlFor={selectId} className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <label htmlFor={selectId} className="text-fg-default text-sm font-medium">
           {label}
           {required === true && <span className="text-danger"> *</span>}
         </label>
@@ -63,10 +63,10 @@ export function Select({
           aria-invalid={error !== undefined || undefined}
           aria-describedby={hasMessage ? messageId : undefined}
           className={cn(
-            'h-10 w-full appearance-none rounded-md border bg-white px-3 pr-9 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-gray-100',
+            'bg-surface text-fg-default h-10 w-full appearance-none rounded-md border px-3 pr-9 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
             error !== undefined
               ? 'border-danger focus-visible:ring-danger'
-              : 'border-gray-300 focus-visible:ring-gray-400 dark:border-gray-700',
+              : 'border-border-control focus-visible:ring-focus-ring',
             className,
           )}
           {...props}
@@ -83,7 +83,7 @@ export function Select({
           ))}
         </select>
         <ChevronDownIcon
-          className="pointer-events-none absolute inset-y-0 right-3 my-auto size-4 text-gray-400"
+          className="text-fg-muted pointer-events-none absolute inset-y-0 right-3 my-auto size-4"
           aria-hidden="true"
         />
       </div>
@@ -94,7 +94,7 @@ export function Select({
         </p>
       ) : (
         helperText !== undefined && (
-          <p id={messageId} className="text-sm text-gray-500">
+          <p id={messageId} className="text-fg-muted text-sm">
             {helperText}
           </p>
         )

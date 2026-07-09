@@ -1,7 +1,7 @@
 import { useMutation } from '@apollo/client'
 import { useNavigate } from 'react-router'
 import { CreateOrderDocument } from '@lib/graphql/__generated__/graphql'
-import { Breadcrumb, PageHeader, useToast } from '@shared/components'
+import { PageHeader, useToast } from '@shared/components'
 import { ROUTES } from '@shared/constants'
 import { OrderForm, type OrderFormValues } from '../components'
 
@@ -43,10 +43,11 @@ export function OrderFormPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Orders', href: ROUTES.ORDERS }, { label: 'New order' }]} />
-      <PageHeader title="New order" />
-      <OrderForm onSubmit={handleSubmit} isSubmitting={isCreating} />
+    <div className="mx-auto w-full max-w-2xl">
+      <div className="flex flex-col gap-6">
+        <PageHeader title="New order" />
+        <OrderForm onSubmit={handleSubmit} isSubmitting={isCreating} />
+      </div>
     </div>
   )
 }

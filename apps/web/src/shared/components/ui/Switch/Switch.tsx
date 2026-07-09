@@ -18,7 +18,7 @@ export function Switch({ ref, label, id, className, disabled, ...props }: Switch
     <label
       htmlFor={switchId}
       className={cn(
-        'inline-flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100',
+        'text-fg-default inline-flex items-center gap-2 text-sm',
         disabled === true && 'cursor-not-allowed opacity-50',
       )}
     >
@@ -30,14 +30,21 @@ export function Switch({ ref, label, id, className, disabled, ...props }: Switch
           id={switchId}
           disabled={disabled}
           className={cn(
-            'peer absolute inset-0 size-full cursor-pointer appearance-none rounded-full border border-gray-300 bg-gray-200 transition-colors checked:border-gray-900 checked:bg-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:checked:border-gray-100 dark:checked:bg-gray-100',
+            // Unchecked track needs a visibly filled "off" state, not just a
+            // recessed surface (bg-surface-subtle reads as near-white against
+            // a white page in light mode) — reusing border-control's value as
+            // a background gives a clearly visible track, same as the
+            // pre-token `bg-gray-200 dark:bg-gray-700` it replaces. Checked
+            // uses the inverted high-contrast fill (same "active" treatment
+            // as Button primary/Checkbox).
+            'peer border-border-control bg-border-control checked:border-neutral-emphasis checked:bg-neutral-emphasis focus-visible:outline-focus-ring absolute inset-0 size-full cursor-pointer appearance-none rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed',
             className,
           )}
           {...props}
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-0.5 size-4 translate-x-0 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4 dark:bg-gray-900"
+          className="bg-surface pointer-events-none absolute left-0.5 size-4 translate-x-0 rounded-full shadow transition-transform peer-checked:translate-x-4"
         />
       </span>
       {label}

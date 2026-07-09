@@ -31,8 +31,7 @@ export function useToast() {
 }
 
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
-  default:
-    'border-gray-200 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100',
+  default: 'border-border-default bg-surface text-fg-default',
   success: 'border-success-subtle bg-success-subtle text-success-emphasis',
   danger: 'border-danger-subtle bg-danger-subtle text-danger-emphasis',
 }
@@ -68,7 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               }
             }}
             className={cn(
-              'flex items-start gap-3 rounded-lg border p-4 shadow-md transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100',
+              'duration-base flex items-start gap-3 rounded-lg border p-4 shadow-md transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100 motion-reduce:transition-none',
               VARIANT_CLASSES[item.variant ?? 'default'],
             )}
           >
@@ -80,12 +79,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 </RadixToast.Description>
               )}
             </div>
-            <RadixToast.Close aria-label="Dismiss" className="text-gray-400 hover:text-gray-600">
+            <RadixToast.Close
+              aria-label="Dismiss"
+              className="text-fg-muted hover:text-fg-secondary"
+            >
               <CloseIcon className="size-4" aria-hidden="true" />
             </RadixToast.Close>
           </RadixToast.Root>
         ))}
-        <RadixToast.Viewport className="fixed right-0 bottom-0 z-50 flex w-full max-w-sm flex-col gap-2 p-6" />
+        <RadixToast.Viewport className="z-toast fixed right-0 bottom-0 flex w-full max-w-sm flex-col gap-2 p-6" />
       </RadixToast.Provider>
     </ToastContext.Provider>
   )

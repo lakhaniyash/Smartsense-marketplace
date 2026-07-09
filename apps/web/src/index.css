@@ -3,12 +3,59 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Semantic color tokens (docs/ui-guidelines.md § Design Tokens / § Color Philosophy).
- * Aliases onto Tailwind's default palette so every component that renders a
- * status (Alert, Badge, Button's danger variant, form field errors) shares one
- * definition instead of picking its own shade of red/green/amber/blue.
+ * Design tokens (docs/ui-guidelines.md § Design Tokens).
+ *
+ * Two layers:
+ *   1. Primitives — Tailwind's own default palette/scales (gray, green, amber,
+ *      red, blue, spacing, radius, shadow, breakpoints). Never redefined here;
+ *      referenced by var(--color-*) below. No brand color/type ramp exists
+ *      (docs/ui-guidelines.md § Design Tokens) — neutral gray is the baseline.
+ *   2. Semantic tokens — named by role (surface/fg/border/status), not by hue
+ *      or shade number. Components consume ONLY these; a raw `gray-900` or
+ *      `dark:bg-gray-800` in component markup is the anti-pattern this system
+ *      replaces (docs/ui-guidelines.md § Anti-Patterns).
+ *
+ * Theme switching: semantic tokens are plain CSS custom properties redeclared
+ * under `:root` (light) and `.dark` (dark, matching the @custom-variant above)
+ * — NOT baked into a single `@theme` block — because a `@theme` value is
+ * resolved to a literal at build time and can't change at runtime. `@theme
+ * inline` re-exposes each one as a Tailwind utility (`bg-surface`,
+ * `text-fg-muted`, ...) while keeping it a live `var()` reference, so toggling
+ * the `.dark` class on <html> (apps/web/src/shared/services/theme.service.ts)
+ * repaints every consumer with no React re-render and no per-component
+ * `dark:` variant required. This is the mechanism that closes the gap
+ * ui-guidelines.md's Dark Mode section flagged: a component that only ever
+ * writes `bg-surface` cannot have "forgotten" its dark mode — there's no
+ * separate dark styling to forget.
  */
-@theme {
+
+:root {
+  /* Surfaces */
+  --color-canvas: var(--color-gray-50);
+  --color-surface: var(--color-white);
+  --color-surface-subtle: var(--color-gray-50);
+  --color-surface-hover: var(--color-gray-100);
+
+  /* Borders */
+  --color-border-default: var(--color-gray-200);
+  --color-border-control: var(--color-gray-300);
+
+  /* Foreground (text/icon) */
+  --color-fg-default: var(--color-gray-900);
+  --color-fg-secondary: var(--color-gray-700);
+  --color-fg-muted: var(--color-gray-500);
+  --color-fg-on-emphasis: var(--color-white);
+
+  /* Inverted high-contrast fill (primary button, active nav item) */
+  --color-neutral-emphasis: var(--color-gray-900);
+  --color-neutral-emphasis-hover: var(--color-gray-700);
+
+  /* Focus ring — one color for every focusable element (see Button/Input) */
+  --color-focus-ring: var(--color-gray-900);
+
+  /* Status colors — each has base/subtle/emphasis (docs/ui-guidelines.md §
+     Color Philosophy: "every semantic color has a defined pairing for
+     text/background/border use"). Light-mode values unchanged from M10. */
   --color-success: var(--color-green-600);
   --color-success-subtle: var(--color-green-50);
   --color-success-emphasis: var(--color-green-700);
@@ -24,4 +71,162 @@
   --color-info: var(--color-blue-600);
   --color-info-subtle: var(--color-blue-50);
   --color-info-emphasis: var(--color-blue-700);
+
+  /* Native form controls / scrollbars follow the page theme too. */
+  color-scheme: light;
+}
+
+.dark {
+  --color-canvas: var(--color-gray-950);
+  --color-surface: var(--color-gray-900);
+  --color-surface-subtle: var(--color-gray-800);
+  --color-surface-hover: var(--color-gray-800);
+
+  --color-border-default: var(--color-gray-800);
+  --color-border-control: var(--color-gray-700);
+
+  --color-fg-default: var(--color-gray-100);
+  --color-fg-secondary: var(--color-gray-300);
+  --color-fg-muted: var(--color-gray-400);
+  --color-fg-on-emphasis: var(--color-gray-900);
+
+  --color-neutral-emphasis: var(--color-gray-100);
+  --color-neutral-emphasis-hover: var(--color-gray-300);
+
+  --color-focus-ring: var(--color-gray-100);
+
+  /* Status colors shift shade, not just background, in dark mode: M10's
+     fixed `-subtle` values (e.g. green-50) were never dark-mode-aware — a
+     near-white chip on a near-black card. Base colors move one step lighter
+     for contrast against dark surfaces; subtle/emphasis pairs invert. */
+  --color-success: var(--color-green-500);
+  --color-success-subtle: var(--color-green-950);
+  --color-success-emphasis: var(--color-green-400);
+
+  --color-warning: var(--color-amber-500);
+  --color-warning-subtle: var(--color-amber-950);
+  --color-warning-emphasis: var(--color-amber-400);
+
+  --color-danger: var(--color-red-500);
+  --color-danger-subtle: var(--color-red-950);
+  --color-danger-emphasis: var(--color-red-400);
+
+  --color-info: var(--color-blue-500);
+  --color-info-subtle: var(--color-blue-950);
+  --color-info-emphasis: var(--color-blue-400);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-subtle: var(--color-surface-subtle);
+  --color-surface-hover: var(--color-surface-hover);
+
+  --color-border-default: var(--color-border-default);
+  --color-border-control: var(--color-border-control);
+
+  --color-fg-default: var(--color-fg-default);
+  --color-fg-secondary: var(--color-fg-secondary);
+  --color-fg-muted: var(--color-fg-muted);
+  --color-fg-on-emphasis: var(--color-fg-on-emphasis);
+
+  --color-neutral-emphasis: var(--color-neutral-emphasis);
+  --color-neutral-emphasis-hover: var(--color-neutral-emphasis-hover);
+  --color-focus-ring: var(--color-focus-ring);
+
+  --color-success: var(--color-success);
+  --color-success-subtle: var(--color-success-subtle);
+  --color-success-emphasis: var(--color-success-emphasis);
+
+  --color-warning: var(--color-warning);
+  --color-warning-subtle: var(--color-warning-subtle);
+  --color-warning-emphasis: var(--color-warning-emphasis);
+
+  --color-danger: var(--color-danger);
+  --color-danger-subtle: var(--color-danger-subtle);
+  --color-danger-emphasis: var(--color-danger-emphasis);
+
+  --color-info: var(--color-info);
+  --color-info-subtle: var(--color-info-subtle);
+  --color-info-emphasis: var(--color-info-emphasis);
+}
+
+@theme {
+  /*
+   * Overlay scrim (modal/drawer backdrop) — identical in both themes (a dark
+   * translucent gray reads correctly over either a light or dark page), so it
+   * lives in the static @theme block rather than :root/.dark. Used as
+   * `bg-overlay/50` (Tailwind's opacity modifier applies to any color token).
+   */
+  --color-overlay: var(--color-gray-900);
+
+  /*
+   * Typography — formalizes the system font stack as an explicit project
+   * token (apps/web previously loaded no font-family at all; see @layer base
+   * below). No custom/self-hosted typeface: system fonts render instantly
+   * with zero network cost and no FOUC, and CLAUDE.md's stance against
+   * unjustified dependencies rules out an icon-style webfont dependency for
+   * a purely visual upgrade nothing has asked for.
+   *
+   * Spacing, radius, shadow, and breakpoints are deliberately NOT redeclared
+   * here — they already ride Tailwind's default scales used by fixed,
+   * documented role (docs/ui-guidelines.md § Border Radius, § Elevation &
+   * Shadows, § Responsive Breakpoints). `rounded-md`/`rounded-lg`,
+   * `shadow-md`/`shadow-xl`, and `sm:`/`md:`/`lg:` are already tokens, not
+   * arbitrary values — renaming them to project-specific aliases would add
+   * indirection without changing what any component looks like.
+   */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+/*
+ * Z-index scale (docs/ui-guidelines.md flags this as unscored: every overlay
+ * — Modal, Drawer, Toast — hardcoded the same `z-50`, so stacking a Toast
+ * fired from inside an open Modal was left to DOM/portal mount order rather
+ * than an intentional rule). Implemented as `@utility` rather than a `@theme`
+ * namespace: z-index has no Tailwind v4 theme scale to extend, but `@utility`
+ * defines a first-class utility class the same way any built-in one works.
+ */
+@utility z-dropdown {
+  z-index: 20;
+}
+@utility z-overlay {
+  z-index: 40;
+}
+@utility z-modal {
+  z-index: 50;
+}
+@utility z-toast {
+  z-index: 60;
+}
+
+/*
+ * Motion tokens (docs/ui-guidelines.md § Animations § Motion Guidelines).
+ * Named durations replace ad hoc `duration-150`/`duration-200` picked
+ * per-component; `prefers-reduced-motion` is handled per-usage with
+ * Tailwind's built-in `motion-reduce:` variant, not a token (it's a media
+ * query, not a value).
+ */
+@utility duration-fast {
+  transition-duration: 150ms;
+}
+@utility duration-base {
+  transition-duration: 200ms;
+}
+@utility ease-standard {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply bg-canvas text-fg-default;
+  }
 }

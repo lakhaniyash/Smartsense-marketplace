@@ -4,7 +4,6 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { usePermissions } from '@features/auth'
 import { ArchiveProductDocument, GetProductByIdDocument } from '@lib/graphql/__generated__/graphql'
 import {
-  Breadcrumb,
   Button,
   Card,
   CardContent,
@@ -16,12 +15,14 @@ import {
   useToast,
 } from '@shared/components'
 import { ROUTES } from '@shared/constants'
+import { useBreadcrumb } from '@shared/layouts'
 import { ProductStatusBadge, VariantList } from '../components'
 import { useProduct } from '../hooks'
 
-// SM-108 (docs/milestones.md M12) — a single product's detail view. Nested
-// more than one level deep under /catalog, so it gets a Breadcrumb per
-// docs/ui-guidelines.md § Navigation (contrast the list page, which omits one).
+// SM-108 (docs/milestones.md M12) — a single product's detail view. The
+// shell renders its breadcrumb automatically from route metadata
+// (shared/layouts/Breadcrumbs.tsx); useBreadcrumb below only supplies the
+// real title once it loads, replacing the route's static "Product" fallback.
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { product, isLoading, error } = useProduct(id)
@@ -29,6 +30,7 @@ export function ProductDetailPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
+  useBreadcrumb(product?.title)
 
   const [archiveProduct, { loading: isArchiving }] = useMutation(ArchiveProductDocument, {
     refetchQueries: [GetProductByIdDocument],
@@ -48,14 +50,15 @@ export function ProductDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[{ label: 'Catalog', href: ROUTES.CATALOG }, { label: product?.title ?? 'Product' }]}
-      />
-
       {isLoading && (
         <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-9 w-72" />
+          <Skeleton className="h-4 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+          <Skeleton className="h-40 w-full rounded-lg" />
         </div>
       )}
 
@@ -81,7 +84,7 @@ export function ProductDetailPage() {
                 <div className="flex gap-2">
                   <Link
                     to={`${ROUTES.CATALOG}/${product.id}/edit`}
-                    className="inline-flex h-10 items-center rounded-md border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                    className="border-border-control bg-surface text-fg-secondary hover:bg-surface-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
                     Edit
                   </Link>
@@ -99,18 +102,16 @@ export function ProductDetailPage() {
                 label: 'Details',
                 content: (
                   <Card>
-                    <CardContent className="flex flex-col gap-4">
+                    <CardContent className="flex flex-col gap-3">
                       <div className="flex items-center gap-3">
                         <ProductStatusBadge status={product.status} />
-                        <span className="text-sm text-gray-500">SKU: {product.sku}</span>
+                        <span className="text-fg-muted text-sm">SKU: {product.sku}</span>
                       </div>
                       {product.description !== null && product.description !== undefined && (
-                        <p className="text-sm text-gray-700 dark:text-gray-300">
-                          {product.description}
-                        </p>
+                        <p className="text-fg-secondary text-sm">{product.description}</p>
                       )}
                       {product.brand !== null && product.brand !== undefined && (
-                        <p className="text-sm text-gray-500">Brand: {product.brand}</p>
+                        <p className="text-fg-muted text-sm">Brand: {product.brand}</p>
                       )}
                     </CardContent>
                   </Card>

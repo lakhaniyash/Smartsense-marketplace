@@ -1,7 +1,7 @@
 import { useMutation } from '@apollo/client'
 import { useNavigate, useParams } from 'react-router'
 import { CreateProductDocument, UpdateProductDocument } from '@lib/graphql/__generated__/graphql'
-import { Breadcrumb, ErrorState, PageHeader, Skeleton, useToast } from '@shared/components'
+import { Card, CardContent, ErrorState, PageHeader, Skeleton, useToast } from '@shared/components'
 import { ROUTES } from '@shared/constants'
 import { ProductForm, type ProductFormValues } from '../components'
 import { useProduct } from '../hooks'
@@ -82,7 +82,7 @@ export function ProductFormPage() {
 
   if (isEditMode && isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -91,37 +91,39 @@ export function ProductFormPage() {
 
   if (isEditMode && (error !== undefined || product === undefined)) {
     return (
-      <ErrorState
-        title="Couldn't load this product"
-        description="It may not exist, or you may not have access to it."
-      />
+      <div className="mx-auto w-full max-w-2xl">
+        <ErrorState
+          title="Couldn't load this product"
+          description="It may not exist, or you may not have access to it."
+        />
+      </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Catalog', href: ROUTES.CATALOG },
-          { label: isEditMode ? 'Edit product' : 'New product' },
-        ]}
-      />
-      <PageHeader title={isEditMode ? 'Edit product' : 'New product'} />
-      <ProductForm
-        mode={isEditMode ? 'edit' : 'create'}
-        defaultValues={
-          isEditMode && product !== undefined
-            ? {
-                title: product.title,
-                categoryId: product.category.id,
-                status: product.status,
+    <div className="mx-auto w-full max-w-2xl">
+      <div className="flex flex-col gap-6">
+        <PageHeader title={isEditMode ? 'Edit product' : 'New product'} />
+        <Card>
+          <CardContent className="pt-6">
+            <ProductForm
+              mode={isEditMode ? 'edit' : 'create'}
+              defaultValues={
+                isEditMode && product !== undefined
+                  ? {
+                      title: product.title,
+                      categoryId: product.category.id,
+                      status: product.status,
+                    }
+                  : undefined
               }
-            : undefined
-        }
-        onSubmit={handleSubmit}
-        isSubmitting={isCreating || isUpdating}
-        submitLabel={isEditMode ? 'Save changes' : 'Create product'}
-      />
+              onSubmit={handleSubmit}
+              isSubmitting={isCreating || isUpdating}
+              submitLabel={isEditMode ? 'Save changes' : 'Create product'}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

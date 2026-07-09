@@ -15,7 +15,7 @@ export function UnauthorizedPage() {
         <button
           type="button"
           onClick={() => void login()}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+          className="bg-neutral-emphasis text-fg-on-emphasis rounded-md px-4 py-2 text-sm font-medium"
         >
           Sign in
         </button>

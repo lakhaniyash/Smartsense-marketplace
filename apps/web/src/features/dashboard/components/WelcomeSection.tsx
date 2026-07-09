@@ -20,10 +20,10 @@ export function WelcomeSection() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+      <h2 className="text-fg-default text-xl font-semibold">
         Welcome back{user?.fullName !== undefined ? `, ${user.fullName}` : ''}
       </h2>
-      <p className="mt-1 text-sm text-gray-500">{roleLabel} overview</p>
+      <p className="text-fg-muted mt-1 text-sm">{roleLabel} overview</p>
     </div>
   )
 }

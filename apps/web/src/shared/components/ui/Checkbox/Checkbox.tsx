@@ -43,7 +43,7 @@ export function Checkbox({
     <label
       htmlFor={checkboxId}
       className={cn(
-        'inline-flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100',
+        'text-fg-default inline-flex items-center gap-2 text-sm',
         disabled === true && 'cursor-not-allowed opacity-50',
       )}
     >
@@ -53,7 +53,8 @@ export function Checkbox({
         id={checkboxId}
         disabled={disabled}
         className={cn(
-          'size-4 shrink-0 rounded border-gray-300 accent-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed dark:border-gray-600',
+          // Checked fill uses the inverted high-contrast treatment (same as Button primary).
+          'border-border-control accent-neutral-emphasis focus-visible:outline-focus-ring size-4 shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed',
           className,
         )}
         {...props}

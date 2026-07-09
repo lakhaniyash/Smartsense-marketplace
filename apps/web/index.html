@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="SmartSense Marketplace — enterprise partner platform" />
     <title>SmartSense Marketplace</title>
+    <!--
+      Applies the dark class before first paint so there is no flash of the
+      wrong theme while React mounts. This duplicates the resolve logic in
+      apps/web/src/shared/services/theme.service.ts on purpose — an inline,
+      pre-module script is the only thing that runs early enough; keep the
+      two in sync if the storage key or resolution rule ever changes.
+    -->
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('smartsense-theme')
+          var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system'
+          var resolved =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode
+          if (resolved === 'dark') {
+            document.documentElement.classList.add('dark')
+          }
+        } catch (e) {
+          // Storage/matchMedia can throw in locked-down contexts — falling
+          // back to the light default is correct, not an error to surface.
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

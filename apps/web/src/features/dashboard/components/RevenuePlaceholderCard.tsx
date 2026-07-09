@@ -9,13 +9,15 @@ export function RevenuePlaceholderCard() {
   const Icon = REVENUE_PLACEHOLDER_CARD.icon
 
   return (
-    <Card className="opacity-75">
+    <Card className="border-dashed opacity-75">
       <CardContent className="flex items-center gap-4">
-        <div className="rounded-md bg-gray-100 p-3 text-gray-400 dark:bg-gray-800">
+        <div className="bg-surface-hover text-fg-muted rounded-lg p-3">
           <Icon className="size-5" aria-hidden="true" />
         </div>
         <div>
-          <p className="text-sm text-gray-500">{REVENUE_PLACEHOLDER_CARD.label}</p>
+          <p className="text-fg-muted text-xs font-medium tracking-wide uppercase">
+            {REVENUE_PLACEHOLDER_CARD.label}
+          </p>
           <Badge className="mt-1">Coming soon</Badge>
         </div>
       </CardContent>

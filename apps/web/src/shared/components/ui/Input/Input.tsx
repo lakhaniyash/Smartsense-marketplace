@@ -34,14 +34,14 @@ export function Input({
   return (
     <div className="flex flex-col gap-1.5">
       {label !== undefined && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        <label htmlFor={inputId} className="text-fg-default text-sm font-medium">
           {label}
           {required === true && <span className="text-danger"> *</span>}
         </label>
       )}
       <div className="relative">
         {prefixIcon !== undefined && (
-          <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+          <span className="text-fg-muted pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             {prefixIcon}
           </span>
         )}
@@ -52,10 +52,10 @@ export function Input({
           aria-invalid={error !== undefined || undefined}
           aria-describedby={hasMessage ? messageId : undefined}
           className={cn(
-            'h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-gray-100',
+            'bg-surface text-fg-default placeholder:text-fg-muted h-10 w-full rounded-md border px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
             error !== undefined
               ? 'border-danger focus-visible:ring-danger'
-              : 'border-gray-300 focus-visible:ring-gray-400 dark:border-gray-700',
+              : 'border-border-control focus-visible:ring-focus-ring',
             prefixIcon !== undefined && 'pl-9',
             suffixIcon !== undefined && 'pr-9',
             className,
@@ -63,7 +63,7 @@ export function Input({
           {...props}
         />
         {suffixIcon !== undefined && (
-          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+          <span className="text-fg-muted pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
             {suffixIcon}
           </span>
         )}
@@ -75,7 +75,7 @@ export function Input({
         </p>
       ) : (
         helperText !== undefined && (
-          <p id={messageId} className="text-sm text-gray-500">
+          <p id={messageId} className="text-fg-muted text-sm">
             {helperText}
           </p>
         )

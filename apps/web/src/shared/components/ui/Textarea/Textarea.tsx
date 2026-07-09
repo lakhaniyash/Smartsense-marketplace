@@ -29,10 +29,7 @@ export function Textarea({
   return (
     <div className="flex flex-col gap-1.5">
       {label !== undefined && (
-        <label
-          htmlFor={textareaId}
-          className="text-sm font-medium text-gray-900 dark:text-gray-100"
-        >
+        <label htmlFor={textareaId} className="text-fg-default text-sm font-medium">
           {label}
           {required === true && <span className="text-danger"> *</span>}
         </label>
@@ -45,10 +42,10 @@ export function Textarea({
         aria-invalid={error !== undefined || undefined}
         aria-describedby={hasMessage ? messageId : undefined}
         className={cn(
-          'w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-gray-100',
+          'bg-surface text-fg-default placeholder:text-fg-muted w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
           error !== undefined
             ? 'border-danger focus-visible:ring-danger'
-            : 'border-gray-300 focus-visible:ring-gray-400 dark:border-gray-700',
+            : 'border-border-control focus-visible:ring-focus-ring',
           className,
         )}
         {...props}
@@ -60,7 +57,7 @@ export function Textarea({
         </p>
       ) : (
         helperText !== undefined && (
-          <p id={messageId} className="text-sm text-gray-500">
+          <p id={messageId} className="text-fg-muted text-sm">
             {helperText}
           </p>
         )

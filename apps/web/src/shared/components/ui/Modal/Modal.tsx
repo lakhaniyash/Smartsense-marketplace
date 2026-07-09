@@ -29,25 +29,27 @@ export function Modal({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-50 bg-gray-900/50 transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
+        <RadixDialog.Overlay className="z-overlay bg-overlay/50 fixed inset-0 transition-opacity data-[state=closed]:opacity-0 data-[state=open]:opacity-100 motion-reduce:transition-none" />
         <RadixDialog.Content
           className={cn(
-            'fixed top-1/2 left-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-6 shadow-xl focus:outline-none dark:bg-gray-900',
+            'z-modal bg-surface fixed top-1/2 left-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg p-6 shadow-xl focus:outline-none',
             className,
           )}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <RadixDialog.Title className="text-fg-default text-xl font-semibold">
                 {title}
               </RadixDialog.Title>
               {description !== undefined && (
-                <RadixDialog.Description className="mt-1 text-sm text-gray-500">
+                <RadixDialog.Description className="text-fg-muted mt-1 text-sm">
                   {description}
                 </RadixDialog.Description>
               )}
             </div>
-            <RadixDialog.Close aria-label="Close" className="text-gray-400 hover:text-gray-600">
+            {/* gray-400 → gray-600 hover had no dedicated token; fg-secondary is the
+                closest role-match for the darker hover state. */}
+            <RadixDialog.Close aria-label="Close" className="text-fg-muted hover:text-fg-secondary">
               <CloseIcon className="size-5" aria-hidden="true" />
             </RadixDialog.Close>
           </div>

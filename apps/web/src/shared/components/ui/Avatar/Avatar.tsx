@@ -23,7 +23,9 @@ export function Avatar({ src, alt = '', initials, size = 'md', className }: Avat
   return (
     <RadixAvatar.Root
       className={cn(
-        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 font-medium text-gray-700 select-none dark:bg-gray-700 dark:text-gray-200',
+        // Fallback background is a recessed neutral circle; text uses the
+        // secondary foreground role (closest match — no dedicated avatar token).
+        'bg-surface-subtle text-fg-secondary inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium select-none',
         SIZE_CLASSES[size],
         className,
       )}

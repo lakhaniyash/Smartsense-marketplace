@@ -19,6 +19,10 @@ const meta: Meta<typeof Sidebar> = {
       { label: 'Orders', href: '/orders' },
       { label: 'Billing', href: '/billing' },
     ],
+    userLabel: 'yash.lakhani+admin@smartsensesolutions.com',
+    userInitials: 'YL',
+    roleLabel: 'Admin Console',
+    onLogout: () => {},
   },
 }
 
@@ -26,3 +30,4 @@ export default meta
 type Story = StoryObj<typeof Sidebar>
 
 export const Default: Story = {}
+export const Collapsed: Story = { args: { collapsed: true } }
