@@ -535,6 +535,51 @@ Notes on the diagram:
 
 ---
 
+### Notification
+
+**Purpose.** An event-sourced, per-recipient message telling a User about something that happened
+to an Order or Invoice they have a stake in — the artifact behind M16's in-app notification center
+(`docs/roadmap.md` § Notifications). Created exclusively by `NotificationEventsListener` reacting to
+domain events (`@nestjs/event-emitter`) — never written directly by a resolver or another module's
+service, so a future email/SMS provider can subscribe to the exact same events independently.
+
+**Attributes**
+
+| Attribute   | Notes                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id          |                                                                                                                                                  |
+| recipientId | The `User` this row belongs to — always individually owned, never org-shared.                                                                    |
+| type        | The domain event that produced it (`OrderCreated`, `OrderConfirmed`, `OrderCancelled`, `OrderCompleted`, `InvoiceGenerated`, `PaymentRecorded`). |
+| title       |                                                                                                                                                  |
+| body        |                                                                                                                                                  |
+| entityType  | `Order` or `Invoice` — which kind of record this notification is about.                                                                          |
+| entityId    | The referenced Order/Invoice's id, nullable (not every notification type links out).                                                             |
+| status      | `Unread`, `Read`                                                                                                                                 |
+| readAt      | Nullable — set when `status` moves to `Read`.                                                                                                    |
+
+**Relationships**
+
+- Many-to-one with `User` (the recipient).
+
+**Business rules**
+
+- An event that identifies an organization (Partner/Customer), not a single User, fans out to one
+  Notification row per `Active`, non-deleted User of that org — each recipient gets independent read
+  state, not a shared row.
+- `OrderCompleted`, `InvoiceGenerated`, and `PaymentRecorded` notify the owning Partner's Users only —
+  none of those three events carries a `customerId`, a known, accepted gap (not solved in M16's first
+  pass; re-querying Orders' tables from the Notifications listener to backfill it would violate the
+  backend's module dependency direction rule).
+- No soft-delete: nothing else references a Notification by FK, and there is no delete/dismiss
+  mutation in this milestone — rows are retained indefinitely (a future retention job is out of
+  scope here).
+
+**Lifecycle.** `Unread` (created by the listener) → `Read` (via `markNotificationRead` or
+`markAllNotificationsRead`, idempotent — marking an already-`Read` row read again is a no-op). There
+is no reverse transition.
+
+---
+
 ### Address
 
 **Purpose.** A reusable postal address owned by either a Partner or a Customer, used for shipping and billing.

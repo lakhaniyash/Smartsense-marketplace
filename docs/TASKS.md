@@ -264,9 +264,34 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 | Task ID | Task                                       | Priority | Status     | Dependencies |
 | ------- | ------------------------------------------ | -------- | ---------- | ------------ |
-| M16-T1  | Domain event model design                  | High     | ⬜ Backlog | M13          |
-| M16-T2  | In-app notification center                 | Medium   | ⬜ Backlog | M16-T1       |
+| M16-T1  | Domain event model design                  | High     | ✅ Done    | M13          |
+| M16-T2  | In-app notification center                 | Medium   | ✅ Done    | M16-T1       |
 | M16-T3  | Email delivery channel + v1.1 event wiring | Medium   | ⬜ Backlog | M16-T1       |
+
+**Scope notes.** M16-T1: a `Notification` Prisma model (`NotificationType`/`NotificationStatus`
+enums, `recipientId`-scoped, no soft-delete — no delete/dismiss mutation exists and nothing
+FK-references a Notification) plus a `NotificationEventsListener` consuming Orders' 4 existing M13
+events and 2 new Billing events (`invoice.generated`/`payment.recorded`, added to `BillingService`
+this pass, emitted post-commit). Every handler is wrapped in a `safely()` try/catch — `emit()` is
+fire-and-forget, so an uncaught async rejection here must never surface as a bare unhandled
+rejection affecting the Order/Invoice/Payment mutation that already committed. `order.completed`
+and both new Billing events notify the Partner side only (no `customerId` on any of the three
+events — a known, accepted gap, not solved this pass). M16-T2: `NotificationsModule`
+(`notifications`/`unreadNotificationCount` queries, `markNotificationRead`/`markAllNotificationsRead`
+mutations, Relay cursor pagination matching Billing's `Invoice` connection shape) with deliberately
+**no** `notifications:*` permission key — every operation is ownership-scoped
+(`recipientId === user.id`) with zero role differentiation, so there's no capability boundary for a
+key to encode. Frontend: retired the M10-era `shared/components/ui/NotificationsMenu` placeholder
+into a real `features/notifications` module (header dropdown with a 45s-interval, visibility-paused
+Apollo poll for the unread badge — no WebSockets/subscriptions this milestone — plus a full
+`/notifications` page, unguarded by any `PermissionRoute` since it's a personal, not role-scoped,
+resource). M16-T3 (email delivery) and wiring Catalog low-stock / Authentication user-registered
+events (both modules still emit zero domain events) are explicitly deferred, not discovered gaps.
+Tested: backend unit (`notifications.service.spec.ts`, `notification-events.listener.spec.ts`,
+extended `billing.service.spec.ts`) + a full-stack `notifications.e2e-spec.ts` proving a real order
+lifecycle → real event → real listener → real Notification row round trip against real Postgres;
+frontend Vitest component tests; one Playwright smoke journey
+(`e2e/notifications/notifications.spec.ts`).
 
 ### M17 — Settings
 
