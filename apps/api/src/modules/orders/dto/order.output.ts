@@ -8,9 +8,11 @@ import { OrderStatusHistoryOutput } from './order-status-history.output'
 registerEnumType(OrderStatus, {
   name: 'OrderStatus',
   description:
-    'Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 only implements ' +
-    'transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED — the remaining values exist ' +
-    'in the schema for future milestones (fulfillment, billing) and are not yet reachable.',
+    'Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 implemented transitions ' +
+    'among DRAFT/CONFIRMED/PROCESSING/CANCELLED; M14 (Billing) added ' +
+    'PROCESSING→SHIPPED→DELIVERED→COMPLETED so invoice generation has a trigger — the ' +
+    'remaining values (PENDING_PAYMENT, RETURN_REQUESTED, REFUNDED) exist in the schema for ' +
+    'future milestones and are not yet reachable.',
 })
 
 @ObjectType('Order', {

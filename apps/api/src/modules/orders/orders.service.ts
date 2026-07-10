@@ -23,6 +23,7 @@ import { OrderSortField } from './dto/order-sort.enum'
 import { OrderSortInput } from './dto/order-sort.input'
 import { OrderOutput } from './dto/order.output'
 import { OrderCancelledEvent } from './events/order-cancelled.event'
+import { OrderCompletedEvent } from './events/order-completed.event'
 import { OrderConfirmedEvent } from './events/order-confirmed.event'
 import { OrderCreatedEvent } from './events/order-created.event'
 
@@ -52,12 +53,14 @@ interface OrderTransitionRule {
   releaseInventory: boolean
 }
 
-// The M13 transition matrix (see the plan's rationale, mirrored in
-// docs/authorization.md § Orders): only these five transitions exist today.
-// The OrderStatus enum has values beyond these (PENDING_PAYMENT, SHIPPED,
-// DELIVERED, RETURN_REQUESTED, COMPLETED, REFUNDED) reserved for future
-// milestones (fulfillment, billing) — any other requested transition is
-// rejected below as invalid, not silently allowed.
+// The transition matrix (see the plan's rationale, mirrored in
+// docs/authorization.md § Orders). M13 landed the first five transitions;
+// M14 (Billing) wires PROCESSING→SHIPPED→DELIVERED→COMPLETED so Billing's
+// invoice-generation trigger (OrderCompletedEvent, emitted on reaching
+// COMPLETED) is reachable. The OrderStatus enum still has values beyond
+// these (PENDING_PAYMENT, RETURN_REQUESTED, REFUNDED) reserved for future
+// milestones — any other requested transition is rejected below as
+// invalid, not silently allowed.
 const ORDER_TRANSITIONS: OrderTransitionRule[] = [
   {
     from: OrderStatus.DRAFT,
@@ -93,6 +96,27 @@ const ORDER_TRANSITIONS: OrderTransitionRule[] = [
     requiredPermission: 'orders:write',
     reserveInventory: false,
     releaseInventory: true,
+  },
+  {
+    from: OrderStatus.PROCESSING,
+    to: OrderStatus.SHIPPED,
+    requiredPermission: 'orders:write',
+    reserveInventory: false,
+    releaseInventory: false,
+  },
+  {
+    from: OrderStatus.SHIPPED,
+    to: OrderStatus.DELIVERED,
+    requiredPermission: 'orders:write',
+    reserveInventory: false,
+    releaseInventory: false,
+  },
+  {
+    from: OrderStatus.DELIVERED,
+    to: OrderStatus.COMPLETED,
+    requiredPermission: 'orders:write',
+    reserveInventory: false,
+    releaseInventory: false,
   },
 ]
 
@@ -345,7 +369,7 @@ export class OrdersService {
       })
     })
 
-    this.emitTransitionEvents(order, targetStatus, rule, items, reason)
+    this.emitTransitionEvents(order, targetStatus, rule, items, reason, user.id)
 
     return this.findOrderById(user, orderId)
   }
@@ -362,6 +386,7 @@ export class OrdersService {
     rule: OrderTransitionRule,
     items: Array<{ productVariantId: string; quantity: number }>,
     reason: string | undefined,
+    changedByUserId: string,
   ): void {
     if (rule.reserveInventory) {
       this.eventEmitter.emit(
@@ -391,6 +416,18 @@ export class OrdersService {
           order.partnerId,
           order.status,
           reason ?? null,
+        ),
+      )
+    }
+    if (targetStatus === OrderStatus.COMPLETED) {
+      this.eventEmitter.emit(
+        OrderCompletedEvent.EVENT_NAME,
+        new OrderCompletedEvent(
+          order.id,
+          order.orderNumber,
+          order.partnerId,
+          order.total.toString(),
+          changedByUserId,
         ),
       )
     }

@@ -7,6 +7,7 @@ import { InventoryReleasedEvent } from '../catalog/events/inventory-released.eve
 import { InventoryReservedEvent } from '../catalog/events/inventory-reserved.event'
 import { OrderSortField } from './dto/order-sort.enum'
 import { OrderCancelledEvent } from './events/order-cancelled.event'
+import { OrderCompletedEvent } from './events/order-completed.event'
 import { OrderConfirmedEvent } from './events/order-confirmed.event'
 import { OrderCreatedEvent } from './events/order-created.event'
 import { OrdersService } from './orders.service'
@@ -517,6 +518,103 @@ describe('OrdersService', () => {
           OrderStatus.PROCESSING,
         ),
       ).rejects.toThrow(ForbiddenException)
+    })
+
+    it('lets the vendor Partner advance PROCESSING->SHIPPED (no inventory effect)', async () => {
+      prisma.order.findUnique
+        .mockResolvedValueOnce(orderFixture({ status: OrderStatus.PROCESSING }))
+        .mockResolvedValueOnce(orderFixture({ status: OrderStatus.SHIPPED }))
+
+      await service.updateStatus(
+        user({ partnerId: 'partner-1', permissions: ['orders:write'] }),
+        'order-1',
+        OrderStatus.SHIPPED,
+      )
+
+      expect(inventoryService.reserve).not.toHaveBeenCalled()
+      expect(inventoryService.release).not.toHaveBeenCalled()
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: OrderStatus.SHIPPED },
+      })
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        OrderCompletedEvent.EVENT_NAME,
+        expect.anything(),
+      )
+    })
+
+    it('lets the vendor Partner advance SHIPPED->DELIVERED', async () => {
+      prisma.order.findUnique
+        .mockResolvedValueOnce(orderFixture({ status: OrderStatus.SHIPPED }))
+        .mockResolvedValueOnce(orderFixture({ status: OrderStatus.DELIVERED }))
+
+      await service.updateStatus(
+        user({ partnerId: 'partner-1', permissions: ['orders:write'] }),
+        'order-1',
+        OrderStatus.DELIVERED,
+      )
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: OrderStatus.DELIVERED },
+      })
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        OrderCompletedEvent.EVENT_NAME,
+        expect.anything(),
+      )
+    })
+
+    it('lets the vendor Partner advance DELIVERED->COMPLETED and emits OrderCompleted', async () => {
+      prisma.order.findUnique
+        .mockResolvedValueOnce(
+          orderFixture({
+            status: OrderStatus.DELIVERED,
+            partnerId: 'partner-1',
+            orderNumber: 'ORD-0001',
+            total: new Prisma.Decimal(100),
+          }),
+        )
+        .mockResolvedValueOnce(orderFixture({ status: OrderStatus.COMPLETED }))
+
+      await service.updateStatus(
+        user({ id: 'user-9', partnerId: 'partner-1', permissions: ['orders:write'] }),
+        'order-1',
+        OrderStatus.COMPLETED,
+      )
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order-1' },
+        data: { status: OrderStatus.COMPLETED },
+      })
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        OrderCompletedEvent.EVENT_NAME,
+        expect.objectContaining({
+          orderId: 'order-1',
+          orderNumber: 'ORD-0001',
+          partnerId: 'partner-1',
+          total: '100',
+          changedByUserId: 'user-9',
+        }),
+      )
+    })
+
+    it('does not emit OrderCompleted when the whole transaction fails', async () => {
+      prisma.order.findUnique.mockResolvedValueOnce(orderFixture({ status: OrderStatus.DELIVERED }))
+      prisma.$transaction.mockImplementationOnce(() => {
+        throw new BadRequestException('boom')
+      })
+
+      await expect(
+        service.updateStatus(
+          user({ partnerId: 'partner-1', permissions: ['orders:write'] }),
+          'order-1',
+          OrderStatus.COMPLETED,
+        ),
+      ).rejects.toThrow(BadRequestException)
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        OrderCompletedEvent.EVENT_NAME,
+        expect.anything(),
+      )
     })
   })
 
