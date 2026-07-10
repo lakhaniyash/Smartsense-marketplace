@@ -7,15 +7,23 @@ export interface PopoverProps {
   children: ReactNode
   align?: 'start' | 'center' | 'end'
   className?: string
+  /** Fires on open/close — e.g. to lazy-fetch a panel's content on first open. */
+  onOpenChange?: (open: boolean) => void
 }
 
 // A floating content panel anchored to a trigger — distinct from Menu (a
 // list of actionable commands, role="menu") in that its content is passive
 // (e.g. the header's notifications panel), so it uses the correct ARIA
 // role rather than mislabeling non-actionable content as a menu.
-export function Popover({ trigger, children, align = 'end', className }: PopoverProps) {
+export function Popover({
+  trigger,
+  children,
+  align = 'end',
+  className,
+  onOpenChange,
+}: PopoverProps) {
   return (
-    <RadixPopover.Root>
+    <RadixPopover.Root {...(onOpenChange !== undefined && { onOpenChange })}>
       <RadixPopover.Trigger asChild>{trigger}</RadixPopover.Trigger>
       <RadixPopover.Portal>
         <RadixPopover.Content

@@ -229,6 +229,16 @@ type Mutation {
   createProductVariant(input: CreateProductVariantInput!): ProductVariant!
 
   """
+  Marks every UNREAD notification for the caller as READ; returns the count updated.
+  """
+  markAllNotificationsRead: Int!
+
+  """
+  Marks one of the caller's own notifications READ. Throws NOT_FOUND on a missing or out-of-scope id. Idempotent — already-READ is a no-op.
+  """
+  markNotificationRead(id: ID!): Notification!
+
+  """
   Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate.
   """
   recordPayment(input: CreatePaymentInput!): Payment!
@@ -253,6 +263,52 @@ type Mutation {
   Voids a DRAFT/ISSUED Invoice with zero recorded Payments (docs/domain-model.md § Invoice).
   """
   voidInvoice(id: ID!): Invoice!
+}
+
+"""
+A recipient-owned, event-sourced notification (docs/domain-model.md § Notification). Never written directly by a resolver — only by NotificationEventsListener reacting to Orders/Billing domain events.
+"""
+type Notification {
+  body: String!
+  createdAt: DateTime!
+  entityId: ID
+  entityType: String
+  id: ID!
+  readAt: DateTime
+  status: NotificationStatus!
+  title: String!
+  type: NotificationType!
+  updatedAt: DateTime!
+}
+
+type NotificationConnection {
+  edges: [NotificationEdge!]!
+  pageInfo: PageInfo!
+}
+
+type NotificationEdge {
+  cursor: String!
+  node: Notification!
+}
+
+input NotificationFilterInput {
+  status: NotificationStatus
+}
+
+"""UNREAD until the recipient marks it (or all of theirs) read."""
+enum NotificationStatus {
+  READ
+  UNREAD
+}
+
+"""The domain event that produced this Notification."""
+enum NotificationType {
+  INVOICE_GENERATED
+  ORDER_CANCELLED
+  ORDER_COMPLETED
+  ORDER_CONFIRMED
+  ORDER_CREATED
+  PAYMENT_RECORDED
 }
 
 """A single-Partner order (docs/domain-model.md § Order)."""
@@ -525,6 +581,9 @@ type Query {
   """The authenticated caller and their resolved roles/permissions."""
   me: CurrentUser!
 
+  """A page of the caller's own notifications, most recent first."""
+  notifications(after: String, filter: NotificationFilterInput, first: Int): NotificationConnection!
+
   """
   A single order by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
   """
@@ -545,6 +604,9 @@ type Query {
 
   """A page of the caller's visible products (Admin: all; Partner: own)."""
   products(after: String, filter: ProductFilterInput, first: Int, sort: ProductSortInput): ProductConnection!
+
+  """The caller's own unread notification count."""
+  unreadNotificationCount: Int!
 
   """Users module status"""
   usersStatus: String!

@@ -151,12 +151,23 @@ Per-module access rules. "Own" means ownership-scoped per [Ownership Rules](#own
 | **Billing**                 | View invoices/payments          | `billing:read`                                                                               | All      | Own             | —                                                                                                       |
 |                             | Adjust/void/administer          | `billing:manage`                                                                             | All      | —               | —                                                                                                       |
 | **Reports**                 | Generate/view billing reports   | `reports:read` _(planned, M15)_ — interim: `billing:read`                                    | All      | Own             | —                                                                                                       |
+| **Notifications**           | Read/mark own notifications     | Authenticated (no key — see below)                                                           | Own      | Own             | Own                                                                                                     |
 | **Settings**                | Own profile/preferences         | Authenticated (no key — every user manages _their own_ profile; ownership is the whole rule) | Own      | Own             | Own                                                                                                     |
 |                             | Partner organization settings   | `settings:manage` _(planned, M17)_ — interim: ownership + Partner role                       | All      | Own org         | —                                                                                                       |
 | **Users** _(Admin surface)_ | View users                      | `users:read`                                                                                 | All      | —               | —                                                                                                       |
 |                             | Manage users/roles              | `users:manage`                                                                               | All      | —               | —                                                                                                       |
 
 When M15/M17 introduce their permission keys, this table and the [seeded catalog](#the-seeded-catalog) are updated in the same PR as the migration that adds them.
+
+**Notifications deliberately has no `notifications:*` permission key** (M16) — this is not an
+oversight to fix later. Every `notifications`/`unreadNotificationCount`/`markNotificationRead`/
+`markAllNotificationsRead` operation is authenticated by `GqlAuthGuard` like everything else, but
+gated on nothing beyond that: `NotificationsService` scopes every query/mutation to
+`recipientId === user.id`, and Admin/Partner/Customer all have exactly the same capability over
+exactly their own rows. Per this doc's own [Ownership Rules](#ownership-rules) split (guards check
+the verb, services check the noun), there is no verb here that varies by role for a permission key
+to gate — only ownership, which the service already enforces. A key would only ever earn its keep
+if a future milestone needs cross-user visibility (e.g. an Admin notifications dashboard).
 
 ### Orders Status Transition Matrix (M13)
 

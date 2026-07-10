@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { InvoiceStatus, type Payment, PaymentStatus, Prisma } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
@@ -7,6 +8,8 @@ import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
 import { type OrderCompletedEvent } from '../orders/events/order-completed.event'
 import { CreatePaymentInput } from './dto/create-payment.input'
+import { InvoiceGeneratedEvent } from './events/invoice-generated.event'
+import { PaymentRecordedEvent } from './events/payment-recorded.event'
 import { InvoiceConnectionOutput, InvoiceEdgeOutput } from './dto/invoice-connection.output'
 import { InvoiceFilterInput } from './dto/invoice-filter.input'
 import { InvoiceSortField } from './dto/invoice-sort.enum'
@@ -33,6 +36,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   getStatus(): string {
@@ -50,9 +54,10 @@ export class BillingService {
    * to and AuditLog.actorUserId is a required FK.
    */
   async generateInvoiceForOrder(event: OrderCompletedEvent): Promise<void> {
+    let invoice
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const invoice = await tx.invoice.create({
+      invoice = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.invoice.create({
           data: {
             invoiceNumber: this.generateInvoiceNumber(),
             orderId: event.orderId,
@@ -66,18 +71,33 @@ export class BillingService {
           actorUserId: event.changedByUserId,
           action: 'invoice.generated',
           entityType: 'Invoice',
-          entityId: invoice.id,
+          entityId: created.id,
           metadata: {
             orderId: event.orderId,
             orderNumber: event.orderNumber,
             amountDue: event.total,
           },
         })
-        return invoice
+        return created
       })
     } catch (error) {
       this.translatePrismaError(error, 'Invoice number collision, retry')
     }
+
+    // Emitted strictly after the transaction commits (docs/backend-architecture.md
+    // § Event Architecture — emitting before commit risks a "phantom
+    // notification" for an Invoice that never actually persisted).
+    this.eventEmitter.emit(
+      InvoiceGeneratedEvent.EVENT_NAME,
+      new InvoiceGeneratedEvent(
+        invoice.id,
+        invoice.invoiceNumber,
+        event.orderId,
+        event.orderNumber,
+        event.partnerId,
+        event.total,
+      ),
+    )
   }
 
   async findInvoices(
@@ -182,68 +202,94 @@ export class BillingService {
    * `idempotencyKey` is the actual backstop.
    */
   async recordPayment(user: AuthenticatedUser, input: CreatePaymentInput): Promise<PaymentOutput> {
-    const payment = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.payment.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-      })
-      if (existing !== null) return existing
+    const { payment, invoiceNumber, partnerId, isNew } = await this.prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.payment.findUnique({
+          where: { idempotencyKey: input.idempotencyKey },
+        })
+        if (existing !== null) {
+          return { payment: existing, invoiceNumber: undefined, partnerId: undefined, isNew: false }
+        }
 
-      const invoice = await tx.invoice.findUnique({ where: { id: input.invoiceId } })
-      if (invoice === null) throw new NotFoundException('Invoice not found')
+        const invoice = await tx.invoice.findUnique({ where: { id: input.invoiceId } })
+        if (invoice === null) throw new NotFoundException('Invoice not found')
 
-      let created
-      try {
-        created = await tx.payment.create({
-          data: {
+        let created
+        try {
+          created = await tx.payment.create({
+            data: {
+              invoiceId: invoice.id,
+              amount: new Prisma.Decimal(input.amount),
+              method: input.method,
+              externalTransactionId: input.externalTransactionId,
+              idempotencyKey: input.idempotencyKey,
+              // v1 has no live payment gateway (docs/roadmap.md) — a recorded
+              // Payment is "recorded, not processed" and therefore already
+              // succeeded; there is no PENDING/webhook-callback flow.
+              status: PaymentStatus.SUCCEEDED,
+              processedAt: new Date(),
+            },
+          })
+        } catch (error) {
+          this.translatePrismaError(
+            error,
+            'Payment collision (duplicate idempotency key or external transaction id), retry',
+          )
+        }
+
+        const succeededPayments = await tx.payment.findMany({
+          where: { invoiceId: invoice.id, status: PaymentStatus.SUCCEEDED },
+        })
+        const totalPaid = succeededPayments.reduce(
+          (sum, candidate) => sum.plus(candidate.amount),
+          new Prisma.Decimal(0),
+        )
+
+        let nextStatus: InvoiceStatus | undefined
+        if (totalPaid.greaterThanOrEqualTo(invoice.amountDue)) nextStatus = InvoiceStatus.PAID
+        else if (totalPaid.greaterThan(0)) nextStatus = InvoiceStatus.PARTIALLY_PAID
+
+        if (nextStatus !== undefined) {
+          await tx.invoice.update({ where: { id: invoice.id }, data: { status: nextStatus } })
+        }
+
+        await this.auditLogService.record(tx, {
+          actorUserId: user.id,
+          action: 'payment.recorded',
+          entityType: 'Payment',
+          entityId: created.id,
+          metadata: {
             invoiceId: invoice.id,
-            amount: new Prisma.Decimal(input.amount),
+            amount: input.amount,
             method: input.method,
-            externalTransactionId: input.externalTransactionId,
-            idempotencyKey: input.idempotencyKey,
-            // v1 has no live payment gateway (docs/roadmap.md) — a recorded
-            // Payment is "recorded, not processed" and therefore already
-            // succeeded; there is no PENDING/webhook-callback flow.
-            status: PaymentStatus.SUCCEEDED,
-            processedAt: new Date(),
           },
         })
-      } catch (error) {
-        this.translatePrismaError(
-          error,
-          'Payment collision (duplicate idempotency key or external transaction id), retry',
-        )
-      }
 
-      const succeededPayments = await tx.payment.findMany({
-        where: { invoiceId: invoice.id, status: PaymentStatus.SUCCEEDED },
-      })
-      const totalPaid = succeededPayments.reduce(
-        (sum, candidate) => sum.plus(candidate.amount),
-        new Prisma.Decimal(0),
+        return {
+          payment: created,
+          invoiceNumber: invoice.invoiceNumber,
+          partnerId: invoice.partnerId,
+          isNew: true,
+        }
+      },
+    )
+
+    // Only a freshly created Payment emits — an idempotent replay must never
+    // double-notify for the same payment (event-emitter has no dedup of its
+    // own, so the guard lives here at the emit call site).
+    if (isNew) {
+      this.eventEmitter.emit(
+        PaymentRecordedEvent.EVENT_NAME,
+        new PaymentRecordedEvent(
+          payment.id,
+          payment.invoiceId,
+          invoiceNumber as string,
+          partnerId as string,
+          input.amount,
+          input.method,
+        ),
       )
-
-      let nextStatus: InvoiceStatus | undefined
-      if (totalPaid.greaterThanOrEqualTo(invoice.amountDue)) nextStatus = InvoiceStatus.PAID
-      else if (totalPaid.greaterThan(0)) nextStatus = InvoiceStatus.PARTIALLY_PAID
-
-      if (nextStatus !== undefined) {
-        await tx.invoice.update({ where: { id: invoice.id }, data: { status: nextStatus } })
-      }
-
-      await this.auditLogService.record(tx, {
-        actorUserId: user.id,
-        action: 'payment.recorded',
-        entityType: 'Payment',
-        entityId: created.id,
-        metadata: {
-          invoiceId: invoice.id,
-          amount: input.amount,
-          method: input.method,
-        },
-      })
-
-      return created
-    })
+    }
 
     return this.mapPaymentToOutput(payment)
   }
