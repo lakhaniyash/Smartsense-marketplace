@@ -1,0 +1,24 @@
+query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {
+  notifications(first: $first, after: $after, filter: $filter) {
+    edges {
+      cursor
+      node {
+        id
+        type
+        title
+        body
+        entityType
+        entityId
+        status
+        readAt
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

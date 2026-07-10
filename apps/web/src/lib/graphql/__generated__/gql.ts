@@ -33,6 +33,10 @@ type Documents = {
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": typeof types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": typeof types.UpdateProductVariantDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": typeof types.DashboardStatsDocument,
+    "query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetNotificationsDocument,
+    "query GetUnreadNotificationCount {\n  unreadNotificationCount\n}": typeof types.GetUnreadNotificationCountDocument,
+    "mutation MarkAllNotificationsRead {\n  markAllNotificationsRead\n}": typeof types.MarkAllNotificationsReadDocument,
+    "mutation MarkNotificationRead($id: ID!) {\n  markNotificationRead(id: $id) {\n    id\n    status\n    readAt\n  }\n}": typeof types.MarkNotificationReadDocument,
     "mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}": typeof types.CancelOrderDocument,
     "mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}": typeof types.CreateOrderDocument,
     "query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}": typeof types.GetOrderByIdDocument,
@@ -60,6 +64,10 @@ const documents: Documents = {
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": types.UpdateProductVariantDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": types.DashboardStatsDocument,
+    "query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetNotificationsDocument,
+    "query GetUnreadNotificationCount {\n  unreadNotificationCount\n}": types.GetUnreadNotificationCountDocument,
+    "mutation MarkAllNotificationsRead {\n  markAllNotificationsRead\n}": types.MarkAllNotificationsReadDocument,
+    "mutation MarkNotificationRead($id: ID!) {\n  markNotificationRead(id: $id) {\n    id\n    status\n    readAt\n  }\n}": types.MarkNotificationReadDocument,
     "mutation CancelOrder($id: ID!, $reason: String) {\n  cancelOrder(id: $id, reason: $reason) {\n    id\n    status\n  }\n}": types.CancelOrderDocument,
     "mutation CreateOrder($input: CreateOrderInput!) {\n  createOrder(input: $input) {\n    id\n    orderNumber\n    status\n  }\n}": types.CreateOrderDocument,
     "query GetOrderById($id: ID!) {\n  order(id: $id) {\n    id\n    orderNumber\n    status\n    customerId\n    partnerId\n    shippingAddressId\n    subtotal\n    tax\n    shippingCost\n    total\n    placedAt\n    createdAt\n    updatedAt\n    items {\n      id\n      productVariantId\n      quantity\n      unitPriceSnapshot\n      lineTotal\n      productVariant {\n        id\n        sku\n        attributes {\n          key\n          value\n        }\n      }\n    }\n    statusHistory {\n      id\n      fromStatus\n      toStatus\n      changedByUserId\n      reason\n      createdAt\n    }\n  }\n}": types.GetOrderByIdDocument,
@@ -158,6 +166,22 @@ export function gql(source: "mutation UpdateProductVariant($input: UpdateProduct
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}"): (typeof documents)["query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetUnreadNotificationCount {\n  unreadNotificationCount\n}"): (typeof documents)["query GetUnreadNotificationCount {\n  unreadNotificationCount\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation MarkAllNotificationsRead {\n  markAllNotificationsRead\n}"): (typeof documents)["mutation MarkAllNotificationsRead {\n  markAllNotificationsRead\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation MarkNotificationRead($id: ID!) {\n  markNotificationRead(id: $id) {\n    id\n    status\n    readAt\n  }\n}"): (typeof documents)["mutation MarkNotificationRead($id: ID!) {\n  markNotificationRead(id: $id) {\n    id\n    status\n    readAt\n  }\n}"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

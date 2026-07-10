@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth, usePermissions } from '@features/auth'
+import { NotificationsMenu } from '@features/notifications'
 import { Button, CommandPalette, Drawer } from '@shared/components'
 import { DashboardIcon, MenuIcon, OrdersIcon, ProductsIcon, RevenueIcon } from '@shared/icons'
 import { ROUTES } from '@shared/constants'
@@ -82,6 +83,7 @@ export function AppShell({ roleLabel }: AppShellProps) {
           title="SmartSense Marketplace"
           subtitle={roleLabel}
           onOpenSearch={() => setIsCommandPaletteOpen(true)}
+          notificationsSlot={<NotificationsMenu />}
           leading={
             <Button
               variant="ghost"

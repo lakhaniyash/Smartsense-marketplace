@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Input, Kbd, NotificationsMenu, ThemeToggle } from '@shared/components'
+import { Input, Kbd, ThemeToggle } from '@shared/components'
 import { SearchIcon } from '@shared/icons'
 import { cn } from '@shared/utils'
 
@@ -8,6 +8,13 @@ export interface HeaderProps {
   subtitle?: string
   onOpenSearch?: () => void
   leading?: ReactNode
+  /**
+   * Slot for the notifications dropdown — injected by the caller (e.g.
+   * AppShell) rather than imported here, since NotificationsMenu is a
+   * feature component (@features/notifications) and shared/ never imports
+   * from features/ (docs/frontend-architecture.md § dependency direction).
+   */
+  notificationsSlot?: ReactNode
   className?: string
 }
 
@@ -17,7 +24,14 @@ export interface HeaderProps {
 // `onOpenSearch` opens the shared Cmd/Ctrl+K command palette
 // (app/layouts/AppShell.tsx owns that state) — the search box here is a
 // trigger, not a second search implementation.
-export function Header({ title, subtitle, onOpenSearch, leading, className }: HeaderProps) {
+export function Header({
+  title,
+  subtitle,
+  onOpenSearch,
+  leading,
+  notificationsSlot,
+  className,
+}: HeaderProps) {
   return (
     <header
       className={cn(
@@ -63,7 +77,7 @@ export function Header({ title, subtitle, onOpenSearch, leading, className }: He
             </div>
           </>
         )}
-        <NotificationsMenu />
+        {notificationsSlot}
         <ThemeToggle />
       </div>
     </header>

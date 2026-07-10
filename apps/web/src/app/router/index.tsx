@@ -38,6 +38,9 @@ const BillingPage = lazy(() =>
 const InvoiceDetailPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.InvoiceDetailPage })),
 )
+const NotificationsPage = lazy(() =>
+  import('@features/notifications').then((m) => ({ default: m.NotificationsPage })),
+)
 
 function withSuspense(element: ReactNode) {
   return <Suspense fallback={<AppLoadingState />}>{element}</Suspense>
@@ -145,6 +148,17 @@ const router = createBrowserRouter([
                 },
               },
             ],
+          },
+          // No PermissionRoute wrapper: a Notification is inherently a
+          // personal resource (recipientId === user.id), never a role-scoped
+          // "someone else's data" concern the way Catalog/Orders/Billing are —
+          // plain authentication is the correct and only gate here (matches
+          // the backend's deliberate absence of a notifications:* permission
+          // key, docs/authorization.md).
+          {
+            path: ROUTES.NOTIFICATIONS.slice(1),
+            element: withSuspense(<NotificationsPage />),
+            handle: { crumb: [{ label: 'Notifications' }] },
           },
         ],
       },
