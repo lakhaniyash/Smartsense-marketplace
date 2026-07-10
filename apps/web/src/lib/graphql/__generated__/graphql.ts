@@ -56,6 +56,15 @@ export type CreateOrderItemInput = {
   quantity: Scalars['Int']['input'];
 };
 
+export type CreatePaymentInput = {
+  amount: Scalars['Decimal']['input'];
+  externalTransactionId: Scalars['String']['input'];
+  /** Caller-generated UUID; retries must reuse the same value. */
+  idempotencyKey: Scalars['ID']['input'];
+  invoiceId: Scalars['ID']['input'];
+  method: PaymentMethod;
+};
+
 export type CreateProductInput = {
   brand?: InputMaybe<Scalars['String']['input']>;
   categoryId: Scalars['ID']['input'];
@@ -91,11 +100,11 @@ export type CurrentUser = {
 /** Marketplace-wide summary counts shown on the dashboard overview. */
 export type DashboardStats = {
   __typename?: 'DashboardStats';
-  /** Mock total customer count — replaced when Orders (M13) ships. */
+  /** Total non-deleted Customer count, marketplace-wide. */
   totalCustomers: Scalars['Int']['output'];
-  /** Mock total order count — replaced when Orders (M13) ships. */
+  /** Total Order count, marketplace-wide. */
   totalOrders: Scalars['Int']['output'];
-  /** Mock total product count — replaced when Catalog (M12) ships. */
+  /** Total non-deleted Product count, marketplace-wide. */
   totalProducts: Scalars['Int']['output'];
 };
 
@@ -118,6 +127,62 @@ export enum InventoryAdjustmentType {
   Set = 'SET'
 }
 
+/** A per-Order billing document (docs/domain-model.md § Invoice). */
+export type Invoice = {
+  __typename?: 'Invoice';
+  amountDue: Scalars['Decimal']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  dueAt?: Maybe<Scalars['DateTime']['output']>;
+  id: Scalars['ID']['output'];
+  invoiceNumber: Scalars['String']['output'];
+  issuedAt?: Maybe<Scalars['DateTime']['output']>;
+  orderId: Scalars['ID']['output'];
+  partnerId: Scalars['ID']['output'];
+  payments: Array<Payment>;
+  status: InvoiceStatus;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type InvoiceConnection = {
+  __typename?: 'InvoiceConnection';
+  edges: Array<InvoiceEdge>;
+  pageInfo: PageInfo;
+};
+
+export type InvoiceEdge = {
+  __typename?: 'InvoiceEdge';
+  cursor: Scalars['String']['output'];
+  node: Invoice;
+};
+
+export type InvoiceFilterInput = {
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+  status?: InputMaybe<InvoiceStatus>;
+};
+
+/** Fields the invoice list can be sorted by. */
+export enum InvoiceSortField {
+  AmountDue = 'AMOUNT_DUE',
+  CreatedAt = 'CREATED_AT',
+  DueAt = 'DUE_AT',
+  IssuedAt = 'ISSUED_AT'
+}
+
+export type InvoiceSortInput = {
+  direction: SortDirection;
+  field: InvoiceSortField;
+};
+
+/** Full lifecycle per docs/domain-model.md § Invoice: DRAFT (generated but not yet sent) → ISSUED → PARTIALLY_PAID → PAID, or ISSUED/DRAFT → VOID. generateInvoiceForOrder creates Invoices directly as ISSUED (docs/domain-model.md § Billing Flow) — DRAFT exists in the schema for a future pre-issuance workflow. */
+export enum InvoiceStatus {
+  Draft = 'DRAFT',
+  Issued = 'ISSUED',
+  Paid = 'PAID',
+  PartiallyPaid = 'PARTIALLY_PAID',
+  Void = 'VOID'
+}
+
 export type Mutation = {
   __typename?: 'Mutation';
   /** Adjusts a ProductVariant's stock on hand and returns the updated Variant. */
@@ -134,6 +199,8 @@ export type Mutation = {
   createProduct: Product;
   /** Adds a ProductVariant to a Product owned by the caller. */
   createProductVariant: ProductVariant;
+  /** Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate. */
+  recordPayment: Payment;
   /** Marks a ProductVariant as its Product's default, unsetting any previous default. */
   setDefaultProductVariant: ProductVariant;
   /** Transitions an Order to a new status per the allowed transition matrix (docs/authorization.md § Orders). Rejects any other requested transition as invalid. */
@@ -142,6 +209,8 @@ export type Mutation = {
   updateProduct: Product;
   /** Updates a ProductVariant owned by the caller. */
   updateProductVariant: ProductVariant;
+  /** Voids a DRAFT/ISSUED Invoice with zero recorded Payments (docs/domain-model.md § Invoice). */
+  voidInvoice: Invoice;
 };
 
 
@@ -181,6 +250,11 @@ export type MutationCreateProductVariantArgs = {
 };
 
 
+export type MutationRecordPaymentArgs = {
+  input: CreatePaymentInput;
+};
+
+
 export type MutationSetDefaultProductVariantArgs = {
   id: Scalars['ID']['input'];
 };
@@ -200,6 +274,11 @@ export type MutationUpdateProductArgs = {
 
 export type MutationUpdateProductVariantArgs = {
   input: UpdateProductVariantInput;
+};
+
+
+export type MutationVoidInvoiceArgs = {
+  id: Scalars['ID']['input'];
 };
 
 /** A single-Partner order (docs/domain-model.md § Order). */
@@ -267,7 +346,7 @@ export type OrderSortInput = {
   field: OrderSortField;
 };
 
-/** Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 only implements transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED — the remaining values exist in the schema for future milestones (fulfillment, billing) and are not yet reachable. */
+/** Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 implemented transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED; M14 (Billing) added PROCESSING→SHIPPED→DELIVERED→COMPLETED so invoice generation has a trigger — the remaining values (PENDING_PAYMENT, RETURN_REQUESTED, REFUNDED) exist in the schema for future milestones and are not yet reachable. */
 export enum OrderStatus {
   Cancelled = 'CANCELLED',
   Completed = 'COMPLETED',
@@ -300,6 +379,34 @@ export type PageInfo = {
   hasPreviousPage: Scalars['Boolean']['output'];
   startCursor?: Maybe<Scalars['String']['output']>;
 };
+
+/** A single payment transaction applied against an Invoice (docs/domain-model.md § Payment). */
+export type Payment = {
+  __typename?: 'Payment';
+  amount: Scalars['Decimal']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  externalTransactionId: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  invoiceId: Scalars['ID']['output'];
+  method: PaymentMethod;
+  processedAt?: Maybe<Scalars['DateTime']['output']>;
+  status: PaymentStatus;
+};
+
+/** How a Payment was settled (docs/domain-model.md § Payment). */
+export enum PaymentMethod {
+  BankTransfer = 'BANK_TRANSFER',
+  Card = 'CARD',
+  Other = 'OTHER'
+}
+
+/** v1 has no live payment gateway (docs/roadmap.md) — a recorded Payment is created directly as SUCCEEDED. PENDING/FAILED/REFUNDED exist in the schema for a future gateway integration and are not yet reachable through recordPayment. */
+export enum PaymentStatus {
+  Failed = 'FAILED',
+  Pending = 'PENDING',
+  Refunded = 'REFUNDED',
+  Succeeded = 'SUCCEEDED'
+}
 
 /** A Partner catalog listing. Always has at least one ProductVariant (docs/domain-model.md § Product Variant); `sku` is flattened from the default one for convenience, and `variants` carries the full list for management. */
 export type Product = {
@@ -401,6 +508,14 @@ export type Query = {
   dashboardStats: DashboardStats;
   /** Dashboard module status */
   dashboardStatus: Scalars['String']['output'];
+  /** A CSV export of the caller's visible invoices, matching the given filter. */
+  exportInvoicesCsv: Scalars['String']['output'];
+  /** A single invoice by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
+  invoice: Invoice;
+  /** A base64-encoded PDF rendering of a single invoice by id. */
+  invoicePdf: Scalars['String']['output'];
+  /** A page of the caller's visible invoices (Admin: all; Partner: own as vendor). */
+  invoices: InvoiceConnection;
   /** The authenticated caller and their resolved roles/permissions. */
   me: CurrentUser;
   /** A single order by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
@@ -415,6 +530,29 @@ export type Query = {
   products: ProductConnection;
   /** Users module status */
   usersStatus: Scalars['String']['output'];
+};
+
+
+export type QueryExportInvoicesCsvArgs = {
+  filter?: InputMaybe<InvoiceFilterInput>;
+};
+
+
+export type QueryInvoiceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryInvoicePdfArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryInvoicesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<InvoiceFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<InvoiceSortInput>;
 };
 
 
@@ -472,6 +610,51 @@ export type MeQueryVariables = Exact<{ [key: string]: never; }>;
 
 
 export type MeQuery = { __typename?: 'Query', me: { __typename?: 'CurrentUser', id: string, email: string, fullName: string, roles: Array<string>, permissions: Array<string> } };
+
+export type ExportInvoicesCsvQueryVariables = Exact<{
+  filter?: InputMaybe<InvoiceFilterInput>;
+}>;
+
+
+export type ExportInvoicesCsvQuery = { __typename?: 'Query', exportInvoicesCsv: string };
+
+export type GetInvoiceByIdQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type GetInvoiceByIdQuery = { __typename?: 'Query', invoice: { __typename?: 'Invoice', id: string, invoiceNumber: string, orderId: string, partnerId: string, amountDue: string, status: InvoiceStatus, issuedAt?: any | null, dueAt?: any | null, createdAt: any, updatedAt: any, payments: Array<{ __typename?: 'Payment', id: string, amount: string, method: PaymentMethod, externalTransactionId: string, status: PaymentStatus, processedAt?: any | null, createdAt: any }> } };
+
+export type GetInvoicesQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<InvoiceFilterInput>;
+  sort?: InputMaybe<InvoiceSortInput>;
+}>;
+
+
+export type GetInvoicesQuery = { __typename?: 'Query', invoices: { __typename?: 'InvoiceConnection', edges: Array<{ __typename?: 'InvoiceEdge', cursor: string, node: { __typename?: 'Invoice', id: string, invoiceNumber: string, partnerId: string, amountDue: string, status: InvoiceStatus, issuedAt?: any | null, dueAt?: any | null, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } };
+
+export type InvoicePdfQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type InvoicePdfQuery = { __typename?: 'Query', invoicePdf: string };
+
+export type RecordPaymentMutationVariables = Exact<{
+  input: CreatePaymentInput;
+}>;
+
+
+export type RecordPaymentMutation = { __typename?: 'Mutation', recordPayment: { __typename?: 'Payment', id: string, amount: string, status: PaymentStatus, invoiceId: string, externalTransactionId: string } };
+
+export type VoidInvoiceMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type VoidInvoiceMutation = { __typename?: 'Mutation', voidInvoice: { __typename?: 'Invoice', id: string, status: InvoiceStatus } };
 
 export type AdjustInventoryMutationVariables = Exact<{
   input: AdjustInventoryInput;
@@ -605,6 +788,12 @@ export type UpdateOrderStatusMutation = { __typename?: 'Mutation', updateOrderSt
 
 
 export const MeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"fullName"}},{"kind":"Field","name":{"kind":"Name","value":"roles"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]} as unknown as DocumentNode<MeQuery, MeQueryVariables>;
+export const ExportInvoicesCsvDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ExportInvoicesCsv"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InvoiceFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"exportInvoicesCsv"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}]}]}}]} as unknown as DocumentNode<ExportInvoicesCsvQuery, ExportInvoicesCsvQueryVariables>;
+export const GetInvoiceByIdDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetInvoiceById"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invoice"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceNumber"}},{"kind":"Field","name":{"kind":"Name","value":"orderId"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"amountDue"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"issuedAt"}},{"kind":"Field","name":{"kind":"Name","value":"dueAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"payments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"method"}},{"kind":"Field","name":{"kind":"Name","value":"externalTransactionId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"processedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]}}]} as unknown as DocumentNode<GetInvoiceByIdQuery, GetInvoiceByIdQueryVariables>;
+export const GetInvoicesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetInvoices"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InvoiceFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InvoiceSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invoices"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceNumber"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"amountDue"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"issuedAt"}},{"kind":"Field","name":{"kind":"Name","value":"dueAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetInvoicesQuery, GetInvoicesQueryVariables>;
+export const InvoicePdfDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InvoicePdf"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invoicePdf"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<InvoicePdfQuery, InvoicePdfQueryVariables>;
+export const RecordPaymentDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RecordPayment"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreatePaymentInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"recordPayment"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceId"}},{"kind":"Field","name":{"kind":"Name","value":"externalTransactionId"}}]}}]}}]} as unknown as DocumentNode<RecordPaymentMutation, RecordPaymentMutationVariables>;
+export const VoidInvoiceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"VoidInvoice"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"voidInvoice"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<VoidInvoiceMutation, VoidInvoiceMutationVariables>;
 export const AdjustInventoryDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AdjustInventory"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AdjustInventoryInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"adjustInventory"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"inventory"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantityOnHand"}},{"kind":"Field","name":{"kind":"Name","value":"quantityReserved"}},{"kind":"Field","name":{"kind":"Name","value":"sellableQuantity"}},{"kind":"Field","name":{"kind":"Name","value":"reorderThreshold"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]}}]} as unknown as DocumentNode<AdjustInventoryMutation, AdjustInventoryMutationVariables>;
 export const ArchiveProductDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ArchiveProduct"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"archiveProduct"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<ArchiveProductMutation, ArchiveProductMutationVariables>;
 export const ArchiveProductVariantDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ArchiveProductVariant"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"archiveProductVariant"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<ArchiveProductVariantMutation, ArchiveProductVariantMutationVariables>;

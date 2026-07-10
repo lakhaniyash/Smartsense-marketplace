@@ -1,0 +1,23 @@
+query GetInvoiceById($id: ID!) {
+  invoice(id: $id) {
+    id
+    invoiceNumber
+    orderId
+    partnerId
+    amountDue
+    status
+    issuedAt
+    dueAt
+    createdAt
+    updatedAt
+    payments {
+      id
+      amount
+      method
+      externalTransactionId
+      status
+      processedAt
+      createdAt
+    }
+  }
+}

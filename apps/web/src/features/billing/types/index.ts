@@ -1,10 +1,13 @@
-export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue' | 'cancelled'
+import type {
+  InvoiceSortField,
+  InvoiceStatus,
+  SortDirection,
+} from '@lib/graphql/__generated__/graphql'
 
-export type PaymentMethod = 'card' | 'bank_transfer' | 'wallet'
-
-export interface BillingFilters {
-  search?: string
-  status?: InvoiceStatus
-  dateFrom?: string
-  dateTo?: string
+// URL-backed filter/sort state for the invoice list — same pattern as
+// OrderFilters (docs/frontend-architecture.md § State Management Strategy).
+export interface InvoiceFilters {
+  status?: InvoiceStatus | undefined
+  sortField?: InvoiceSortField | undefined
+  sortDirection?: SortDirection | undefined
 }

@@ -15,6 +15,12 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  */
 type Documents = {
     "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}": typeof types.MeDocument,
+    "query ExportInvoicesCsv($filter: InvoiceFilterInput) {\n  exportInvoicesCsv(filter: $filter)\n}": typeof types.ExportInvoicesCsvDocument,
+    "query GetInvoiceById($id: ID!) {\n  invoice(id: $id) {\n    id\n    invoiceNumber\n    orderId\n    partnerId\n    amountDue\n    status\n    issuedAt\n    dueAt\n    createdAt\n    updatedAt\n    payments {\n      id\n      amount\n      method\n      externalTransactionId\n      status\n      processedAt\n      createdAt\n    }\n  }\n}": typeof types.GetInvoiceByIdDocument,
+    "query GetInvoices($first: Int, $after: String, $filter: InvoiceFilterInput, $sort: InvoiceSortInput) {\n  invoices(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        invoiceNumber\n        partnerId\n        amountDue\n        status\n        issuedAt\n        dueAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetInvoicesDocument,
+    "query InvoicePdf($id: ID!) {\n  invoicePdf(id: $id)\n}": typeof types.InvoicePdfDocument,
+    "mutation RecordPayment($input: CreatePaymentInput!) {\n  recordPayment(input: $input) {\n    id\n    amount\n    status\n    invoiceId\n    externalTransactionId\n  }\n}": typeof types.RecordPaymentDocument,
+    "mutation VoidInvoice($id: ID!) {\n  voidInvoice(id: $id) {\n    id\n    status\n  }\n}": typeof types.VoidInvoiceDocument,
     "mutation AdjustInventory($input: AdjustInventoryInput!) {\n  adjustInventory(input: $input) {\n    id\n    status\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n  }\n}": typeof types.AdjustInventoryDocument,
     "mutation ArchiveProduct($id: ID!) {\n  archiveProduct(id: $id) {\n    id\n    status\n  }\n}": typeof types.ArchiveProductDocument,
     "mutation ArchiveProductVariant($id: ID!) {\n  archiveProductVariant(id: $id) {\n    id\n  }\n}": typeof types.ArchiveProductVariantDocument,
@@ -36,6 +42,12 @@ type Documents = {
 };
 const documents: Documents = {
     "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}": types.MeDocument,
+    "query ExportInvoicesCsv($filter: InvoiceFilterInput) {\n  exportInvoicesCsv(filter: $filter)\n}": types.ExportInvoicesCsvDocument,
+    "query GetInvoiceById($id: ID!) {\n  invoice(id: $id) {\n    id\n    invoiceNumber\n    orderId\n    partnerId\n    amountDue\n    status\n    issuedAt\n    dueAt\n    createdAt\n    updatedAt\n    payments {\n      id\n      amount\n      method\n      externalTransactionId\n      status\n      processedAt\n      createdAt\n    }\n  }\n}": types.GetInvoiceByIdDocument,
+    "query GetInvoices($first: Int, $after: String, $filter: InvoiceFilterInput, $sort: InvoiceSortInput) {\n  invoices(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        invoiceNumber\n        partnerId\n        amountDue\n        status\n        issuedAt\n        dueAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetInvoicesDocument,
+    "query InvoicePdf($id: ID!) {\n  invoicePdf(id: $id)\n}": types.InvoicePdfDocument,
+    "mutation RecordPayment($input: CreatePaymentInput!) {\n  recordPayment(input: $input) {\n    id\n    amount\n    status\n    invoiceId\n    externalTransactionId\n  }\n}": types.RecordPaymentDocument,
+    "mutation VoidInvoice($id: ID!) {\n  voidInvoice(id: $id) {\n    id\n    status\n  }\n}": types.VoidInvoiceDocument,
     "mutation AdjustInventory($input: AdjustInventoryInput!) {\n  adjustInventory(input: $input) {\n    id\n    status\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n  }\n}": types.AdjustInventoryDocument,
     "mutation ArchiveProduct($id: ID!) {\n  archiveProduct(id: $id) {\n    id\n    status\n  }\n}": types.ArchiveProductDocument,
     "mutation ArchiveProductVariant($id: ID!) {\n  archiveProductVariant(id: $id) {\n    id\n  }\n}": types.ArchiveProductVariantDocument,
@@ -74,6 +86,30 @@ export function gql(source: string): unknown;
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}"): (typeof documents)["query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query ExportInvoicesCsv($filter: InvoiceFilterInput) {\n  exportInvoicesCsv(filter: $filter)\n}"): (typeof documents)["query ExportInvoicesCsv($filter: InvoiceFilterInput) {\n  exportInvoicesCsv(filter: $filter)\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetInvoiceById($id: ID!) {\n  invoice(id: $id) {\n    id\n    invoiceNumber\n    orderId\n    partnerId\n    amountDue\n    status\n    issuedAt\n    dueAt\n    createdAt\n    updatedAt\n    payments {\n      id\n      amount\n      method\n      externalTransactionId\n      status\n      processedAt\n      createdAt\n    }\n  }\n}"): (typeof documents)["query GetInvoiceById($id: ID!) {\n  invoice(id: $id) {\n    id\n    invoiceNumber\n    orderId\n    partnerId\n    amountDue\n    status\n    issuedAt\n    dueAt\n    createdAt\n    updatedAt\n    payments {\n      id\n      amount\n      method\n      externalTransactionId\n      status\n      processedAt\n      createdAt\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetInvoices($first: Int, $after: String, $filter: InvoiceFilterInput, $sort: InvoiceSortInput) {\n  invoices(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        invoiceNumber\n        partnerId\n        amountDue\n        status\n        issuedAt\n        dueAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetInvoices($first: Int, $after: String, $filter: InvoiceFilterInput, $sort: InvoiceSortInput) {\n  invoices(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        invoiceNumber\n        partnerId\n        amountDue\n        status\n        issuedAt\n        dueAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query InvoicePdf($id: ID!) {\n  invoicePdf(id: $id)\n}"): (typeof documents)["query InvoicePdf($id: ID!) {\n  invoicePdf(id: $id)\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation RecordPayment($input: CreatePaymentInput!) {\n  recordPayment(input: $input) {\n    id\n    amount\n    status\n    invoiceId\n    externalTransactionId\n  }\n}"): (typeof documents)["mutation RecordPayment($input: CreatePaymentInput!) {\n  recordPayment(input: $input) {\n    id\n    amount\n    status\n    invoiceId\n    externalTransactionId\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation VoidInvoice($id: ID!) {\n  voidInvoice(id: $id) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation VoidInvoice($id: ID!) {\n  voidInvoice(id: $id) {\n    id\n    status\n  }\n}"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

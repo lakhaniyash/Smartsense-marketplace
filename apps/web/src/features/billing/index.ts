@@ -1,2 +1,2 @@
-export type { InvoiceStatus, PaymentMethod, BillingFilters } from './types'
-export { BillingPage } from './pages'
+export type { InvoiceFilters } from './types'
+export { BillingPage, InvoiceDetailPage } from './pages'

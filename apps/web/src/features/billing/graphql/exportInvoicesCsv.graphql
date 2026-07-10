@@ -1,0 +1,3 @@
+query ExportInvoicesCsv($filter: InvoiceFilterInput) {
+  exportInvoicesCsv(filter: $filter)
+}

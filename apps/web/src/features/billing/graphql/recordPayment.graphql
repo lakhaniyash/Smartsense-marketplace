@@ -1,0 +1,9 @@
+mutation RecordPayment($input: CreatePaymentInput!) {
+  recordPayment(input: $input) {
+    id
+    amount
+    status
+    invoiceId
+    externalTransactionId
+  }
+}
