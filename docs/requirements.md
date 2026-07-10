@@ -76,7 +76,8 @@ Can access everything.
 
 ## Partner
 
-Can manage products, orders, reports, billing.
+Can manage products and orders; billing/reports access is read-only (`billing:read`, no
+`billing:manage` — see [authorization.md](./authorization.md) § Resource Authorization).
 
 ## Customer
 
