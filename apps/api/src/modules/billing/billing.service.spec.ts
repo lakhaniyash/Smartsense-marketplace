@@ -66,6 +66,7 @@ describe('BillingService', () => {
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock }
+  let eventEmitter: { emit: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -81,7 +82,8 @@ describe('BillingService', () => {
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn() }
-    service = new BillingService(prisma as never, auditLogService as never)
+    eventEmitter = { emit: jest.fn() }
+    service = new BillingService(prisma as never, auditLogService as never, eventEmitter as never)
   })
 
   describe('generateInvoiceForOrder', () => {
@@ -117,6 +119,32 @@ describe('BillingService', () => {
           action: 'invoice.generated',
           entityType: 'Invoice',
           entityId: 'invoice-9',
+        }),
+      )
+    })
+
+    it('emits InvoiceGeneratedEvent after the transaction commits', async () => {
+      prisma.invoice.create.mockResolvedValueOnce(
+        invoiceFixture({
+          id: 'invoice-9',
+          invoiceNumber: 'INV-0009',
+          partnerId: 'partner-9',
+          amountDue: new Prisma.Decimal(250),
+        }),
+      )
+
+      const event = new OrderCompletedEvent('order-9', 'ORD-0009', 'partner-9', '250', 'user-9')
+      await service.generateInvoiceForOrder(event)
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'invoice.generated',
+        expect.objectContaining({
+          invoiceId: 'invoice-9',
+          invoiceNumber: 'INV-0009',
+          orderId: 'order-9',
+          orderNumber: 'ORD-0009',
+          partnerId: 'partner-9',
+          amountDue: '250',
         }),
       )
     })
@@ -254,6 +282,44 @@ describe('BillingService', () => {
 
       expect(prisma.payment.create).toHaveBeenCalledTimes(1)
       expect(first).toEqual(second)
+    })
+
+    it('emits PaymentRecordedEvent for a freshly created payment', async () => {
+      prisma.payment.findUnique.mockResolvedValueOnce(null)
+      prisma.invoice.findUnique.mockResolvedValueOnce(
+        invoiceFixture({
+          id: 'invoice-1',
+          invoiceNumber: 'INV-0001',
+          partnerId: 'partner-1',
+          amountDue: new Prisma.Decimal(100),
+        }),
+      )
+      prisma.payment.create.mockResolvedValueOnce(paymentFixture({ id: 'payment-9' }))
+      prisma.payment.findMany.mockResolvedValueOnce([
+        paymentFixture({ amount: new Prisma.Decimal(50) }),
+      ])
+
+      await service.recordPayment(user(), input)
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'payment.recorded',
+        expect.objectContaining({
+          paymentId: 'payment-9',
+          invoiceId: 'invoice-1',
+          invoiceNumber: 'INV-0001',
+          partnerId: 'partner-1',
+          amount: '50',
+        }),
+      )
+    })
+
+    it('does not re-emit PaymentRecordedEvent on an idempotent replay', async () => {
+      prisma.payment.findUnique.mockResolvedValueOnce(paymentFixture())
+
+      await service.recordPayment(user(), input)
+
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith('payment.recorded', expect.anything())
+      expect(prisma.payment.create).not.toHaveBeenCalled()
     })
 
     it('transitions Invoice.status to PARTIALLY_PAID when the payment is less than amountDue', async () => {
