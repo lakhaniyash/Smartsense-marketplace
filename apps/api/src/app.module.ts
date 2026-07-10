@@ -16,6 +16,7 @@ import { AuthModule } from './modules/auth/auth.module'
 import { BillingModule } from './modules/billing/billing.module'
 import { CatalogModule } from './modules/catalog/catalog.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
+import { NotificationsModule } from './modules/notifications/notifications.module'
 import { OrdersModule } from './modules/orders/orders.module'
 import { UsersModule } from './modules/users/users.module'
 
@@ -42,9 +43,11 @@ import { UsersModule } from './modules/users/users.module'
       }),
     }),
     // First event-driven machinery in the codebase, introduced by Orders (M13)
-    // — domain events (OrderCreated, InventoryReserved, ...) so M16
-    // Notifications has something to subscribe to later. See
-    // modules/orders/events/ and modules/catalog/events/.
+    // — domain events (OrderCreated, InventoryReserved, ...). M16
+    // Notifications is the real consumer: see
+    // modules/notifications/listeners/notification-events.listener.ts, plus
+    // modules/orders/events/, modules/catalog/events/, and the 2 new
+    // Billing events under modules/billing/events/.
     EventEmitterModule.forRoot(),
     CommonModule,
     PrismaModule,
@@ -55,6 +58,7 @@ import { UsersModule } from './modules/users/users.module'
     CatalogModule,
     OrdersModule,
     BillingModule,
+    NotificationsModule,
   ],
   providers: [
     {
