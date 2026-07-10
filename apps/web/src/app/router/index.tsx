@@ -35,6 +35,9 @@ const OrderFormPage = lazy(() =>
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
 )
+const InvoiceDetailPage = lazy(() =>
+  import('@features/billing').then((m) => ({ default: m.InvoiceDetailPage })),
+)
 
 function withSuspense(element: ReactNode) {
   return <Suspense fallback={<AppLoadingState />}>{element}</Suspense>
@@ -132,7 +135,16 @@ const router = createBrowserRouter([
           },
           {
             element: <PermissionRoute permission="billing:read" />,
-            children: [{ path: ROUTES.BILLING.slice(1), element: withSuspense(<BillingPage />) }],
+            children: [
+              { path: ROUTES.BILLING.slice(1), element: withSuspense(<BillingPage />) },
+              {
+                path: `${ROUTES.BILLING.slice(1)}/:id`,
+                element: withSuspense(<InvoiceDetailPage />),
+                handle: {
+                  crumb: [{ label: 'Billing', href: ROUTES.BILLING }, { label: 'Invoice' }],
+                },
+              },
+            ],
           },
         ],
       },

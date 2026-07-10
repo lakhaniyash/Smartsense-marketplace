@@ -45,6 +45,16 @@ input CreateOrderItemInput {
   quantity: Int!
 }
 
+input CreatePaymentInput {
+  amount: Decimal!
+  externalTransactionId: String!
+
+  """Caller-generated UUID; retries must reuse the same value."""
+  idempotencyKey: ID!
+  invoiceId: ID!
+  method: PaymentMethod!
+}
+
 input CreateProductInput {
   brand: String
   categoryId: ID!
@@ -131,6 +141,63 @@ enum InventoryAdjustmentType {
   SET
 }
 
+"""A per-Order billing document (docs/domain-model.md § Invoice)."""
+type Invoice {
+  amountDue: Decimal!
+  createdAt: DateTime!
+  dueAt: DateTime
+  id: ID!
+  invoiceNumber: String!
+  issuedAt: DateTime
+  orderId: ID!
+  partnerId: ID!
+  payments: [Payment!]!
+  status: InvoiceStatus!
+  updatedAt: DateTime!
+}
+
+type InvoiceConnection {
+  edges: [InvoiceEdge!]!
+  pageInfo: PageInfo!
+}
+
+type InvoiceEdge {
+  cursor: String!
+  node: Invoice!
+}
+
+input InvoiceFilterInput {
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+  status: InvoiceStatus
+}
+
+"""Fields the invoice list can be sorted by."""
+enum InvoiceSortField {
+  AMOUNT_DUE
+  CREATED_AT
+  DUE_AT
+  ISSUED_AT
+}
+
+input InvoiceSortInput {
+  direction: SortDirection!
+  field: InvoiceSortField!
+}
+
+"""
+Full lifecycle per docs/domain-model.md § Invoice: DRAFT (generated but not yet sent) → ISSUED → PARTIALLY_PAID → PAID, or ISSUED/DRAFT → VOID. generateInvoiceForOrder creates Invoices directly as ISSUED (docs/domain-model.md § Billing Flow) — DRAFT exists in the schema for a future pre-issuance workflow.
+"""
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  VOID
+}
+
 type Mutation {
   """
   Adjusts a ProductVariant's stock on hand and returns the updated Variant.
@@ -162,6 +229,11 @@ type Mutation {
   createProductVariant(input: CreateProductVariantInput!): ProductVariant!
 
   """
+  Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate.
+  """
+  recordPayment(input: CreatePaymentInput!): Payment!
+
+  """
   Marks a ProductVariant as its Product's default, unsetting any previous default.
   """
   setDefaultProductVariant(id: ID!): ProductVariant!
@@ -176,6 +248,11 @@ type Mutation {
 
   """Updates a ProductVariant owned by the caller."""
   updateProductVariant(input: UpdateProductVariantInput!): ProductVariant!
+
+  """
+  Voids a DRAFT/ISSUED Invoice with zero recorded Payments (docs/domain-model.md § Invoice).
+  """
+  voidInvoice(id: ID!): Invoice!
 }
 
 """A single-Partner order (docs/domain-model.md § Order)."""
@@ -249,7 +326,7 @@ input OrderSortInput {
 }
 
 """
-Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 only implements transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED — the remaining values exist in the schema for future milestones (fulfillment, billing) and are not yet reachable.
+Full lifecycle per docs/domain-model.md § Order Lifecycle. M13 implemented transitions among DRAFT/CONFIRMED/PROCESSING/CANCELLED; M14 (Billing) added PROCESSING→SHIPPED→DELIVERED→COMPLETED so invoice generation has a trigger — the remaining values (PENDING_PAYMENT, RETURN_REQUESTED, REFUNDED) exist in the schema for future milestones and are not yet reachable.
 """
 enum OrderStatus {
   CANCELLED
@@ -283,6 +360,37 @@ type PageInfo {
   hasNextPage: Boolean!
   hasPreviousPage: Boolean!
   startCursor: String
+}
+
+"""
+A single payment transaction applied against an Invoice (docs/domain-model.md § Payment).
+"""
+type Payment {
+  amount: Decimal!
+  createdAt: DateTime!
+  externalTransactionId: String!
+  id: ID!
+  invoiceId: ID!
+  method: PaymentMethod!
+  processedAt: DateTime
+  status: PaymentStatus!
+}
+
+"""How a Payment was settled (docs/domain-model.md § Payment)."""
+enum PaymentMethod {
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+"""
+v1 has no live payment gateway (docs/roadmap.md) — a recorded Payment is created directly as SUCCEEDED. PENDING/FAILED/REFUNDED exist in the schema for a future gateway integration and are not yet reachable through recordPayment.
+"""
+enum PaymentStatus {
+  FAILED
+  PENDING
+  REFUNDED
+  SUCCEEDED
 }
 
 """
@@ -395,6 +503,24 @@ type Query {
 
   """Dashboard module status"""
   dashboardStatus: String!
+
+  """
+  A CSV export of the caller's visible invoices, matching the given filter.
+  """
+  exportInvoicesCsv(filter: InvoiceFilterInput): String!
+
+  """
+  A single invoice by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
+  """
+  invoice(id: ID!): Invoice!
+
+  """A base64-encoded PDF rendering of a single invoice by id."""
+  invoicePdf(id: ID!): String!
+
+  """
+  A page of the caller's visible invoices (Admin: all; Partner: own as vendor).
+  """
+  invoices(after: String, filter: InvoiceFilterInput, first: Int, sort: InvoiceSortInput): InvoiceConnection!
 
   """The authenticated caller and their resolved roles/permissions."""
   me: CurrentUser!

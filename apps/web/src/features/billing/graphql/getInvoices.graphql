@@ -1,0 +1,28 @@
+query GetInvoices(
+  $first: Int
+  $after: String
+  $filter: InvoiceFilterInput
+  $sort: InvoiceSortInput
+) {
+  invoices(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        invoiceNumber
+        partnerId
+        amountDue
+        status
+        issuedAt
+        dueAt
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

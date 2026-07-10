@@ -1,0 +1,6 @@
+mutation VoidInvoice($id: ID!) {
+  voidInvoice(id: $id) {
+    id
+    status
+  }
+}
