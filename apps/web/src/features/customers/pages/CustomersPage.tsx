@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { useAuth, usePermissions } from '@features/auth'
+import { usePermissions } from '@features/auth'
 import {
   Button,
   EmptyState,
@@ -50,15 +50,10 @@ export function CustomersPage() {
     hasPreviousPage,
     refetch,
   } = useCustomers()
-  const { canManageCustomers } = usePermissions()
-  const { identity } = useAuth()
-  // createCustomer is Admin-only server-side (no Order yet exists to derive
-  // a Partner "permitted" floor from — docs/authorization.md § Ownership
-  // Rules) — canManageCustomers alone doesn't distinguish that, since a
-  // Partner also holds customers:write for editing their own. Same
-  // role-check precedent as BillingReportsPage's `isAdmin`.
-  const isAdmin = identity?.roles.includes('Admin') ?? false
-  const canCreateCustomers = canManageCustomers && isAdmin
+  // SM-323: createCustomer requires customers:manage (Admin-only, distinct
+  // from customers:write's Partner-reachable edit/archive/activate) — no
+  // role-check needed now that the permission itself expresses this.
+  const { canCreateCustomers } = usePermissions()
   const hasActiveFilter = filters.search !== undefined || filters.status !== undefined
 
   return (

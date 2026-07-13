@@ -27,7 +27,7 @@ This document covers **authorization**: the RBAC/permission model, role definiti
 
 **Assumptions made explicit.**
 
-1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): eleven `Permission.key` values across six domains (M13 added `orders:create`; M15 added `reports:read`). `settings:*` keys do not exist yet — they are introduced with milestone M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization table marks them as planned.
+1. **The permission catalog below is the real, seeded vocabulary** (`database/prisma/seed.ts`): fourteen `Permission.key` values across seven domains (M13 added `orders:create`; M15 added `reports:read`; Sprint 2 added the `customers:*` domain — SM-321 for `read`/`write`, SM-323 for `manage`). `settings:*` keys do not exist yet — they are introduced with milestone M17 ([milestones.md](./milestones.md#milestone-details)); the Resource Authorization table marks them as planned.
 2. **Only realm roles are used.** No Keycloak client roles or composite roles are configured, deliberately — see [RBAC Model](#rbac-model).
 3. **"Super Admin" and "Read-only" are not implemented roles.** The system roles are exactly `Admin`, `Partner`, `Customer` ([requirements.md § User Roles](./requirements.md#user-roles)); the [System Roles](#system-roles) section documents the two future candidates and the mechanism that makes them cheap to add.
 
@@ -107,24 +107,25 @@ M13 (Orders) is the first real instance of this: `orders:create` (place/cancel o
 
 ### The Seeded Catalog
 
-| Permission key    | Grants                                                          | Admin | Partner | Customer |
-| ----------------- | --------------------------------------------------------------- | :---: | :-----: | :------: |
-| `dashboard:view`  | Dashboard analytics and summaries                               |  ✅   |   ✅    |    ✅    |
-| `catalog:read`    | View products, variants, categories                             |  ✅   |   ✅    |    ✅    |
-| `catalog:write`   | Create/edit products, variants, inventory                       |  ✅   |   ✅    |    —     |
-| `orders:read`     | View orders and order history                                   |  ✅   |   ✅    |    ✅    |
-| `orders:create`   | Place a new order; cancel an own order before fulfillment (M13) |  ✅   |   ✅    |    ✅    |
-| `orders:write`    | Update order status, manage fulfillment                         |  ✅   |   ✅    |    —     |
-| `billing:read`    | View invoices, payments, billing reports                        |  ✅   |   ✅    |    —     |
-| `billing:manage`  | Administrative billing operations                               |  ✅   |    —    |    —     |
-| `users:read`      | View platform users                                             |  ✅   |    —    |    —     |
-| `users:manage`    | Manage users and role assignments                               |  ✅   |    —    |    —     |
-| `customers:read`  | View customer accounts and their order/billing history          |  ✅   |   ✅    |    —     |
-| `customers:write` | Create, edit, and suspend/reactivate customer accounts          |  ✅   |   ✅    |    —     |
+| Permission key     | Grants                                                          | Admin | Partner | Customer |
+| ------------------ | --------------------------------------------------------------- | :---: | :-----: | :------: |
+| `dashboard:view`   | Dashboard analytics and summaries                               |  ✅   |   ✅    |    ✅    |
+| `catalog:read`     | View products, variants, categories                             |  ✅   |   ✅    |    ✅    |
+| `catalog:write`    | Create/edit products, variants, inventory                       |  ✅   |   ✅    |    —     |
+| `orders:read`      | View orders and order history                                   |  ✅   |   ✅    |    ✅    |
+| `orders:create`    | Place a new order; cancel an own order before fulfillment (M13) |  ✅   |   ✅    |    ✅    |
+| `orders:write`     | Update order status, manage fulfillment                         |  ✅   |   ✅    |    —     |
+| `billing:read`     | View invoices, payments, billing reports                        |  ✅   |   ✅    |    —     |
+| `billing:manage`   | Administrative billing operations                               |  ✅   |    —    |    —     |
+| `users:read`       | View platform users                                             |  ✅   |    —    |    —     |
+| `users:manage`     | Manage users and role assignments                               |  ✅   |    —    |    —     |
+| `customers:read`   | View customer accounts and their order/billing history          |  ✅   |   ✅    |    —     |
+| `customers:write`  | Edit and suspend/reactivate customer accounts within scope      |  ✅   |   ✅    |    —     |
+| `customers:manage` | Create new customer accounts (Admin-only)                       |  ✅   |    —    |    —     |
 
 Grants are exactly as seeded (`database/prisma/seed.ts`); a ✅ never implies ownership bypass — Partner and Customer grants are always additionally ownership-scoped ([Ownership Rules](#ownership-rules)).
 
-`customers:read`/`customers:write` (Sprint 2, SM-320/SM-321) are **not** tied to a
+`customers:read`/`customers:write`/`customers:manage` (Sprint 2, SM-320/SM-321/SM-323) are **not** tied to a
 [docs/milestones.md](./milestones.md) roadmap milestone — Customer Management is a Sprint 2
 initiative tracked as a Jira Epic, not an `M*` milestone. The Customer role itself gets neither
 key: this is an Admin/Partner management surface over the `Customer` entity, not buyer
@@ -166,7 +167,7 @@ Per-module access rules. "Own" means ownership-scoped per [Ownership Rules](#own
 | **Users** _(Admin surface)_                                    | View users                                                                                                                               | `users:read`                                                                                 | All          | —               | —                                                                                                       |
 |                                                                | Manage users/roles                                                                                                                       | `users:manage`                                                                               | All          | —               | —                                                                                                       |
 | **Customers** _(Sprint 2, not a docs/milestones.md milestone)_ | View customers, order history, billing summary, addresses, assigned users, activity timeline                                             | `customers:read`                                                                             | All          | Own (see below) | —                                                                                                       |
-|                                                                | Create a customer                                                                                                                        | `customers:write`                                                                            | All          | —               | —                                                                                                       |
+|                                                                | Create a customer                                                                                                                        | `customers:manage`                                                                           | All          | —               | —                                                                                                       |
 |                                                                | Edit / suspend / reactivate a customer                                                                                                   | `customers:write`                                                                            | All          | Own (see below) | —                                                                                                       |
 
 `reports:read` (M15) is now seeded — a single key covers view _and_ generate for every report type in
