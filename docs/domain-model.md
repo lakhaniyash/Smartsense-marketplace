@@ -544,24 +544,25 @@ Notification Activity reports are live, computed-on-read aggregations over `Orde
 ### Notification
 
 **Purpose.** An event-sourced, per-recipient message telling a User about something that happened
-to an Order or Invoice they have a stake in — the artifact behind M16's in-app notification center
-(`docs/roadmap.md` § Notifications). Created exclusively by `NotificationEventsListener` reacting to
-domain events (`@nestjs/event-emitter`) — never written directly by a resolver or another module's
-service, so a future email/SMS provider can subscribe to the exact same events independently.
+to an Order, Invoice, or Customer they have a stake in — the artifact behind M16's in-app
+notification center (`docs/roadmap.md` § Notifications). Created exclusively by
+`NotificationEventsListener` reacting to domain events (`@nestjs/event-emitter`) — never written
+directly by a resolver or another module's service, so a future email/SMS provider can subscribe to
+the exact same events independently.
 
 **Attributes**
 
-| Attribute   | Notes                                                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| id          |                                                                                                                                                  |
-| recipientId | The `User` this row belongs to — always individually owned, never org-shared.                                                                    |
-| type        | The domain event that produced it (`OrderCreated`, `OrderConfirmed`, `OrderCancelled`, `OrderCompleted`, `InvoiceGenerated`, `PaymentRecorded`). |
-| title       |                                                                                                                                                  |
-| body        |                                                                                                                                                  |
-| entityType  | `Order` or `Invoice` — which kind of record this notification is about.                                                                          |
-| entityId    | The referenced Order/Invoice's id, nullable (not every notification type links out).                                                             |
-| status      | `Unread`, `Read`                                                                                                                                 |
-| readAt      | Nullable — set when `status` moves to `Read`.                                                                                                    |
+| Attribute   | Notes                                                                                                                                                                                                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id          |                                                                                                                                                                                                                                                                                          |
+| recipientId | The `User` this row belongs to — always individually owned, never org-shared.                                                                                                                                                                                                            |
+| type        | The domain event that produced it (`OrderCreated`, `OrderConfirmed`, `OrderCancelled`, `OrderCompleted`, `InvoiceGenerated`, `PaymentRecorded`, `CustomerArchived`, `CustomerActivated` — the last two added by Sprint 2's Customer Management, SM-328, not tied to a milestone number). |
+| title       |                                                                                                                                                                                                                                                                                          |
+| body        |                                                                                                                                                                                                                                                                                          |
+| entityType  | `Order`, `Invoice`, or `Customer` — which kind of record this notification is about.                                                                                                                                                                                                     |
+| entityId    | The referenced Order/Invoice/Customer's id, nullable (not every notification type links out).                                                                                                                                                                                            |
+| status      | `Unread`, `Read`                                                                                                                                                                                                                                                                         |
+| readAt      | Nullable — set when `status` moves to `Read`.                                                                                                                                                                                                                                            |
 
 **Relationships**
 

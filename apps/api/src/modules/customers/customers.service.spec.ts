@@ -62,6 +62,7 @@ describe('CustomersService', () => {
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
+  let eventEmitter: { emit: jest.Mock }
 
   beforeEach(() => {
     prisma = {
@@ -72,7 +73,8 @@ describe('CustomersService', () => {
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn(), findForEntity: jest.fn() }
-    service = new CustomersService(prisma as never, auditLogService as never)
+    eventEmitter = { emit: jest.fn() }
+    service = new CustomersService(prisma as never, auditLogService as never, eventEmitter as never)
   })
 
   describe('findCustomerById', () => {
@@ -374,6 +376,10 @@ describe('CustomersService', () => {
         prisma,
         expect.objectContaining({ action: 'CUSTOMER_ARCHIVED', entityType: 'Customer' }),
       )
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'customer.archived',
+        expect.objectContaining({ customerId: 'customer-1', displayName: 'Acme Corp' }),
+      )
     })
   })
 
@@ -408,6 +414,10 @@ describe('CustomersService', () => {
       expect(auditLogService.record).toHaveBeenCalledWith(
         prisma,
         expect.objectContaining({ action: 'CUSTOMER_ACTIVATED', entityType: 'Customer' }),
+      )
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'customer.activated',
+        expect.objectContaining({ customerId: 'customer-1', displayName: 'Acme Corp' }),
       )
     })
   })
