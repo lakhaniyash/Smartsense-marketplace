@@ -1,0 +1,33 @@
+query GetCustomerById($id: ID!) {
+  customerById(id: $id) {
+    id
+    displayName
+    type
+    status
+    billingEmail
+    createdAt
+    updatedAt
+    addresses {
+      id
+      type
+      line1
+      line2
+      city
+      state
+      postalCode
+      country
+      isDefault
+    }
+    assignedUsers {
+      id
+      email
+      fullName
+      status
+    }
+    billingSummary {
+      totalOrders
+      totalInvoiced
+      totalOutstanding
+    }
+  }
+}

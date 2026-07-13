@@ -1,0 +1,13 @@
+query GetCustomerOrders($customerId: ID!, $first: Int) {
+  orders(first: $first, filter: { customerId: $customerId }) {
+    edges {
+      node {
+        id
+        orderNumber
+        status
+        total
+        placedAt
+      }
+    }
+  }
+}

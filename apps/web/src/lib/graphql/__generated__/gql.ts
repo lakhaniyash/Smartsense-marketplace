@@ -32,6 +32,14 @@ type Documents = {
     "mutation SetDefaultProductVariant($id: ID!) {\n  setDefaultProductVariant(id: $id) {\n    id\n    isDefault\n  }\n}": typeof types.SetDefaultProductVariantDocument,
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": typeof types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": typeof types.UpdateProductVariantDocument,
+    "mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}": typeof types.ActivateCustomerDocument,
+    "mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}": typeof types.ArchiveCustomerDocument,
+    "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}": typeof types.CreateCustomerDocument,
+    "query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": typeof types.GetCustomerAuditLogDocument,
+    "query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}": typeof types.GetCustomerByIdDocument,
+    "query GetCustomerOrders($customerId: ID!, $first: Int) {\n  orders(first: $first, filter: {customerId: $customerId}) {\n    edges {\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n  }\n}": typeof types.GetCustomerOrdersDocument,
+    "query GetCustomers($first: Int, $after: String, $filter: CustomerFilterInput, $sort: CustomerSortInput) {\n  customers(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        displayName\n        type\n        status\n        billingEmail\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetCustomersDocument,
+    "mutation UpdateCustomer($input: UpdateCustomerInput!) {\n  updateCustomer(input: $input) {\n    id\n  }\n}": typeof types.UpdateCustomerDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": typeof types.DashboardStatsDocument,
     "query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetNotificationsDocument,
     "query GetUnreadNotificationCount {\n  unreadNotificationCount\n}": typeof types.GetUnreadNotificationCountDocument,
@@ -75,6 +83,14 @@ const documents: Documents = {
     "mutation SetDefaultProductVariant($id: ID!) {\n  setDefaultProductVariant(id: $id) {\n    id\n    isDefault\n  }\n}": types.SetDefaultProductVariantDocument,
     "mutation UpdateProduct($input: UpdateProductInput!) {\n  updateProduct(input: $input) {\n    id\n    title\n    sku\n    status\n    category {\n      id\n      name\n    }\n  }\n}": types.UpdateProductDocument,
     "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}": types.UpdateProductVariantDocument,
+    "mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}": types.ActivateCustomerDocument,
+    "mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}": types.ArchiveCustomerDocument,
+    "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}": types.CreateCustomerDocument,
+    "query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": types.GetCustomerAuditLogDocument,
+    "query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}": types.GetCustomerByIdDocument,
+    "query GetCustomerOrders($customerId: ID!, $first: Int) {\n  orders(first: $first, filter: {customerId: $customerId}) {\n    edges {\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n  }\n}": types.GetCustomerOrdersDocument,
+    "query GetCustomers($first: Int, $after: String, $filter: CustomerFilterInput, $sort: CustomerSortInput) {\n  customers(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        displayName\n        type\n        status\n        billingEmail\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetCustomersDocument,
+    "mutation UpdateCustomer($input: UpdateCustomerInput!) {\n  updateCustomer(input: $input) {\n    id\n  }\n}": types.UpdateCustomerDocument,
     "query DashboardStats {\n  dashboardStats {\n    totalProducts\n    totalOrders\n    totalCustomers\n  }\n}": types.DashboardStatsDocument,
     "query GetNotifications($first: Int, $after: String, $filter: NotificationFilterInput) {\n  notifications(first: $first, after: $after, filter: $filter) {\n    edges {\n      cursor\n      node {\n        id\n        type\n        title\n        body\n        entityType\n        entityId\n        status\n        readAt\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetNotificationsDocument,
     "query GetUnreadNotificationCount {\n  unreadNotificationCount\n}": types.GetUnreadNotificationCountDocument,
@@ -186,6 +202,38 @@ export function gql(source: "mutation UpdateProduct($input: UpdateProductInput!)
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}"): (typeof documents)["mutation UpdateProductVariant($input: UpdateProductVariantInput!) {\n  updateProductVariant(input: $input) {\n    id\n    sku\n    price\n    status\n    isDefault\n    attributes {\n      key\n      value\n    }\n    inventory {\n      quantityOnHand\n      quantityReserved\n      sellableQuantity\n      reorderThreshold\n      updatedAt\n    }\n    createdAt\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}"): (typeof documents)["query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}"): (typeof documents)["query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetCustomerOrders($customerId: ID!, $first: Int) {\n  orders(first: $first, filter: {customerId: $customerId}) {\n    edges {\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n  }\n}"): (typeof documents)["query GetCustomerOrders($customerId: ID!, $first: Int) {\n  orders(first: $first, filter: {customerId: $customerId}) {\n    edges {\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetCustomers($first: Int, $after: String, $filter: CustomerFilterInput, $sort: CustomerSortInput) {\n  customers(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        displayName\n        type\n        status\n        billingEmail\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetCustomers($first: Int, $after: String, $filter: CustomerFilterInput, $sort: CustomerSortInput) {\n  customers(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        displayName\n        type\n        status\n        billingEmail\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation UpdateCustomer($input: UpdateCustomerInput!) {\n  updateCustomer(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation UpdateCustomer($input: UpdateCustomerInput!) {\n  updateCustomer(input: $input) {\n    id\n  }\n}"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

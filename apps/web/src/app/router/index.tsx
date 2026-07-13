@@ -32,6 +32,15 @@ const OrderDetailPage = lazy(() =>
 const OrderFormPage = lazy(() =>
   import('@features/orders').then((m) => ({ default: m.OrderFormPage })),
 )
+const CustomersPage = lazy(() =>
+  import('@features/customers').then((m) => ({ default: m.CustomersPage })),
+)
+const CustomerDetailPage = lazy(() =>
+  import('@features/customers').then((m) => ({ default: m.CustomerDetailPage })),
+)
+const CustomerFormPage = lazy(() =>
+  import('@features/customers').then((m) => ({ default: m.CustomerFormPage })),
+)
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
 )
@@ -156,6 +165,47 @@ const router = createBrowserRouter([
                 element: withSuspense(<OrderFormPage />),
                 handle: {
                   crumb: [{ label: 'Orders', href: ROUTES.ORDERS }, { label: 'New order' }],
+                },
+              },
+            ],
+          },
+          // Sprint 2 (Customer Management, SM-320/SM-322) — not tied to a
+          // docs/milestones.md milestone. Same list/detail + write-gated
+          // create/edit split as Catalog/Orders above.
+          {
+            element: <PermissionRoute permission="customers:read" />,
+            children: [
+              { path: ROUTES.CUSTOMERS.slice(1), element: withSuspense(<CustomersPage />) },
+              {
+                path: `${ROUTES.CUSTOMERS.slice(1)}/:id`,
+                element: withSuspense(<CustomerDetailPage />),
+                handle: {
+                  crumb: [{ label: 'Customers', href: ROUTES.CUSTOMERS }, { label: 'Customer' }],
+                },
+              },
+            ],
+          },
+          {
+            element: <PermissionRoute permission="customers:write" />,
+            children: [
+              {
+                path: `${ROUTES.CUSTOMERS.slice(1)}/new`,
+                element: withSuspense(<CustomerFormPage />),
+                handle: {
+                  crumb: [
+                    { label: 'Customers', href: ROUTES.CUSTOMERS },
+                    { label: 'New customer' },
+                  ],
+                },
+              },
+              {
+                path: `${ROUTES.CUSTOMERS.slice(1)}/:id/edit`,
+                element: withSuspense(<CustomerFormPage />),
+                handle: {
+                  crumb: [
+                    { label: 'Customers', href: ROUTES.CUSTOMERS },
+                    { label: 'Edit customer' },
+                  ],
                 },
               },
             ],

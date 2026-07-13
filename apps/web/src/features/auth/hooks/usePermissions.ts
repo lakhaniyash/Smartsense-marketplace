@@ -15,6 +15,11 @@ const PERMISSION_KEYS = {
   USERS_READ: 'users:read',
   USERS_MANAGE: 'users:manage',
   REPORTS_READ: 'reports:read',
+  // Sprint 2 (Customer Management, SM-320) — not tied to a
+  // docs/milestones.md milestone. See docs/authorization.md § Resource
+  // Authorization's Customers row.
+  CUSTOMERS_READ: 'customers:read',
+  CUSTOMERS_WRITE: 'customers:write',
 } as const
 
 export function usePermissions() {
@@ -45,5 +50,7 @@ export function usePermissions() {
     canViewUsers: can(PERMISSION_KEYS.USERS_READ),
     canManageUsers: can(PERMISSION_KEYS.USERS_MANAGE),
     canViewReports: can(PERMISSION_KEYS.REPORTS_READ),
+    canViewCustomers: can(PERMISSION_KEYS.CUSTOMERS_READ),
+    canManageCustomers: can(PERMISSION_KEYS.CUSTOMERS_WRITE),
   }
 }
