@@ -16,6 +16,7 @@ import {
   EmptyState,
   ErrorState,
   PageHeader,
+  Pagination,
   Skeleton,
   Table,
   TableBody,
@@ -37,7 +38,14 @@ import { useCustomer, useCustomerAuditLog, useCustomerOrders } from '../hooks'
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { customer, isLoading, error } = useCustomer(id)
-  const { orders, isLoading: isOrdersLoading } = useCustomerOrders(id)
+  const {
+    orders,
+    pageInfo: ordersPageInfo,
+    isLoading: isOrdersLoading,
+    goToNextPage: goToNextOrdersPage,
+    goToPreviousPage: goToPreviousOrdersPage,
+    hasPreviousPage: hasPreviousOrdersPage,
+  } = useCustomerOrders(id)
   const { entries: auditEntries, isLoading: isAuditLoading } = useCustomerAuditLog(id)
   const { canEditCustomers } = usePermissions()
   const { toast } = useToast()
@@ -187,7 +195,7 @@ export function CustomerDetailPage() {
                   />
                 ) : (
                   <Card>
-                    <CardContent>
+                    <CardContent className="flex flex-col gap-3">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -221,6 +229,12 @@ export function CustomerDetailPage() {
                           ))}
                         </TableBody>
                       </Table>
+                      <Pagination
+                        hasPreviousPage={hasPreviousOrdersPage}
+                        hasNextPage={ordersPageInfo?.hasNextPage ?? false}
+                        onPrevious={goToPreviousOrdersPage}
+                        onNext={goToNextOrdersPage}
+                      />
                     </CardContent>
                   </Card>
                 ),

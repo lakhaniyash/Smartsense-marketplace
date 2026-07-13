@@ -1,6 +1,7 @@
-query GetCustomerOrders($customerId: ID!, $first: Int) {
-  orders(first: $first, filter: { customerId: $customerId }) {
+query GetCustomerOrders($customerId: ID!, $first: Int, $after: String) {
+  orders(first: $first, after: $after, filter: { customerId: $customerId }) {
     edges {
+      cursor
       node {
         id
         orderNumber
@@ -8,6 +9,12 @@ query GetCustomerOrders($customerId: ID!, $first: Int) {
         total
         placedAt
       }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
     }
   }
 }
