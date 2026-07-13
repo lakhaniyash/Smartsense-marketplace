@@ -4,6 +4,8 @@ import { NotificationType } from '@prisma/client'
 import { LoggingService } from '../../../common/services/logging.service'
 import { InvoiceGeneratedEvent } from '../../billing/events/invoice-generated.event'
 import { PaymentRecordedEvent } from '../../billing/events/payment-recorded.event'
+import { CustomerActivatedEvent } from '../../customers/events/customer-activated.event'
+import { CustomerArchivedEvent } from '../../customers/events/customer-archived.event'
 import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
@@ -126,6 +128,36 @@ export class NotificationEventsListener {
         body: `A payment of ${event.amount} was recorded against invoice ${event.invoiceNumber}.`,
         entityType: 'Invoice',
         entityId: event.invoiceId,
+      })
+    })
+  }
+
+  // Customer Management (Sprint 2, SM-328) — not tied to a
+  // docs/milestones.md milestone. Notifies only the Customer's own
+  // buyer-contact Users (fanOut's existing customerId scope), never
+  // Admin/Partner — matches every other "affected party" notification here.
+  @OnEvent(CustomerArchivedEvent.EVENT_NAME)
+  async handleCustomerArchived(event: CustomerArchivedEvent): Promise<void> {
+    await this.safely(CustomerArchivedEvent.EVENT_NAME, event.displayName, async () => {
+      await this.notificationsService.notifyCustomerUsers(event.customerId, {
+        type: NotificationType.CUSTOMER_ARCHIVED,
+        title: 'Account suspended',
+        body: `${event.displayName}'s account was suspended. New orders cannot be placed until it's reactivated.`,
+        entityType: 'Customer',
+        entityId: event.customerId,
+      })
+    })
+  }
+
+  @OnEvent(CustomerActivatedEvent.EVENT_NAME)
+  async handleCustomerActivated(event: CustomerActivatedEvent): Promise<void> {
+    await this.safely(CustomerActivatedEvent.EVENT_NAME, event.displayName, async () => {
+      await this.notificationsService.notifyCustomerUsers(event.customerId, {
+        type: NotificationType.CUSTOMER_ACTIVATED,
+        title: 'Account reactivated',
+        body: `${event.displayName}'s account was reactivated. Orders can be placed again.`,
+        entityType: 'Customer',
+        entityId: event.customerId,
       })
     })
   }

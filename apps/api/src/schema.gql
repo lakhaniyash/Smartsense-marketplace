@@ -632,6 +632,8 @@ enum NotificationStatus {
 
 """The domain event that produced this Notification."""
 enum NotificationType {
+  CUSTOMER_ACTIVATED
+  CUSTOMER_ARCHIVED
   INVOICE_GENERATED
   ORDER_CANCELLED
   ORDER_COMPLETED

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { CustomerStatus, InvoiceStatus, Prisma, PaymentStatus } from '@prisma/client'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
@@ -18,6 +19,8 @@ import { CustomerSortInput } from './dto/customer-sort.input'
 import { CustomerOutput } from './dto/customer.output'
 import { CreateCustomerInput } from './dto/create-customer.input'
 import { UpdateCustomerInput } from './dto/update-customer.input'
+import { CustomerActivatedEvent } from './events/customer-activated.event'
+import { CustomerArchivedEvent } from './events/customer-archived.event'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -46,6 +49,7 @@ export class CustomersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   getStatus(): string {
@@ -208,6 +212,14 @@ export class CustomersService {
       })
     })
 
+    // Emitted only once the transaction has committed — NotificationEventsListener
+    // fans this out to the Customer's own assigned Users (SM-328), and must
+    // never see a suspension that then rolled back.
+    this.eventEmitter.emit(
+      CustomerArchivedEvent.EVENT_NAME,
+      new CustomerArchivedEvent(id, existing.displayName),
+    )
+
     return this.findCustomerById(user, id)
   }
 
@@ -228,6 +240,11 @@ export class CustomersService {
         metadata: { displayName: existing.displayName },
       })
     })
+
+    this.eventEmitter.emit(
+      CustomerActivatedEvent.EVENT_NAME,
+      new CustomerActivatedEvent(id, existing.displayName),
+    )
 
     return this.findCustomerById(user, id)
   }

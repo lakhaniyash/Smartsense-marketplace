@@ -644,6 +644,10 @@ enum NotificationType {
   ORDER_COMPLETED
   INVOICE_GENERATED
   PAYMENT_RECORDED
+  // Sprint 2 (Customer Management, SM-328) — not tied to a
+  // docs/milestones.md milestone.
+  CUSTOMER_ARCHIVED
+  CUSTOMER_ACTIVATED
 
   @@map("notification_type")
 }

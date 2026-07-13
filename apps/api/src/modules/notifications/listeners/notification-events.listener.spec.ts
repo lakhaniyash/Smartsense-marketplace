@@ -1,6 +1,8 @@
 import { OrderStatus, PaymentMethod } from '@prisma/client'
 import { InvoiceGeneratedEvent } from '../../billing/events/invoice-generated.event'
 import { PaymentRecordedEvent } from '../../billing/events/payment-recorded.event'
+import { CustomerActivatedEvent } from '../../customers/events/customer-activated.event'
+import { CustomerArchivedEvent } from '../../customers/events/customer-archived.event'
 import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
@@ -111,6 +113,26 @@ describe('NotificationEventsListener', () => {
       expect.objectContaining({ entityId: 'invoice-1', entityType: 'Invoice' }),
     )
     expect(notificationsService.notifyCustomerUsers).not.toHaveBeenCalled()
+  })
+
+  it('notifies only the Customer on CustomerArchived (never Admin/Partner)', async () => {
+    await listener.handleCustomerArchived(new CustomerArchivedEvent('customer-1', 'Acme Corp'))
+
+    expect(notificationsService.notifyCustomerUsers).toHaveBeenCalledWith(
+      'customer-1',
+      expect.objectContaining({ entityId: 'customer-1', entityType: 'Customer' }),
+    )
+    expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
+  })
+
+  it('notifies only the Customer on CustomerActivated (never Admin/Partner)', async () => {
+    await listener.handleCustomerActivated(new CustomerActivatedEvent('customer-1', 'Acme Corp'))
+
+    expect(notificationsService.notifyCustomerUsers).toHaveBeenCalledWith(
+      'customer-1',
+      expect.objectContaining({ entityId: 'customer-1', entityType: 'Customer' }),
+    )
+    expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
   })
 
   it('swallows a rejected fan-out and logs it, instead of rethrowing', async () => {
