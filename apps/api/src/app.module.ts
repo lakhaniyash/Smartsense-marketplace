@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { BillingModule } from './modules/billing/billing.module'
 import { CatalogModule } from './modules/catalog/catalog.module'
+import { CustomersModule } from './modules/customers/customers.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { NotificationsModule } from './modules/notifications/notifications.module'
 import { OrdersModule } from './modules/orders/orders.module'
@@ -66,6 +67,11 @@ import { UsersModule } from './modules/users/users.module'
     // precedent), so it has no ordering requirement of its own; keeping it
     // last documents that it was added most recently.
     ReportsModule,
+    // Customer Management (Sprint 2, SM-320/SM-321) — not a
+    // docs/milestones.md roadmap milestone. Depends on nothing beyond
+    // Prisma/Common, same as Reports; registered after it for the same
+    // "most recently added" reason.
+    CustomersModule,
   ],
   providers: [
     {
