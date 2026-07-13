@@ -121,8 +121,8 @@ describe('CustomersService', () => {
       prisma.customer.findFirst.mockResolvedValueOnce(customerFixture())
       prisma.order.count.mockResolvedValueOnce(2)
       prisma.invoice.findMany.mockResolvedValueOnce([
-        { amountDue: new Prisma.Decimal(100), status: InvoiceStatus.PAID },
-        { amountDue: new Prisma.Decimal(50), status: InvoiceStatus.ISSUED },
+        { amountDue: new Prisma.Decimal(100), status: InvoiceStatus.PAID, payments: [] },
+        { amountDue: new Prisma.Decimal(50), status: InvoiceStatus.ISSUED, payments: [] },
       ])
 
       const result = await service.findCustomerById(user({ partnerId: 'partner-1' }), 'customer-1')
@@ -135,6 +135,42 @@ describe('CustomersService', () => {
       expect(result.billingSummary?.totalOrders).toBe(2)
       expect(result.billingSummary?.totalInvoiced.toString()).toBe('150')
       expect(result.billingSummary?.totalOutstanding.toString()).toBe('50')
+    })
+
+    it("nets SUCCEEDED payments against a PARTIALLY_PAID invoice's outstanding balance", async () => {
+      prisma.customer.findFirst.mockResolvedValueOnce(customerFixture())
+      prisma.order.count.mockResolvedValueOnce(1)
+      prisma.invoice.findMany.mockResolvedValueOnce([
+        {
+          amountDue: new Prisma.Decimal(100),
+          status: InvoiceStatus.PARTIALLY_PAID,
+          payments: [{ amount: new Prisma.Decimal(30) }, { amount: new Prisma.Decimal(20) }],
+        },
+      ])
+
+      const result = await service.findCustomerById(user(), 'customer-1')
+
+      expect(result.billingSummary?.totalInvoiced.toString()).toBe('100')
+      expect(result.billingSummary?.totalOutstanding.toString()).toBe('50')
+    })
+
+    it('ignores non-SUCCEEDED payments when netting outstanding balance', async () => {
+      prisma.customer.findFirst.mockResolvedValueOnce(customerFixture())
+      prisma.order.count.mockResolvedValueOnce(1)
+      prisma.invoice.findMany.mockResolvedValueOnce([
+        { amountDue: new Prisma.Decimal(100), status: InvoiceStatus.ISSUED, payments: [] },
+      ])
+
+      const result = await service.findCustomerById(user(), 'customer-1')
+
+      expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({
+            payments: { where: { status: 'SUCCEEDED' }, select: { amount: true } },
+          }),
+        }),
+      )
+      expect(result.billingSummary?.totalOutstanding.toString()).toBe('100')
     })
 
     it('billingSummary is unscoped for Admin', async () => {
