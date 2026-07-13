@@ -1,0 +1,13 @@
+query GetCustomerAuditLog($customerId: ID!) {
+  customerAuditLog(customerId: $customerId) {
+    id
+    action
+    entityType
+    entityId
+    metadata
+    occurredAt
+    actorId
+    actorName
+    actorEmail
+  }
+}

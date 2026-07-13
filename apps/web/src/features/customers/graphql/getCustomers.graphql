@@ -1,0 +1,21 @@
+query GetCustomers($first: Int, $after: String, $filter: CustomerFilterInput, $sort: CustomerSortInput) {
+  customers(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        displayName
+        type
+        status
+        billingEmail
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

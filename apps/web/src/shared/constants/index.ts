@@ -5,6 +5,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   CATALOG: '/catalog',
   ORDERS: '/orders',
+  CUSTOMERS: '/customers',
   BILLING: '/billing',
   NOTIFICATIONS: '/notifications',
   REPORTS: '/reports',

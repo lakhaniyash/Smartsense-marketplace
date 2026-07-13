@@ -3,6 +3,7 @@ import { useAuth, usePermissions } from '@features/auth'
 import { NotificationsMenu } from '@features/notifications'
 import { Button, CommandPalette, Drawer } from '@shared/components'
 import {
+  CustomersIcon,
   DashboardIcon,
   MenuIcon,
   OrdersIcon,
@@ -37,6 +38,14 @@ const NAV_ITEMS: Array<SidebarItem & { permission: string }> = [
     href: ROUTES.ORDERS,
     permission: 'orders:read',
     icon: <OrdersIcon className="size-4 shrink-0" aria-hidden="true" />,
+  },
+  // Sprint 2 (Customer Management, SM-320/SM-322) — not tied to a
+  // docs/milestones.md milestone.
+  {
+    label: 'Customers',
+    href: ROUTES.CUSTOMERS,
+    permission: 'customers:read',
+    icon: <CustomersIcon className="size-4 shrink-0" aria-hidden="true" />,
   },
   {
     label: 'Billing',

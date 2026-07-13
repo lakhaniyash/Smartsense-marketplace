@@ -1,0 +1,6 @@
+mutation ArchiveCustomer($id: ID!) {
+  archiveCustomer(id: $id) {
+    id
+    status
+  }
+}

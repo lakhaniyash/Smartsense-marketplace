@@ -20,12 +20,34 @@ export type Scalars = {
   Decimal: { input: string; output: string; }
 };
 
+/** Shipping, Billing, or Registered (docs/domain-model.md § Address). */
+export enum AddressType {
+  Billing = 'BILLING',
+  Registered = 'REGISTERED',
+  Shipping = 'SHIPPING'
+}
+
 export type AdjustInventoryInput = {
   adjustmentType: InventoryAdjustmentType;
   productVariantId: Scalars['ID']['input'];
   /** Non-negative. Interpreted per adjustmentType. */
   quantity: Scalars['Int']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity — the first GraphQL exposure of this model, added for the Customer activity timeline. */
+export type AuditLogEntry = {
+  __typename?: 'AuditLogEntry';
+  action: Scalars['String']['output'];
+  actorEmail: Scalars['String']['output'];
+  actorId: Scalars['ID']['output'];
+  actorName: Scalars['String']['output'];
+  entityId: Scalars['ID']['output'];
+  entityType: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  /** JSON-encoded metadata, if any — transported as a string rather than adding a new GraphQL JSON scalar dependency for this one field. */
+  metadata?: Maybe<Scalars['String']['output']>;
+  occurredAt: Scalars['DateTime']['output'];
 };
 
 /** A periodic per-Partner statement reconciling Invoice/Payment activity for a date range (docs/domain-model.md § Billing Report). The only persisted Reports entity — every other report in this module is computed on read. */
@@ -96,6 +118,12 @@ export type Category = {
   slug: Scalars['String']['output'];
 };
 
+export type CreateCustomerInput = {
+  billingEmail: Scalars['String']['input'];
+  displayName: Scalars['String']['input'];
+  type: CustomerType;
+};
+
 export type CreateOrderInput = {
   /** Required when the caller is Admin; ignored (overridden by the caller's own customerId) for a Customer-scoped caller. */
   customerId?: InputMaybe<Scalars['ID']['input']>;
@@ -151,6 +179,96 @@ export type CurrentUser = {
   permissions: Array<Scalars['String']['output']>;
   /** Role.name values, e.g. ["Admin"] */
   roles: Array<Scalars['String']['output']>;
+};
+
+/** A buyer — an individual or organization (docs/domain-model.md § Customer). */
+export type Customer = {
+  __typename?: 'Customer';
+  addresses: Array<CustomerAddress>;
+  /** Buyer-contact Users belonging to this Customer (User.customerId) — the "assigned users" tab; not a separate account-manager concept. */
+  assignedUsers: Array<CustomerUser>;
+  billingEmail: Scalars['String']['output'];
+  /** Populated only when fetched via customerById — see that type's own description. */
+  billingSummary?: Maybe<CustomerBillingSummary>;
+  createdAt: Scalars['DateTime']['output'];
+  displayName: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  status: CustomerStatus;
+  type: CustomerType;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+/** One of a Customer's addresses (docs/domain-model.md § Address). `ownerType`/`customerId` are omitted — implied by the parent Customer this is nested under. */
+export type CustomerAddress = {
+  __typename?: 'CustomerAddress';
+  city: Scalars['String']['output'];
+  country: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  isDefault: Scalars['Boolean']['output'];
+  line1: Scalars['String']['output'];
+  line2?: Maybe<Scalars['String']['output']>;
+  postalCode: Scalars['String']['output'];
+  state: Scalars['String']['output'];
+  type: AddressType;
+};
+
+/** Aggregated across all of this Customer's Orders/Invoices. Computed only by `customerById` — the `customers` list intentionally omits it (CustomerOutput.billingSummary is null there) to avoid an aggregate query per row. */
+export type CustomerBillingSummary = {
+  __typename?: 'CustomerBillingSummary';
+  totalInvoiced: Scalars['Decimal']['output'];
+  totalOrders: Scalars['Int']['output'];
+  /** Sum of amountDue on invoices not yet fully settled (ISSUED or PARTIALLY_PAID). */
+  totalOutstanding: Scalars['Decimal']['output'];
+};
+
+export type CustomerConnection = {
+  __typename?: 'CustomerConnection';
+  edges: Array<CustomerEdge>;
+  pageInfo: PageInfo;
+};
+
+export type CustomerEdge = {
+  __typename?: 'CustomerEdge';
+  cursor: Scalars['String']['output'];
+  node: Customer;
+};
+
+export type CustomerFilterInput = {
+  /** Free-text match against the display name and billing email. */
+  search?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<CustomerStatus>;
+};
+
+/** Fields the customer list can be sorted by. */
+export enum CustomerSortField {
+  CreatedAt = 'CREATED_AT',
+  DisplayName = 'DISPLAY_NAME'
+}
+
+export type CustomerSortInput = {
+  direction: SortDirection;
+  field: CustomerSortField;
+};
+
+/** Active or Suspended (docs/domain-model.md § Customer Lifecycle). There is no hard-delete status — Customers are anonymized, never removed, per the same doc. */
+export enum CustomerStatus {
+  Active = 'ACTIVE',
+  Suspended = 'SUSPENDED'
+}
+
+/** Individual buyer vs. buyer organization (docs/domain-model.md § Customer). */
+export enum CustomerType {
+  Individual = 'INDIVIDUAL',
+  Organization = 'ORGANIZATION'
+}
+
+/** A buyer-contact User belonging to this Customer (the existing `User.customerId` relation) — not a separate account-manager assignment (docs/domain-model.md § User Ownership). */
+export type CustomerUser = {
+  __typename?: 'CustomerUser';
+  email: Scalars['String']['output'];
+  fullName: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  status: UserStatus;
 };
 
 /** Marketplace-wide summary counts shown on the dashboard overview. */
@@ -302,14 +420,20 @@ export enum InvoiceStatus {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  /** Reactivates a suspended Customer within the caller's scope. */
+  activateCustomer: Customer;
   /** Adjusts a ProductVariant's stock on hand and returns the updated Variant. */
   adjustInventory: ProductVariant;
+  /** Suspends a Customer within the caller's scope (soft archive, reversible via activateCustomer). */
+  archiveCustomer: Customer;
   /** Transitions a Product owned by the caller to ARCHIVED status. */
   archiveProduct: Product;
   /** Soft-deletes a ProductVariant. Rejected if it is the Product's default Variant or its only remaining Variant. */
   archiveProductVariant: ProductVariant;
   /** Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory. */
   cancelOrder: Order;
+  /** Creates a new Customer. Admin-only — see CustomersService.createCustomer. */
+  createCustomer: Customer;
   /** Places a new Order in DRAFT status for the caller (Customer: self; Partner/Admin: on behalf of a specified customerId). No inventory effect yet — reservation happens when the order is confirmed via updateOrderStatus. */
   createOrder: Order;
   /** Creates a Product under the caller's own Partner. */
@@ -330,6 +454,8 @@ export type Mutation = {
   recordPayment: Payment;
   /** Marks a ProductVariant as its Product's default, unsetting any previous default. */
   setDefaultProductVariant: ProductVariant;
+  /** Updates a Customer within the caller's scope. */
+  updateCustomer: Customer;
   /** Transitions an Order to a new status per the allowed transition matrix (docs/authorization.md § Orders). Rejects any other requested transition as invalid. */
   updateOrderStatus: Order;
   /** Updates a Product owned by the caller. */
@@ -341,8 +467,18 @@ export type Mutation = {
 };
 
 
+export type MutationActivateCustomerArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationAdjustInventoryArgs = {
   input: AdjustInventoryInput;
+};
+
+
+export type MutationArchiveCustomerArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -359,6 +495,11 @@ export type MutationArchiveProductVariantArgs = {
 export type MutationCancelOrderArgs = {
   id: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type MutationCreateCustomerArgs = {
+  input: CreateCustomerInput;
 };
 
 
@@ -404,6 +545,11 @@ export type MutationRecordPaymentArgs = {
 
 export type MutationSetDefaultProductVariantArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationUpdateCustomerArgs = {
+  input: UpdateCustomerInput;
 };
 
 
@@ -789,6 +935,14 @@ export type Query = {
   catalogStatus: Scalars['String']['output'];
   /** Active categories in the global taxonomy, flat. */
   categories: Array<Category>;
+  /** A Customer's activity timeline, most recent first. */
+  customerAuditLog: Array<AuditLogEntry>;
+  /** A single customer by id, scoped to the caller, including its billing summary. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
+  customerById: Customer;
+  /** A page of the caller's visible customers (Admin: all; Partner: only customers with at least one Order placed with that Partner). */
+  customers: CustomerConnection;
+  /** Customers module status */
+  customersStatus: Scalars['String']['output'];
   /** Summary statistics for the dashboard overview. */
   dashboardStats: DashboardStats;
   /** Dashboard module status */
@@ -846,6 +1000,24 @@ export type QueryBillingReportsArgs = {
   filter?: InputMaybe<BillingReportFilterInput>;
   first?: InputMaybe<Scalars['Int']['input']>;
   sort?: InputMaybe<BillingReportSortInput>;
+};
+
+
+export type QueryCustomerAuditLogArgs = {
+  customerId: Scalars['ID']['input'];
+};
+
+
+export type QueryCustomerByIdArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryCustomersArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<CustomerFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<CustomerSortInput>;
 };
 
 
@@ -1020,6 +1192,13 @@ export enum SortDirection {
   Desc = 'DESC'
 }
 
+export type UpdateCustomerInput = {
+  billingEmail?: InputMaybe<Scalars['String']['input']>;
+  displayName?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['ID']['input'];
+  type?: InputMaybe<CustomerType>;
+};
+
 export type UpdateProductInput = {
   brand?: InputMaybe<Scalars['String']['input']>;
   categoryId?: InputMaybe<Scalars['ID']['input']>;
@@ -1039,6 +1218,14 @@ export type UpdateProductVariantInput = {
   /** Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here. */
   status?: InputMaybe<ProductVariantStatus>;
 };
+
+/** A User's lifecycle status (docs/domain-model.md § User). First GraphQL exposure of this enum — introduced for the Customer Management "assigned users" tab. */
+export enum UserStatus {
+  Active = 'ACTIVE',
+  Deactivated = 'DEACTIVATED',
+  Invited = 'INVITED',
+  Suspended = 'SUSPENDED'
+}
 
 export type MeQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -1167,6 +1354,66 @@ export type UpdateProductVariantMutationVariables = Exact<{
 
 
 export type UpdateProductVariantMutation = { __typename?: 'Mutation', updateProductVariant: { __typename?: 'ProductVariant', id: string, sku: string, price: string, status: ProductVariantStatus, isDefault: boolean, createdAt: any, attributes: Array<{ __typename?: 'ProductVariantAttribute', key: string, value: string }>, inventory: { __typename?: 'Inventory', quantityOnHand: number, quantityReserved: number, sellableQuantity: number, reorderThreshold?: number | null, updatedAt: any } } };
+
+export type ActivateCustomerMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type ActivateCustomerMutation = { __typename?: 'Mutation', activateCustomer: { __typename?: 'Customer', id: string, status: CustomerStatus } };
+
+export type ArchiveCustomerMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type ArchiveCustomerMutation = { __typename?: 'Mutation', archiveCustomer: { __typename?: 'Customer', id: string, status: CustomerStatus } };
+
+export type CreateCustomerMutationVariables = Exact<{
+  input: CreateCustomerInput;
+}>;
+
+
+export type CreateCustomerMutation = { __typename?: 'Mutation', createCustomer: { __typename?: 'Customer', id: string } };
+
+export type GetCustomerAuditLogQueryVariables = Exact<{
+  customerId: Scalars['ID']['input'];
+}>;
+
+
+export type GetCustomerAuditLogQuery = { __typename?: 'Query', customerAuditLog: Array<{ __typename?: 'AuditLogEntry', id: string, action: string, entityType: string, entityId: string, metadata?: string | null, occurredAt: any, actorId: string, actorName: string, actorEmail: string }> };
+
+export type GetCustomerByIdQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type GetCustomerByIdQuery = { __typename?: 'Query', customerById: { __typename?: 'Customer', id: string, displayName: string, type: CustomerType, status: CustomerStatus, billingEmail: string, createdAt: any, updatedAt: any, addresses: Array<{ __typename?: 'CustomerAddress', id: string, type: AddressType, line1: string, line2?: string | null, city: string, state: string, postalCode: string, country: string, isDefault: boolean }>, assignedUsers: Array<{ __typename?: 'CustomerUser', id: string, email: string, fullName: string, status: UserStatus }>, billingSummary?: { __typename?: 'CustomerBillingSummary', totalOrders: number, totalInvoiced: string, totalOutstanding: string } | null } };
+
+export type GetCustomerOrdersQueryVariables = Exact<{
+  customerId: Scalars['ID']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type GetCustomerOrdersQuery = { __typename?: 'Query', orders: { __typename?: 'OrderConnection', edges: Array<{ __typename?: 'OrderEdge', node: { __typename?: 'Order', id: string, orderNumber: string, status: OrderStatus, total: string, placedAt?: any | null } }> } };
+
+export type GetCustomersQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<CustomerFilterInput>;
+  sort?: InputMaybe<CustomerSortInput>;
+}>;
+
+
+export type GetCustomersQuery = { __typename?: 'Query', customers: { __typename?: 'CustomerConnection', edges: Array<{ __typename?: 'CustomerEdge', cursor: string, node: { __typename?: 'Customer', id: string, displayName: string, type: CustomerType, status: CustomerStatus, billingEmail: string, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } };
+
+export type UpdateCustomerMutationVariables = Exact<{
+  input: UpdateCustomerInput;
+}>;
+
+
+export type UpdateCustomerMutation = { __typename?: 'Mutation', updateCustomer: { __typename?: 'Customer', id: string } };
 
 export type DashboardStatsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -1357,6 +1604,14 @@ export const GetProductsDocument = {"kind":"Document","definitions":[{"kind":"Op
 export const SetDefaultProductVariantDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SetDefaultProductVariant"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"setDefaultProductVariant"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<SetDefaultProductVariantMutation, SetDefaultProductVariantMutationVariables>;
 export const UpdateProductDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateProduct"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateProductInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateProduct"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"sku"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"category"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateProductMutation, UpdateProductMutationVariables>;
 export const UpdateProductVariantDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateProductVariant"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateProductVariantInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateProductVariant"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"sku"}},{"kind":"Field","name":{"kind":"Name","value":"price"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"attributes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}},{"kind":"Field","name":{"kind":"Name","value":"inventory"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantityOnHand"}},{"kind":"Field","name":{"kind":"Name","value":"quantityReserved"}},{"kind":"Field","name":{"kind":"Name","value":"sellableQuantity"}},{"kind":"Field","name":{"kind":"Name","value":"reorderThreshold"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<UpdateProductVariantMutation, UpdateProductVariantMutationVariables>;
+export const ActivateCustomerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ActivateCustomer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"activateCustomer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<ActivateCustomerMutation, ActivateCustomerMutationVariables>;
+export const ArchiveCustomerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ArchiveCustomer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"archiveCustomer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<ArchiveCustomerMutation, ArchiveCustomerMutationVariables>;
+export const CreateCustomerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCustomer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateCustomerInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCustomer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<CreateCustomerMutation, CreateCustomerMutationVariables>;
+export const GetCustomerAuditLogDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCustomerAuditLog"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"customerId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerAuditLog"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"customerId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"customerId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"action"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"metadata"}},{"kind":"Field","name":{"kind":"Name","value":"occurredAt"}},{"kind":"Field","name":{"kind":"Name","value":"actorId"}},{"kind":"Field","name":{"kind":"Name","value":"actorName"}},{"kind":"Field","name":{"kind":"Name","value":"actorEmail"}}]}}]}}]} as unknown as DocumentNode<GetCustomerAuditLogQuery, GetCustomerAuditLogQueryVariables>;
+export const GetCustomerByIdDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCustomerById"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customerById"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"billingEmail"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"addresses"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"line1"}},{"kind":"Field","name":{"kind":"Name","value":"line2"}},{"kind":"Field","name":{"kind":"Name","value":"city"}},{"kind":"Field","name":{"kind":"Name","value":"state"}},{"kind":"Field","name":{"kind":"Name","value":"postalCode"}},{"kind":"Field","name":{"kind":"Name","value":"country"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}},{"kind":"Field","name":{"kind":"Name","value":"assignedUsers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"fullName"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}},{"kind":"Field","name":{"kind":"Name","value":"billingSummary"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalOrders"}},{"kind":"Field","name":{"kind":"Name","value":"totalInvoiced"}},{"kind":"Field","name":{"kind":"Name","value":"totalOutstanding"}}]}}]}}]}}]} as unknown as DocumentNode<GetCustomerByIdQuery, GetCustomerByIdQueryVariables>;
+export const GetCustomerOrdersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCustomerOrders"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"customerId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"orders"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"customerId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"customerId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"orderNumber"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"placedAt"}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetCustomerOrdersQuery, GetCustomerOrdersQueryVariables>;
+export const GetCustomersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCustomers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"CustomerFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"CustomerSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"customers"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"billingEmail"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetCustomersQuery, GetCustomersQueryVariables>;
+export const UpdateCustomerDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateCustomer"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateCustomerInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateCustomer"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]} as unknown as DocumentNode<UpdateCustomerMutation, UpdateCustomerMutationVariables>;
 export const DashboardStatsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DashboardStats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dashboardStats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalProducts"}},{"kind":"Field","name":{"kind":"Name","value":"totalOrders"}},{"kind":"Field","name":{"kind":"Name","value":"totalCustomers"}}]}}]}}]} as unknown as DocumentNode<DashboardStatsQuery, DashboardStatsQueryVariables>;
 export const GetNotificationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetNotifications"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"NotificationFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notifications"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"body"}},{"kind":"Field","name":{"kind":"Name","value":"entityType"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"readAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetNotificationsQuery, GetNotificationsQueryVariables>;
 export const GetUnreadNotificationCountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetUnreadNotificationCount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unreadNotificationCount"}}]}}]} as unknown as DocumentNode<GetUnreadNotificationCountQuery, GetUnreadNotificationCountQueryVariables>;

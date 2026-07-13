@@ -1,0 +1,6 @@
+mutation ActivateCustomer($id: ID!) {
+  activateCustomer(id: $id) {
+    id
+    status
+  }
+}
