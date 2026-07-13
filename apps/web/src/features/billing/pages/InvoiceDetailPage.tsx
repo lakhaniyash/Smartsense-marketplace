@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@apollo/client'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   GetInvoiceByIdDocument,
@@ -27,11 +27,12 @@ import {
   useToast,
   type BadgeVariant,
 } from '@shared/components'
+import { ROUTES } from '@shared/constants'
 import { useBreadcrumb } from '@shared/layouts'
+import { base64ToUint8Array, downloadBlob } from '@shared/utils'
 import { InvoiceStatusBadge, RecordPaymentForm, type RecordPaymentFormValues } from '../components'
 import { useInvoice } from '../hooks'
 import { fetchInvoicePdf } from '../services'
-import { base64ToUint8Array, downloadBlob } from '../utils'
 
 // v1 has no live payment gateway (docs/roadmap.md) — recordPayment always
 // creates a SUCCEEDED payment today, but PENDING/FAILED/REFUNDED already
@@ -153,9 +154,12 @@ export function InvoiceDetailPage() {
           title="Couldn't load this invoice"
           description="It may not exist, or you may not have access to it."
           action={
-            <Button variant="secondary" onClick={() => window.history.back()}>
+            <Link
+              to={ROUTES.BILLING}
+              className="border-border-control bg-surface text-fg-secondary hover:bg-surface-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
               Back to billing
-            </Button>
+            </Link>
           }
         />
       )}

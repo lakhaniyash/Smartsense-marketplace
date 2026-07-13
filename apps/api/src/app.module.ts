@@ -18,6 +18,7 @@ import { CatalogModule } from './modules/catalog/catalog.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { NotificationsModule } from './modules/notifications/notifications.module'
 import { OrdersModule } from './modules/orders/orders.module'
+import { ReportsModule } from './modules/reports/reports.module'
 import { UsersModule } from './modules/users/users.module'
 
 @Module({
@@ -59,6 +60,12 @@ import { UsersModule } from './modules/users/users.module'
     OrdersModule,
     BillingModule,
     NotificationsModule,
+    // Registered last per docs/backend-architecture.md — Reports (M15)
+    // depends on nothing beyond Prisma/Common and reads across every
+    // earlier domain's tables directly (mirrors DashboardModule's own
+    // precedent), so it has no ordering requirement of its own; keeping it
+    // last documents that it was added most recently.
+    ReportsModule,
   ],
   providers: [
     {

@@ -1,0 +1,7 @@
+mutation FinalizeBillingReport($id: ID!) {
+  finalizeBillingReport(id: $id) {
+    id
+    status
+    updatedAt
+  }
+}

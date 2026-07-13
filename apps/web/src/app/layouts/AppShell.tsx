@@ -2,7 +2,14 @@ import { useState } from 'react'
 import { useAuth, usePermissions } from '@features/auth'
 import { NotificationsMenu } from '@features/notifications'
 import { Button, CommandPalette, Drawer } from '@shared/components'
-import { DashboardIcon, MenuIcon, OrdersIcon, ProductsIcon, RevenueIcon } from '@shared/icons'
+import {
+  DashboardIcon,
+  MenuIcon,
+  OrdersIcon,
+  ProductsIcon,
+  ReportsIcon,
+  RevenueIcon,
+} from '@shared/icons'
 import { ROUTES } from '@shared/constants'
 import { AppLayout, Content, Header, Sidebar, type SidebarItem } from '@shared/layouts'
 
@@ -36,6 +43,12 @@ const NAV_ITEMS: Array<SidebarItem & { permission: string }> = [
     href: ROUTES.BILLING,
     permission: 'billing:read',
     icon: <RevenueIcon className="size-4 shrink-0" aria-hidden="true" />,
+  },
+  {
+    label: 'Reports',
+    href: ROUTES.REPORTS,
+    permission: 'reports:read',
+    icon: <ReportsIcon className="size-4 shrink-0" aria-hidden="true" />,
   },
 ]
 

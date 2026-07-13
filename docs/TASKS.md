@@ -252,13 +252,102 @@ High-level tasks per milestone. Completed milestones (M1–M7) record what was a
 
 **Scope notes.** M14-T1 turned out to already be resolved: the `Decimal` GraphQL scalar shipped in M12 (`apps/api/src/common/graphql/decimal.scalar.ts`) with an explicit doc comment declaring it reusable by Billing — this milestone reuses it as-is rather than making a fresh scalar decision. Closing the M13 gap this milestone depends on: `OrdersService.ORDER_TRANSITIONS` only reached `CANCELLED`/`PROCESSING` before now, so `PROCESSING`→`SHIPPED`→`DELIVERED`→`COMPLETED` (all `orders:write`, no inventory effect) were added, with a new `OrderCompletedEvent` emitted on reaching `COMPLETED` — Billing's own `BillingEventsListener` (a real, extend-me listener, unlike the throwaway M13 `OrderEventsListener`) consumes it to generate the Invoice, keeping `orders`/`billing` decoupled via `@nestjs/event-emitter` rather than a direct cross-module import. Invoice numbers follow `OrdersService.generateOrderNumber`'s exact pattern (`INV-<uuid fragment>`, unique-constraint collision → `ConflictException` retry, no DB sequence). `recordPayment` implements `docs/api-conventions.md`'s idempotency pattern for the first time in this codebase (`CreatePaymentInput.idempotencyKey`, unique-constrained, existence-checked inside the same `$transaction` as the create) — v1 has no live payment gateway, so a recorded Payment is created directly as `SUCCEEDED`, and Invoice status is recomputed to `PARTIALLY_PAID`/`PAID` by summing succeeded payments in `Prisma.Decimal` arithmetic. `voidInvoice` enforces the domain rule that only a payment-free `DRAFT`/`ISSUED` invoice can be voided, checked and written in one transaction to close the race with a concurrent `recordPayment`. CSV export is a dependency-free string builder; PDF export added `pdfkit` (the milestone's only new dependency) — its `@types/pdfkit` types compile with a default import but that import throws at runtime because this project's `tsconfig` doesn't set `esModuleInterop`, so `invoice-pdf.generator.ts` uses a namespace import (`import * as PDFDocument from 'pdfkit'`) instead; found and fixed during manual verification, not caught by typecheck/lint. `billing:read`/`billing:manage` permissions already existed (seeded pre-M14); `recordPayment`/`voidInvoice` require `billing:manage` (Admin only, per `docs/authorization.md`'s existing matrix — Partners are billing-read-only, not `requirements.md`'s looser "Partner can manage billing" bullet, which is stale). Frontend mirrors the Orders feature's conventions exactly (URL-backed cursor pagination, `InvoiceStatusBadge`, `InvoiceFilterBar`); CSV/PDF downloads are this codebase's first file-download code (`Blob` + object URL, no new dependency). Playwright coverage deferred to M18 per the milestone's own gating; backend coverage is `billing.service.spec.ts` (unit) + `billing.e2e-spec.ts` (full order-completion → invoice → partial/full payment → paid flow, void invariants, ownership scoping, idempotent replay — all against real Postgres).
 
-### M15 — Reports
+### M15 — Reports & Analytics
 
-| Task ID | Task                                                | Priority | Status     | Dependencies |
-| ------- | --------------------------------------------------- | -------- | ---------- | ------------ |
-| M15-T1  | Billing report generation (non-overlapping periods) | High     | ⬜ Backlog | M14          |
-| M15-T2  | Sales summaries + downloadable exports              | Medium   | ⬜ Backlog | M15-T1       |
-| M15-T3  | Ledger reconciliation tests as exit gate            | High     | ⬜ Backlog | M15-T1       |
+**Scope expanded** from "Billing reports only" to "Reports & Analytics" (see `docs/milestones.md` §
+M15 and Jira epic SM-249) — all Partner-owned, true cross-partner/marketplace-wide BI stays deferred to
+a future Analytics epic.
+
+| Task ID | Task                                                                     | Priority | Status  | Dependencies |
+| ------- | ------------------------------------------------------------------------ | -------- | ------- | ------------ |
+| M15-T1  | Billing report generation, lifecycle (non-overlapping periods)           | High     | ✅ Done | M14          |
+| M15-T2  | Sales summaries + downloadable exports (CSV; Excel foundation)           | Medium   | ✅ Done | M15-T1       |
+| M15-T3  | Ledger reconciliation tests as exit gate                                 | High     | ✅ Done | M15-T1       |
+| M15-T4  | Orders report                                                            | Medium   | ✅ Done | M13          |
+| M15-T5  | Inventory report                                                         | Medium   | ✅ Done | M12          |
+| M15-T6  | Product performance report                                               | Medium   | ✅ Done | M12, M13     |
+| M15-T7  | Notification activity report                                             | Medium   | ✅ Done | M16          |
+| M15-T8  | Reports dashboard (KPI cards + charts)                                   | Medium   | ✅ Done | M15-T1–T7    |
+| M15-T9  | Reusable reporting components (DateRangePicker/Chart/KpiCard/ExportMenu) | High     | ✅ Done | —            |
+
+**Scope notes.** `BillingReport`'s service/resolver layer was built on the already-migrated schema
+(model, `BillingReportStatus` enum, and the non-overlapping-period GiST exclusion constraint all
+predate this milestone from M4) — the schema.prisma comment claiming the constraint was still a
+"future TODO" was stale and fixed as a drive-by. `ReportsService` queries Order/Invoice/Payment/
+Product/ProductVariant/Inventory/Notification directly via `PrismaService`, mirroring
+`DashboardService`'s existing cross-domain read pattern, rather than importing
+Orders/Billing/Catalog/NotificationsModule — Reports never re-implements a domain mutation, it only
+aggregates already-committed data. A single new `reports:read` permission (seeded, granted to Partner)
+gates every operation; Admin sees all partners, Partner sees only their own, Customer has none.
+`commissionAmount = grossRevenue * (Partner.commissionRate / 100)` — `commissionRate` is a stored 0–100
+percentage, not a 0–1 fraction, pinned by a unit test after the domain-model.md formula's ambiguity was
+caught during implementation. The GiST exclusion violation surfaces as
+`Prisma.PrismaClientUnknownRequestError` with no mapped `.code` (verified empirically against real
+Postgres, not assumed) — matched by inspecting `.message` for the constraint name and translated to a
+clean `CONFLICT`. Product Performance's connection uses an offset-encoded cursor (not id-based, the only
+list in this codebase that doesn't) since Prisma's `groupBy` has no `cursor` support; its sort is
+likewise applied in application memory rather than via Prisma's `orderBy` (a `groupBy`-with-dynamic-field
+TypeScript limitation), bounded the same way Inventory's low-stock filter already accepts an
+in-memory-paginate tradeoff. CSV export reuses a `common/utils/csv.util.ts` promoted out of Billing's
+existing `exportInvoicesCsv` (Billing itself refactored to call it, behavior-preserving); Excel is
+architecture-only — the enum value and resolver branch exist, but the service throws a clear
+"not yet supported" error rather than generating a file. Frontend ships this codebase's first charting
+library (Chart.js via `react-chartjs-2`, one generic `<Chart>` wrapper covering line/bar/doughnut) plus
+three other new shared components (`DateRangePicker`, `KpiCard`, `ExportMenu`) and an 8-page
+`features/reports` module, all gated by one `PermissionRoute permission="reports:read"` route block. No
+GraphQL query exists anywhere in this codebase to list partners, so the Admin partner-selector control
+was descoped to a plain "Partner ID" text input on the Generate Report form rather than a fake dropdown
+— an honest, documented interim gap, not silently invented. A real bundle-splitting regression was
+caught and fixed during verification: an eagerly-loaded `AppShell.tsx` importing the shared components
+barrel was pulling Chart.js into the main entry chunk despite every Reports page being route-level
+`lazy()`-split, because Rollup couldn't prove the barrel's other modules were side-effect-free; adding
+`"sideEffects": false` to `apps/web/package.json` fixed it (Chart.js's ~200KB now loads only on
+navigating into Reports — verified by inspecting the built chunks directly, not assumed). Tested:
+backend unit (`reports.service.spec.ts`, including the commission-math pin) + a 25-case
+`reports.e2e-spec.ts` against real Postgres (permission/ownership gating, the full
+Generated→Finalized→PaidOut lifecycle reconciling exactly against real Invoice fixtures, and the
+overlap-rejection case) — 214/214 unit and 124/124 e2e tests passing repo-wide; frontend Vitest
+component tests (193/193 passing repo-wide) plus a real-browser Playwright journey
+(`e2e/reports/reports.spec.ts`) driving an actual Keycloak login, all 6 report routes, CSV export, the
+full billing-report lifecycle, and a dark-mode chart-palette check. **Cross-cutting fix found during
+review:** the new `BillingReportDetailPage`'s error-state "Back" button copied
+`window.history.back()` from `InvoiceDetailPage`/`OrderDetailPage`/`ProductDetailPage` — the exact
+anti-pattern SM-244 already fixed for list-page pagination (breaks on a bookmarked/shared detail-page
+URL, since there's no in-app history entry to return to), just never caught on these detail pages'
+error-state action button. Replaced all four with a real `Link` to the known list route, styled to
+match `Button`'s secondary/md variant (the same `Link`-styled-as-button precedent
+`dashboard/components/QuickActions.tsx` already uses for navigation vs. action semantics).
+**Second cross-cutting fix found during review:** the same generalization gap on the scroll side —
+`ReportsDashboardPage`/`RevenueReportPage`/`OrdersReportPage`/`NotificationActivityReportPage` used
+plain `flex flex-col gap-6` with no bounded scroll region, so on tall content (the Dashboard stacking
+KPIs + a chart + 6 nav cards) the whole page scrolled via the shell's outer scroll region instead of
+keeping `PageHeader`/`ReportFilterBar` pinned, the way `CatalogPage`/`OrdersPage`/`BillingPage`/
+`NotificationsPage` already do for their tables. Fixed by wrapping each page's success-state body in
+the same `flex h-full flex-col` root + `flex-1 overflow-hidden` → `flex-1 overflow-y-auto` shell (user
+confirmed scope: all 4 pages, not just Dashboard). `BillingReportDetailPage` intentionally kept plain
+scroll, matching `InvoiceDetailPage`/`OrderDetailPage`/`ProductDetailPage`'s existing detail-page
+convention. Both cross-cutting fixes exposed the same root cause — an established Catalog/Orders
+convention that was never generalized in `docs/ui-guidelines.md` beyond its original table-specific (or
+button-specific) wording, so a new screen copying the nearest existing example reproduced the gap
+instead of the fix. Both rules are now written into `docs/ui-guidelines.md` (§ Navigation's "Back
+navigation" row; § Page Layouts' bounded-scroll paragraph) in general terms so a future screen doesn't
+need to rediscover them a third time. **Third cross-cutting fix, found once the bounded-scroll fix above
+still didn't visually resolve the problem on the 6 Reports sub-pages:** every one of them had a
+`handle.crumb` set in `app/router/index.tsx`, rendering a real "Reports > X" breadcrumb bar above the
+page — but `CatalogPage`/`OrdersPage`/`BillingPage`'s own top-level list routes deliberately have no
+`handle.crumb` (`Breadcrumbs.tsx`'s own comment: "omitted on top-level list pages"). Since `Content.tsx`'s
+`<main>` is the shell's one bounded, scrolling region (per the SM-244 app-shell-pinning fix,
+`2fff850`) and a page's `h-full` flex column claims 100% of that box without reserving room for a
+breadcrumb sibling rendered above it, the crumb's height pushed the page's own content past `main`'s
+visible area — exactly why Pagination/the KPI body sat just below the fold instead of fitting flush,
+even after the page's own internal layout was already correct. Fixed by removing `handle.crumb` from
+the 6 sub-page routes (Revenue, Orders, Inventory, Product Performance, Notification Activity, Billing
+Reports list) — each is the direct one-level-deep entry point for its report, the same relationship
+Catalog/Orders/Billing's list pages have to their own sidebar entry — keeping it only on the true nested
+detail route (`/reports/billing-reports/:id`). Verified live (not just typechecked): a real-browser
+check confirmed no breadcrumb renders, `document.documentElement.scrollHeight` no longer exceeds
+`clientHeight`, and the pagination control sits fully in the viewport — plus the full existing
+`reports.e2e-spec.ts`/`reports.spec.ts` suites and all 193 Vitest tests still pass unchanged.
 
 ### M16 — Notifications
 

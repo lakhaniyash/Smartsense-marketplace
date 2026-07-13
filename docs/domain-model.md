@@ -509,16 +509,16 @@ Notes on the diagram:
 
 **Attributes**
 
-| Attribute               | Notes                                   |
-| ----------------------- | --------------------------------------- |
-| id                      |                                         |
-| partnerId               |                                         |
-| periodStart / periodEnd |                                         |
-| grossRevenue            | Sum of Invoice amounts in period        |
-| commissionAmount        | `grossRevenue * Partner.commissionRate` |
-| netPayout               | `grossRevenue - commissionAmount`       |
-| status                  | `Generated`, `Finalized`, `PaidOut`     |
-| generatedAt             |                                         |
+| Attribute               | Notes                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| id                      |                                                                                                                        |
+| partnerId               |                                                                                                                        |
+| periodStart / periodEnd |                                                                                                                        |
+| grossRevenue            | Sum of Invoice amounts in period                                                                                       |
+| commissionAmount        | `grossRevenue * (Partner.commissionRate / 100)` — `commissionRate` is stored as a 0–100 percentage, not a 0–1 fraction |
+| netPayout               | `grossRevenue - commissionAmount`                                                                                      |
+| status                  | `Generated`, `Finalized`, `PaidOut`                                                                                    |
+| generatedAt             |                                                                                                                        |
 
 **Relationships**
 
@@ -532,6 +532,12 @@ Notes on the diagram:
 - `netPayout` can only be marked `PaidOut` after the platform's payout process confirms disbursement (external to this domain model).
 
 **Lifecycle.** `Generated` (computed, editable/regenerable) → `Finalized` (locked, sent to Partner) → `PaidOut` (funds disbursed). See [Billing Flow](#billing-flow).
+
+**Related, non-modeled reports (M15).** Revenue, Orders, Inventory, Product Performance, and
+Notification Activity reports are live, computed-on-read aggregations over `Order`/`OrderItem`/
+`Product`/`ProductVariant`/`Inventory`/`Notification` — they have no Prisma model of their own (unlike
+`BillingReport`, which is persisted so a Partner's statement can be finalized and paid out). See
+`docs/milestones.md` § M15 and `docs/roadmap.md` § Reports & Analytics for scope.
 
 ---
 

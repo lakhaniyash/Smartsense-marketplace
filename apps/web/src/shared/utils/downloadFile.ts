@@ -1,6 +1,9 @@
 // No existing precedent for a file download in this codebase (first one
-// ships with M14/Billing) — kept minimal per the plan: Blob -> object URL ->
+// shipped with M14/Billing) — kept minimal per the plan: Blob -> object URL ->
 // a programmatic <a> click -> revoke, rather than reaching for a dependency.
+// Promoted to shared/ for M15/Reports (docs/milestones.md) since Billing and
+// Reports both need the identical mechanism and features can't import each
+// other's internals (docs/folder-structure.md § features).
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

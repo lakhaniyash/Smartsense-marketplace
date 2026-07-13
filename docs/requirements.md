@@ -116,8 +116,18 @@ Future roles should be easy to add.
 
 - Invoices
 - Payments
-- Reports
 - Download CSV/PDF
+
+## Reports
+
+- Billing Reports (generate/finalize/mark paid out)
+- Revenue Report
+- Orders Report
+- Inventory Report
+- Product Performance Report
+- Notification Activity Report
+- Reports Dashboard (KPI cards + charts)
+- Download CSV (Excel foundation reserved)
 
 ---
 

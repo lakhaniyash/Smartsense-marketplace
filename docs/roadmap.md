@@ -153,11 +153,11 @@ Organized by domain. "Planned capabilities" describe the target release's scope 
 - **Planned capabilities:** invoice generation per completed order, payment recording (including partial payments), invoice/payment status visibility, CSV/PDF export ([requirements.md § Billing](./requirements.md#modules)).
 - **Future enhancements:** payment-provider integration (v2.0 — currently payments are recorded, not processed), automated payout/settlement runs, dunning for overdue invoices.
 
-### Reports — v1.1
+### Reports & Analytics — v1.1
 
-- **Business value:** partners and operators make pricing, stocking, and commission decisions from these numbers — reports convert the ledger into decisions.
-- **Planned capabilities:** periodic billing reports per Partner ([domain-model.md § Billing Report](./domain-model.md#billing-report)), sales summaries, downloadable exports.
-- **Future enhancements:** scheduled report delivery (with Notifications), custom report periods, operator-side cross-partner reporting (v2.0, feeding Analytics).
+- **Business value:** partners and operators make pricing, stocking, and commission decisions from these numbers — reports convert Billing's ledger and Orders/Catalog/Notifications' operational data into decisions.
+- **Planned capabilities:** periodic billing reports per Partner ([domain-model.md § Billing Report](./domain-model.md#billing-report)) with a Generated→Finalized→PaidOut lifecycle; Revenue, Orders, Inventory, Product Performance, and Notification Activity reports; a Reports Dashboard (KPI cards + charts); CSV export (Excel foundation reserved). All Partner-owned — Admin sees every partner, but this is not cross-partner aggregation.
+- **Future enhancements:** scheduled report delivery (with Notifications), custom report periods, operator-side **cross-partner** reporting (v2.0, feeding Analytics).
 
 ### Notifications — v1.1
 
@@ -179,8 +179,8 @@ Organized by domain. "Planned capabilities" describe the target release's scope 
 
 ### Analytics — v2.0
 
-- **Business value:** aggregate insight across partners, products, and time — the difference between reporting what happened and understanding why.
-- **Planned capabilities:** dashboards for sales trends, partner performance, and category performance; operator-side marketplace health views.
+- **Business value:** aggregate insight _across_ partners, products, and time — the difference between reporting what happened for one Partner (M15 Reports) and understanding marketplace-wide why.
+- **Planned capabilities:** true cross-partner dashboards for sales trends, partner performance, and category performance; operator-side marketplace health views spanning every Partner at once.
 - **Future enhancements:** cohort and funnel analysis, anomaly detection, the AI-powered recommendations in [Future Product Vision](#future-product-vision).
 
 ### Audit Logs — v1.0 (recording) → v2.0 (surfacing)

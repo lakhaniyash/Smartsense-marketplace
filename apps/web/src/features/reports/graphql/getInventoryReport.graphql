@@ -1,0 +1,28 @@
+query GetInventoryReport($first: Int, $after: String, $filter: InventoryReportFilterInput) {
+  inventoryReport(first: $first, after: $after, filter: $filter) {
+    totalVariants
+    totalOnHand
+    totalReserved
+    lowStockCount
+    lowStockItems {
+      edges {
+        cursor
+        node {
+          productVariantId
+          productTitle
+          sku
+          partnerId
+          quantityOnHand
+          quantityReserved
+          reorderThreshold
+        }
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+}

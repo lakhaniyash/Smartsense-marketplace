@@ -1,0 +1,15 @@
+mutation GenerateBillingReport($input: GenerateBillingReportInput!) {
+  generateBillingReport(input: $input) {
+    id
+    partnerId
+    periodStart
+    periodEnd
+    status
+    grossRevenue
+    commissionAmount
+    netPayout
+    generatedAt
+    createdAt
+    updatedAt
+  }
+}

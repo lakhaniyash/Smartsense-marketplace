@@ -28,6 +28,62 @@ export type AdjustInventoryInput = {
   reason?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** A periodic per-Partner statement reconciling Invoice/Payment activity for a date range (docs/domain-model.md § Billing Report). The only persisted Reports entity — every other report in this module is computed on read. */
+export type BillingReport = {
+  __typename?: 'BillingReport';
+  /** grossRevenue * (Partner.commissionRate / 100). */
+  commissionAmount: Scalars['Decimal']['output'];
+  createdAt: Scalars['DateTime']['output'];
+  generatedAt: Scalars['DateTime']['output'];
+  /** SUM(Invoice.amountDue) for ISSUED/PARTIALLY_PAID/PAID invoices issued in the period. */
+  grossRevenue: Scalars['Decimal']['output'];
+  id: Scalars['ID']['output'];
+  /** grossRevenue - commissionAmount. */
+  netPayout: Scalars['Decimal']['output'];
+  partnerId: Scalars['ID']['output'];
+  periodEnd: Scalars['DateTime']['output'];
+  periodStart: Scalars['DateTime']['output'];
+  status: BillingReportStatus;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type BillingReportConnection = {
+  __typename?: 'BillingReportConnection';
+  edges: Array<BillingReportEdge>;
+  pageInfo: PageInfo;
+};
+
+export type BillingReportEdge = {
+  __typename?: 'BillingReportEdge';
+  cursor: Scalars['String']['output'];
+  node: BillingReport;
+};
+
+export type BillingReportFilterInput = {
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+  status?: InputMaybe<BillingReportStatus>;
+};
+
+/** Fields the billing report list can be sorted by. */
+export enum BillingReportSortField {
+  GeneratedAt = 'GENERATED_AT',
+  GrossRevenue = 'GROSS_REVENUE',
+  PeriodStart = 'PERIOD_START'
+}
+
+export type BillingReportSortInput = {
+  direction: SortDirection;
+  field: BillingReportSortField;
+};
+
+/** Lifecycle per docs/domain-model.md § Billing Report: GENERATED (just computed) → FINALIZED (locked, ready for payout) → PAID_OUT (payout completed). */
+export enum BillingReportStatus {
+  Finalized = 'FINALIZED',
+  Generated = 'GENERATED',
+  PaidOut = 'PAID_OUT'
+}
+
 /** A node in the global product category taxonomy, owned and maintained by Admin (docs/domain-model.md § Category). Returned as a flat list — clients build the parent/child tree from parentCategoryId. */
 export type Category = {
   __typename?: 'Category';
@@ -108,6 +164,28 @@ export type DashboardStats = {
   totalProducts: Scalars['Int']['output'];
 };
 
+/** An inclusive [from, to] date range used to scope a report to a period. */
+export type DateRangeInput = {
+  from: Scalars['DateTime']['input'];
+  to: Scalars['DateTime']['input'];
+};
+
+export type ExportReportInput = {
+  /** Ignored for a BILLING_REPORTS or INVENTORY export. Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  format: ReportExportFormat;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+  reportType: ReportExportType;
+};
+
+export type GenerateBillingReportInput = {
+  /** Required for an Admin caller (there is no "generate for all partners" bulk operation); ignored for a Partner caller, whose own partnerId always wins. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+  periodEnd: Scalars['DateTime']['input'];
+  periodStart: Scalars['DateTime']['input'];
+};
+
 /** Stock levels for a ProductVariant (docs/domain-model.md § Inventory). sellableQuantity = quantityOnHand - quantityReserved, never negative. */
 export type Inventory = {
   __typename?: 'Inventory';
@@ -126,6 +204,45 @@ export enum InventoryAdjustmentType {
   Increase = 'INCREASE',
   Set = 'SET'
 }
+
+/** A point-in-time inventory snapshot for the scoped Partner(s) — no date range, unlike every other report, since stock levels aren't a historical ledger. */
+export type InventoryReport = {
+  __typename?: 'InventoryReport';
+  lowStockCount: Scalars['Int']['output'];
+  lowStockItems: InventoryReportItemConnection;
+  totalOnHand: Scalars['Int']['output'];
+  totalReserved: Scalars['Int']['output'];
+  totalVariants: Scalars['Int']['output'];
+};
+
+export type InventoryReportFilterInput = {
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+/** A single low-stock Product Variant: quantityOnHand < reorderThreshold (docs/domain-model.md § Inventory). Variants with no reorderThreshold set never appear here — a data-completeness gap, not a bug (see the plan's Risks section). */
+export type InventoryReportItem = {
+  __typename?: 'InventoryReportItem';
+  partnerId: Scalars['ID']['output'];
+  productTitle: Scalars['String']['output'];
+  productVariantId: Scalars['ID']['output'];
+  quantityOnHand: Scalars['Int']['output'];
+  quantityReserved: Scalars['Int']['output'];
+  reorderThreshold?: Maybe<Scalars['Int']['output']>;
+  sku: Scalars['String']['output'];
+};
+
+export type InventoryReportItemConnection = {
+  __typename?: 'InventoryReportItemConnection';
+  edges: Array<InventoryReportItemEdge>;
+  pageInfo: PageInfo;
+};
+
+export type InventoryReportItemEdge = {
+  __typename?: 'InventoryReportItemEdge';
+  cursor: Scalars['String']['output'];
+  node: InventoryReportItem;
+};
 
 /** A per-Order billing document (docs/domain-model.md § Invoice). */
 export type Invoice = {
@@ -199,8 +316,14 @@ export type Mutation = {
   createProduct: Product;
   /** Adds a ProductVariant to a Product owned by the caller. */
   createProductVariant: ProductVariant;
+  /** GENERATED → FINALIZED (docs/domain-model.md § Billing Report lifecycle). */
+  finalizeBillingReport: BillingReport;
+  /** Generates a BillingReport for a Partner/period, reconciling gross revenue/commission/net payout from the Invoice ledger. Rejects an overlapping period (any Partner-scoped period that intersects an existing one) with CONFLICT. */
+  generateBillingReport: BillingReport;
   /** Marks every UNREAD notification for the caller as READ; returns the count updated. */
   markAllNotificationsRead: Scalars['Int']['output'];
+  /** FINALIZED → PAID_OUT (docs/domain-model.md § Billing Report lifecycle). */
+  markBillingReportPaidOut: BillingReport;
   /** Marks one of the caller's own notifications READ. Throws NOT_FOUND on a missing or out-of-scope id. Idempotent — already-READ is a no-op. */
   markNotificationRead: Notification;
   /** Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate. */
@@ -254,6 +377,21 @@ export type MutationCreateProductVariantArgs = {
 };
 
 
+export type MutationFinalizeBillingReportArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationGenerateBillingReportArgs = {
+  input: GenerateBillingReportInput;
+};
+
+
+export type MutationMarkBillingReportPaidOutArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationMarkNotificationReadArgs = {
   id: Scalars['ID']['input'];
 };
@@ -303,6 +441,29 @@ export type Notification = {
   title: Scalars['String']['output'];
   type: NotificationType;
   updatedAt: Scalars['DateTime']['output'];
+};
+
+/** Historical Notification volume for the scoped Partner's staff recipients, regardless of current recipient status/deletedAt — a report reflects what happened, not who's still active today (unlike NotificationsService.notifyPartnerUsers' fan-out filter). */
+export type NotificationActivityReport = {
+  __typename?: 'NotificationActivityReport';
+  readCount: Scalars['Int']['output'];
+  totalNotifications: Scalars['Int']['output'];
+  typeBreakdown: Array<NotificationActivityTypeBreakdown>;
+  unreadCount: Scalars['Int']['output'];
+};
+
+export type NotificationActivityReportFilterInput = {
+  /** Scopes to Notification.createdAt within this range. Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+/** Notification count for a single NotificationType within the scoped period. */
+export type NotificationActivityTypeBreakdown = {
+  __typename?: 'NotificationActivityTypeBreakdown';
+  count: Scalars['Int']['output'];
+  type: NotificationType;
 };
 
 export type NotificationConnection = {
@@ -428,6 +589,29 @@ export type OrderStatusHistoryEntry = {
   toStatus: OrderStatus;
 };
 
+/** Order-volume summary for the scoped Partner(s)/period. totalRevenue/averageOrderValue exclude CANCELLED orders (a cancelled order was never fulfilled revenue). */
+export type OrdersReport = {
+  __typename?: 'OrdersReport';
+  averageOrderValue: Scalars['Decimal']['output'];
+  statusBreakdown: Array<OrdersReportStatusBreakdown>;
+  totalOrders: Scalars['Int']['output'];
+  totalRevenue: Scalars['Decimal']['output'];
+};
+
+export type OrdersReportFilterInput = {
+  /** Scopes to Order.createdAt within this range. Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+/** Order count for a single OrderStatus within the scoped period. */
+export type OrdersReportStatusBreakdown = {
+  __typename?: 'OrdersReportStatusBreakdown';
+  count: Scalars['Int']['output'];
+  status: OrderStatus;
+};
+
 export type PageInfo = {
   __typename?: 'PageInfo';
   endCursor?: Maybe<Scalars['String']['output']>;
@@ -499,6 +683,47 @@ export type ProductFilterInput = {
   status?: InputMaybe<ProductStatus>;
 };
 
+/** Units-sold/revenue ranking for a single Product Variant within the scoped period. "Sold" excludes CANCELLED orders (same convention as OrdersReport). */
+export type ProductPerformance = {
+  __typename?: 'ProductPerformance';
+  partnerId: Scalars['ID']['output'];
+  productTitle: Scalars['String']['output'];
+  productVariantId: Scalars['ID']['output'];
+  revenue: Scalars['Decimal']['output'];
+  sku: Scalars['String']['output'];
+  unitsSold: Scalars['Int']['output'];
+};
+
+export type ProductPerformanceConnection = {
+  __typename?: 'ProductPerformanceConnection';
+  edges: Array<ProductPerformanceEdge>;
+  pageInfo: PageInfo;
+};
+
+export type ProductPerformanceEdge = {
+  __typename?: 'ProductPerformanceEdge';
+  cursor: Scalars['String']['output'];
+  node: ProductPerformance;
+};
+
+export type ProductPerformanceFilterInput = {
+  /** Scopes to Order.createdAt within this range. Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+/** Fields the product performance ranking can be sorted by. Defaults to REVENUE desc. */
+export enum ProductPerformanceSortField {
+  Revenue = 'REVENUE',
+  UnitsSold = 'UNITS_SOLD'
+}
+
+export type ProductPerformanceSortInput = {
+  direction: SortDirection;
+  field: ProductPerformanceSortField;
+};
+
 /** Fields the product list can be sorted by. */
 export enum ProductSortField {
   CreatedAt = 'CREATED_AT',
@@ -554,6 +779,10 @@ export type Query = {
   __typename?: 'Query';
   /** Auth module status */
   authStatus: Scalars['String']['output'];
+  /** A single billing report by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
+  billingReport: BillingReport;
+  /** A page of the caller's visible billing reports (Admin: all; Partner: own). */
+  billingReports: BillingReportConnection;
   /** Billing module status */
   billingStatus: Scalars['String']['output'];
   /** Catalog module status */
@@ -566,6 +795,10 @@ export type Query = {
   dashboardStatus: Scalars['String']['output'];
   /** A CSV export of the caller's visible invoices, matching the given filter. */
   exportInvoicesCsv: Scalars['String']['output'];
+  /** Renders the requested report as a raw CSV string, matching the given filter. EXCEL format is a not-yet-implemented placeholder (throws BAD_USER_INPUT today). */
+  exportReport: Scalars['String']['output'];
+  /** A point-in-time inventory snapshot for the scoped Partner(s), including a paginated low-stock item connection. */
+  inventoryReport: InventoryReport;
   /** A single invoice by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
   invoice: Invoice;
   /** A base64-encoded PDF rendering of a single invoice by id. */
@@ -574,18 +807,28 @@ export type Query = {
   invoices: InvoiceConnection;
   /** The authenticated caller and their resolved roles/permissions. */
   me: CurrentUser;
+  /** Historical Notification volume for the scoped Partner's staff recipients, by type/status. */
+  notificationActivityReport: NotificationActivityReport;
   /** A page of the caller's own notifications, most recent first. */
   notifications: NotificationConnection;
   /** A single order by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
   order: Order;
   /** A page of the caller's visible orders (Admin: all; Partner: own as vendor; Customer: own as buyer). */
   orders: OrderConnection;
+  /** Order-volume summary + status breakdown for the scoped Partner(s)/period. */
+  ordersReport: OrdersReport;
   /** Orders module status */
   ordersStatus: Scalars['String']['output'];
   /** A single product by id, scoped to the caller (Admin: any; Partner: own). Throws NOT_FOUND rather than returning null on a missing or out-of-scope id. */
   productById: Product;
+  /** Units-sold/revenue ranking of Product Variants for the scoped Partner(s)/period. Uses an offset-encoded cursor (see ProductPerformanceConnectionOutput's doc comment) since Prisma's groupBy has no cursor support. */
+  productPerformanceReport: ProductPerformanceConnection;
   /** A page of the caller's visible products (Admin: all; Partner: own). */
   products: ProductConnection;
+  /** KPI + trend summary for the Reports landing page. A dedicated query — never touches dashboardStats (the M11 marketplace-wide overview card). */
+  reportsDashboard: ReportsDashboard;
+  /** Invoice-ledger-derived revenue summary + trend for the scoped Partner(s)/period. */
+  revenueReport: RevenueReport;
   /** The caller's own unread notification count. */
   unreadNotificationCount: Scalars['Int']['output'];
   /** Users module status */
@@ -593,8 +836,33 @@ export type Query = {
 };
 
 
+export type QueryBillingReportArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryBillingReportsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<BillingReportFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<BillingReportSortInput>;
+};
+
+
 export type QueryExportInvoicesCsvArgs = {
   filter?: InputMaybe<InvoiceFilterInput>;
+};
+
+
+export type QueryExportReportArgs = {
+  input: ExportReportInput;
+};
+
+
+export type QueryInventoryReportArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<InventoryReportFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -613,6 +881,11 @@ export type QueryInvoicesArgs = {
   filter?: InputMaybe<InvoiceFilterInput>;
   first?: InputMaybe<Scalars['Int']['input']>;
   sort?: InputMaybe<InvoiceSortInput>;
+};
+
+
+export type QueryNotificationActivityReportArgs = {
+  filter?: InputMaybe<NotificationActivityReportFilterInput>;
 };
 
 
@@ -636,8 +909,21 @@ export type QueryOrdersArgs = {
 };
 
 
+export type QueryOrdersReportArgs = {
+  filter?: InputMaybe<OrdersReportFilterInput>;
+};
+
+
 export type QueryProductByIdArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryProductPerformanceReportArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ProductPerformanceFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<ProductPerformanceSortInput>;
 };
 
 
@@ -646,6 +932,87 @@ export type QueryProductsArgs = {
   filter?: InputMaybe<ProductFilterInput>;
   first?: InputMaybe<Scalars['Int']['input']>;
   sort?: InputMaybe<ProductSortInput>;
+};
+
+
+export type QueryReportsDashboardArgs = {
+  filter?: InputMaybe<ReportsDashboardFilterInput>;
+};
+
+
+export type QueryRevenueReportArgs = {
+  filter?: InputMaybe<RevenueReportFilterInput>;
+};
+
+/** CSV is fully implemented today; EXCEL is a not-yet-implemented placeholder. */
+export enum ReportExportFormat {
+  Csv = 'CSV',
+  Excel = 'EXCEL'
+}
+
+/** Which report exportReport should render. */
+export enum ReportExportType {
+  BillingReports = 'BILLING_REPORTS',
+  Inventory = 'INVENTORY',
+  NotificationActivity = 'NOTIFICATION_ACTIVITY',
+  Orders = 'ORDERS',
+  ProductPerformance = 'PRODUCT_PERFORMANCE',
+  Revenue = 'REVENUE'
+}
+
+/** KPI + trend summary for the Reports landing page. A dedicated query — never reuses or touches dashboardStats (the M11 marketplace-wide overview card), which stays untouched. */
+export type ReportsDashboard = {
+  __typename?: 'ReportsDashboard';
+  /** Same formula as RevenueReport.totalGrossRevenue. */
+  grossRevenue: Scalars['Decimal']['output'];
+  /** Same definition as InventoryReport.lowStockCount. */
+  lowStockCount: Scalars['Int']['output'];
+  /** Same formula as OrdersReport.totalRevenue. */
+  ordersRevenue: Scalars['Decimal']['output'];
+  revenueTrend: Array<RevenueReportBucket>;
+  totalOrders: Scalars['Int']['output'];
+};
+
+export type ReportsDashboardFilterInput = {
+  /** Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+};
+
+/** Trend bucket size for revenueReport.trend. Defaults to MONTH. */
+export enum RevenueBucketGranularity {
+  Day = 'DAY',
+  Month = 'MONTH',
+  Week = 'WEEK'
+}
+
+/** Invoice-ledger-derived revenue summary + trend for the scoped Partner(s)/period (same aggregation formula as BillingReport, computed on read rather than persisted). */
+export type RevenueReport = {
+  __typename?: 'RevenueReport';
+  invoiceCount: Scalars['Int']['output'];
+  totalCommission: Scalars['Decimal']['output'];
+  totalGrossRevenue: Scalars['Decimal']['output'];
+  totalNetPayout: Scalars['Decimal']['output'];
+  trend: Array<RevenueReportBucket>;
+};
+
+/** One point in the revenue trend series, bucketed by the requested granularity. */
+export type RevenueReportBucket = {
+  __typename?: 'RevenueReportBucket';
+  bucketEnd: Scalars['DateTime']['output'];
+  bucketStart: Scalars['DateTime']['output'];
+  grossRevenue: Scalars['Decimal']['output'];
+  invoiceCount: Scalars['Int']['output'];
+};
+
+export type RevenueReportFilterInput = {
+  /** Scopes to Invoice.issuedAt within this range. Omitted = all time. */
+  dateRange?: InputMaybe<DateRangeInput>;
+  /** Defaults to MONTH. */
+  granularity?: InputMaybe<RevenueBucketGranularity>;
+  /** Narrows within the caller's own scope; only Admin can broaden beyond it. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 export enum SortDirection {
@@ -879,6 +1246,98 @@ export type UpdateOrderStatusMutationVariables = Exact<{
 
 export type UpdateOrderStatusMutation = { __typename?: 'Mutation', updateOrderStatus: { __typename?: 'Order', id: string, status: OrderStatus } };
 
+export type ExportReportQueryVariables = Exact<{
+  input: ExportReportInput;
+}>;
+
+
+export type ExportReportQuery = { __typename?: 'Query', exportReport: string };
+
+export type FinalizeBillingReportMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type FinalizeBillingReportMutation = { __typename?: 'Mutation', finalizeBillingReport: { __typename?: 'BillingReport', id: string, status: BillingReportStatus, updatedAt: any } };
+
+export type GenerateBillingReportMutationVariables = Exact<{
+  input: GenerateBillingReportInput;
+}>;
+
+
+export type GenerateBillingReportMutation = { __typename?: 'Mutation', generateBillingReport: { __typename?: 'BillingReport', id: string, partnerId: string, periodStart: any, periodEnd: any, status: BillingReportStatus, grossRevenue: string, commissionAmount: string, netPayout: string, generatedAt: any, createdAt: any, updatedAt: any } };
+
+export type GetBillingReportQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type GetBillingReportQuery = { __typename?: 'Query', billingReport: { __typename?: 'BillingReport', id: string, partnerId: string, periodStart: any, periodEnd: any, status: BillingReportStatus, grossRevenue: string, commissionAmount: string, netPayout: string, generatedAt: any, createdAt: any, updatedAt: any } };
+
+export type GetBillingReportsQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<BillingReportFilterInput>;
+  sort?: InputMaybe<BillingReportSortInput>;
+}>;
+
+
+export type GetBillingReportsQuery = { __typename?: 'Query', billingReports: { __typename?: 'BillingReportConnection', edges: Array<{ __typename?: 'BillingReportEdge', cursor: string, node: { __typename?: 'BillingReport', id: string, partnerId: string, periodStart: any, periodEnd: any, status: BillingReportStatus, grossRevenue: string, commissionAmount: string, netPayout: string, generatedAt: any, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } };
+
+export type GetInventoryReportQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<InventoryReportFilterInput>;
+}>;
+
+
+export type GetInventoryReportQuery = { __typename?: 'Query', inventoryReport: { __typename?: 'InventoryReport', totalVariants: number, totalOnHand: number, totalReserved: number, lowStockCount: number, lowStockItems: { __typename?: 'InventoryReportItemConnection', edges: Array<{ __typename?: 'InventoryReportItemEdge', cursor: string, node: { __typename?: 'InventoryReportItem', productVariantId: string, productTitle: string, sku: string, partnerId: string, quantityOnHand: number, quantityReserved: number, reorderThreshold?: number | null } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } } };
+
+export type GetNotificationActivityReportQueryVariables = Exact<{
+  filter?: InputMaybe<NotificationActivityReportFilterInput>;
+}>;
+
+
+export type GetNotificationActivityReportQuery = { __typename?: 'Query', notificationActivityReport: { __typename?: 'NotificationActivityReport', totalNotifications: number, readCount: number, unreadCount: number, typeBreakdown: Array<{ __typename?: 'NotificationActivityTypeBreakdown', type: NotificationType, count: number }> } };
+
+export type GetOrdersReportQueryVariables = Exact<{
+  filter?: InputMaybe<OrdersReportFilterInput>;
+}>;
+
+
+export type GetOrdersReportQuery = { __typename?: 'Query', ordersReport: { __typename?: 'OrdersReport', totalOrders: number, totalRevenue: string, averageOrderValue: string, statusBreakdown: Array<{ __typename?: 'OrdersReportStatusBreakdown', status: OrderStatus, count: number }> } };
+
+export type GetProductPerformanceReportQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<ProductPerformanceFilterInput>;
+  sort?: InputMaybe<ProductPerformanceSortInput>;
+}>;
+
+
+export type GetProductPerformanceReportQuery = { __typename?: 'Query', productPerformanceReport: { __typename?: 'ProductPerformanceConnection', edges: Array<{ __typename?: 'ProductPerformanceEdge', cursor: string, node: { __typename?: 'ProductPerformance', productVariantId: string, productTitle: string, sku: string, partnerId: string, unitsSold: number, revenue: string } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } };
+
+export type GetReportsDashboardQueryVariables = Exact<{
+  filter?: InputMaybe<ReportsDashboardFilterInput>;
+}>;
+
+
+export type GetReportsDashboardQuery = { __typename?: 'Query', reportsDashboard: { __typename?: 'ReportsDashboard', grossRevenue: string, ordersRevenue: string, totalOrders: number, lowStockCount: number, revenueTrend: Array<{ __typename?: 'RevenueReportBucket', bucketStart: any, bucketEnd: any, grossRevenue: string, invoiceCount: number }> } };
+
+export type GetRevenueReportQueryVariables = Exact<{
+  filter?: InputMaybe<RevenueReportFilterInput>;
+}>;
+
+
+export type GetRevenueReportQuery = { __typename?: 'Query', revenueReport: { __typename?: 'RevenueReport', invoiceCount: number, totalCommission: string, totalGrossRevenue: string, totalNetPayout: string, trend: Array<{ __typename?: 'RevenueReportBucket', bucketStart: any, bucketEnd: any, grossRevenue: string, invoiceCount: number }> } };
+
+export type MarkBillingReportPaidOutMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type MarkBillingReportPaidOutMutation = { __typename?: 'Mutation', markBillingReportPaidOut: { __typename?: 'BillingReport', id: string, status: BillingReportStatus, updatedAt: any } };
+
 
 export const MeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"fullName"}},{"kind":"Field","name":{"kind":"Name","value":"roles"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]} as unknown as DocumentNode<MeQuery, MeQueryVariables>;
 export const ExportInvoicesCsvDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ExportInvoicesCsv"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InvoiceFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"exportInvoicesCsv"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}]}]}}]} as unknown as DocumentNode<ExportInvoicesCsvQuery, ExportInvoicesCsvQueryVariables>;
@@ -909,3 +1368,15 @@ export const GetOrderByIdDocument = {"kind":"Document","definitions":[{"kind":"O
 export const GetOrderableVariantsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetOrderableVariants"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"search"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"products"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"50"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"status"},"value":{"kind":"EnumValue","value":"PUBLISHED"}},{"kind":"ObjectField","name":{"kind":"Name","value":"search"},"value":{"kind":"Variable","name":{"kind":"Name","value":"search"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"variants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"sku"}},{"kind":"Field","name":{"kind":"Name","value":"price"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetOrderableVariantsQuery, GetOrderableVariantsQueryVariables>;
 export const GetOrdersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetOrders"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"OrderFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"OrderSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"orders"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"orderNumber"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"customerId"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"subtotal"}},{"kind":"Field","name":{"kind":"Name","value":"total"}},{"kind":"Field","name":{"kind":"Name","value":"placedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetOrdersQuery, GetOrdersQueryVariables>;
 export const UpdateOrderStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateOrderStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"status"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"OrderStatus"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateOrderStatus"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}},{"kind":"Argument","name":{"kind":"Name","value":"status"},"value":{"kind":"Variable","name":{"kind":"Name","value":"status"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<UpdateOrderStatusMutation, UpdateOrderStatusMutationVariables>;
+export const ExportReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ExportReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ExportReportInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"exportReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<ExportReportQuery, ExportReportQueryVariables>;
+export const FinalizeBillingReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"FinalizeBillingReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"finalizeBillingReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<FinalizeBillingReportMutation, FinalizeBillingReportMutationVariables>;
+export const GenerateBillingReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GenerateBillingReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GenerateBillingReportInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"generateBillingReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"periodStart"}},{"kind":"Field","name":{"kind":"Name","value":"periodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"commissionAmount"}},{"kind":"Field","name":{"kind":"Name","value":"netPayout"}},{"kind":"Field","name":{"kind":"Name","value":"generatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GenerateBillingReportMutation, GenerateBillingReportMutationVariables>;
+export const GetBillingReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBillingReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"billingReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"periodStart"}},{"kind":"Field","name":{"kind":"Name","value":"periodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"commissionAmount"}},{"kind":"Field","name":{"kind":"Name","value":"netPayout"}},{"kind":"Field","name":{"kind":"Name","value":"generatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<GetBillingReportQuery, GetBillingReportQueryVariables>;
+export const GetBillingReportsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBillingReports"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"BillingReportFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"BillingReportSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"billingReports"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"periodStart"}},{"kind":"Field","name":{"kind":"Name","value":"periodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"commissionAmount"}},{"kind":"Field","name":{"kind":"Name","value":"netPayout"}},{"kind":"Field","name":{"kind":"Name","value":"generatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetBillingReportsQuery, GetBillingReportsQueryVariables>;
+export const GetInventoryReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetInventoryReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InventoryReportFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"inventoryReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalVariants"}},{"kind":"Field","name":{"kind":"Name","value":"totalOnHand"}},{"kind":"Field","name":{"kind":"Name","value":"totalReserved"}},{"kind":"Field","name":{"kind":"Name","value":"lowStockCount"}},{"kind":"Field","name":{"kind":"Name","value":"lowStockItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"productVariantId"}},{"kind":"Field","name":{"kind":"Name","value":"productTitle"}},{"kind":"Field","name":{"kind":"Name","value":"sku"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"quantityOnHand"}},{"kind":"Field","name":{"kind":"Name","value":"quantityReserved"}},{"kind":"Field","name":{"kind":"Name","value":"reorderThreshold"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetInventoryReportQuery, GetInventoryReportQueryVariables>;
+export const GetNotificationActivityReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetNotificationActivityReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"NotificationActivityReportFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notificationActivityReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalNotifications"}},{"kind":"Field","name":{"kind":"Name","value":"readCount"}},{"kind":"Field","name":{"kind":"Name","value":"unreadCount"}},{"kind":"Field","name":{"kind":"Name","value":"typeBreakdown"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"count"}}]}}]}}]}}]} as unknown as DocumentNode<GetNotificationActivityReportQuery, GetNotificationActivityReportQueryVariables>;
+export const GetOrdersReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetOrdersReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"OrdersReportFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"ordersReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalOrders"}},{"kind":"Field","name":{"kind":"Name","value":"totalRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"averageOrderValue"}},{"kind":"Field","name":{"kind":"Name","value":"statusBreakdown"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"count"}}]}}]}}]}}]} as unknown as DocumentNode<GetOrdersReportQuery, GetOrdersReportQueryVariables>;
+export const GetProductPerformanceReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetProductPerformanceReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ProductPerformanceFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ProductPerformanceSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"productPerformanceReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"productVariantId"}},{"kind":"Field","name":{"kind":"Name","value":"productTitle"}},{"kind":"Field","name":{"kind":"Name","value":"sku"}},{"kind":"Field","name":{"kind":"Name","value":"partnerId"}},{"kind":"Field","name":{"kind":"Name","value":"unitsSold"}},{"kind":"Field","name":{"kind":"Name","value":"revenue"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetProductPerformanceReportQuery, GetProductPerformanceReportQueryVariables>;
+export const GetReportsDashboardDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetReportsDashboard"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ReportsDashboardFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reportsDashboard"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"ordersRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"totalOrders"}},{"kind":"Field","name":{"kind":"Name","value":"lowStockCount"}},{"kind":"Field","name":{"kind":"Name","value":"revenueTrend"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bucketStart"}},{"kind":"Field","name":{"kind":"Name","value":"bucketEnd"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}}]}}]}}]}}]} as unknown as DocumentNode<GetReportsDashboardQuery, GetReportsDashboardQueryVariables>;
+export const GetRevenueReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetRevenueReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"RevenueReportFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"revenueReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}},{"kind":"Field","name":{"kind":"Name","value":"totalCommission"}},{"kind":"Field","name":{"kind":"Name","value":"totalGrossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"totalNetPayout"}},{"kind":"Field","name":{"kind":"Name","value":"trend"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bucketStart"}},{"kind":"Field","name":{"kind":"Name","value":"bucketEnd"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}}]}}]}}]}}]} as unknown as DocumentNode<GetRevenueReportQuery, GetRevenueReportQueryVariables>;
+export const MarkBillingReportPaidOutDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"MarkBillingReportPaidOut"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markBillingReportPaidOut"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<MarkBillingReportPaidOutMutation, MarkBillingReportPaidOutMutationVariables>;

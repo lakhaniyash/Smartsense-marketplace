@@ -1,0 +1,14 @@
+query GetReportsDashboard($filter: ReportsDashboardFilterInput) {
+  reportsDashboard(filter: $filter) {
+    grossRevenue
+    ordersRevenue
+    totalOrders
+    lowStockCount
+    revenueTrend {
+      bucketStart
+      bucketEnd
+      grossRevenue
+      invoiceCount
+    }
+  }
+}

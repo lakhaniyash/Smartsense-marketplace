@@ -1,0 +1,3 @@
+query ExportReport($input: ExportReportInput!) {
+  exportReport(input: $input)
+}

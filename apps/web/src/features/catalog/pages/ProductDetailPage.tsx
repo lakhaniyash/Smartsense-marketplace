@@ -67,9 +67,12 @@ export function ProductDetailPage() {
           title="Couldn't load this product"
           description="It may not exist, or you may not have access to it."
           action={
-            <Button variant="secondary" onClick={() => window.history.back()}>
+            <Link
+              to={ROUTES.CATALOG}
+              className="border-border-control bg-surface text-fg-secondary hover:bg-surface-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
               Back to catalog
-            </Button>
+            </Link>
           }
         />
       )}

@@ -1,0 +1,15 @@
+query GetBillingReport($id: ID!) {
+  billingReport(id: $id) {
+    id
+    partnerId
+    periodStart
+    periodEnd
+    status
+    grossRevenue
+    commissionAmount
+    netPayout
+    generatedAt
+    createdAt
+    updatedAt
+  }
+}

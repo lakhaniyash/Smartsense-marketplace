@@ -6,6 +6,7 @@ import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { buildCsv } from '../../common/utils/csv.util'
 import { type OrderCompletedEvent } from '../orders/events/order-completed.event'
 import { CreatePaymentInput } from './dto/create-payment.input'
 import { InvoiceGeneratedEvent } from './events/invoice-generated.event'
@@ -314,21 +315,17 @@ export class BillingService {
       'issuedAt',
       'dueAt',
     ]
-    const rows = invoices.map((invoice) =>
-      [
-        invoice.invoiceNumber,
-        invoice.orderId,
-        invoice.partnerId,
-        invoice.amountDue.toString(),
-        invoice.status,
-        invoice.issuedAt?.toISOString() ?? '',
-        invoice.dueAt?.toISOString() ?? '',
-      ]
-        .map((field) => this.escapeCsvField(field))
-        .join(','),
-    )
+    const rows = invoices.map((invoice) => [
+      invoice.invoiceNumber,
+      invoice.orderId,
+      invoice.partnerId,
+      invoice.amountDue.toString(),
+      invoice.status,
+      invoice.issuedAt?.toISOString() ?? '',
+      invoice.dueAt?.toISOString() ?? '',
+    ])
 
-    return [header.join(','), ...rows].join('\n')
+    return buildCsv(header, rows)
   }
 
   async getInvoicePdf(user: AuthenticatedUser, id: string): Promise<string> {
@@ -347,13 +344,6 @@ export class BillingService {
 
   private generateInvoiceNumber(): string {
     return `INV-${randomUUID().split('-')[0]?.toUpperCase()}`
-  }
-
-  private escapeCsvField(field: string): string {
-    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-      return `"${field.replace(/"/g, '""')}"`
-    }
-    return field
   }
 
   private translatePrismaError(error: unknown, conflictMessage: string): never {

@@ -12,6 +12,69 @@ input AdjustInventoryInput {
 }
 
 """
+A periodic per-Partner statement reconciling Invoice/Payment activity for a date range (docs/domain-model.md § Billing Report). The only persisted Reports entity — every other report in this module is computed on read.
+"""
+type BillingReport {
+  """grossRevenue * (Partner.commissionRate / 100)."""
+  commissionAmount: Decimal!
+  createdAt: DateTime!
+  generatedAt: DateTime!
+
+  """
+  SUM(Invoice.amountDue) for ISSUED/PARTIALLY_PAID/PAID invoices issued in the period.
+  """
+  grossRevenue: Decimal!
+  id: ID!
+
+  """grossRevenue - commissionAmount."""
+  netPayout: Decimal!
+  partnerId: ID!
+  periodEnd: DateTime!
+  periodStart: DateTime!
+  status: BillingReportStatus!
+  updatedAt: DateTime!
+}
+
+type BillingReportConnection {
+  edges: [BillingReportEdge!]!
+  pageInfo: PageInfo!
+}
+
+type BillingReportEdge {
+  cursor: String!
+  node: BillingReport!
+}
+
+input BillingReportFilterInput {
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+  status: BillingReportStatus
+}
+
+"""Fields the billing report list can be sorted by."""
+enum BillingReportSortField {
+  GENERATED_AT
+  GROSS_REVENUE
+  PERIOD_START
+}
+
+input BillingReportSortInput {
+  direction: SortDirection!
+  field: BillingReportSortField!
+}
+
+"""
+Lifecycle per docs/domain-model.md § Billing Report: GENERATED (just computed) → FINALIZED (locked, ready for payout) → PAID_OUT (payout completed).
+"""
+enum BillingReportStatus {
+  FINALIZED
+  GENERATED
+  PAID_OUT
+}
+
+"""
 A node in the global product category taxonomy, owned and maintained by Admin (docs/domain-model.md § Category). Returned as a flat list — clients build the parent/child tree from parentCategoryId.
 """
 type Category {
@@ -107,6 +170,12 @@ type DashboardStats {
   totalProducts: Int!
 }
 
+"""An inclusive [from, to] date range used to scope a report to a period."""
+input DateRangeInput {
+  from: DateTime!
+  to: DateTime!
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
@@ -116,6 +185,27 @@ scalar DateTime
 Arbitrary-precision decimal (money, percentages), transported as a string to avoid floating-point precision loss.
 """
 scalar Decimal
+
+input ExportReportInput {
+  """Ignored for a BILLING_REPORTS or INVENTORY export. Omitted = all time."""
+  dateRange: DateRangeInput
+  format: ReportExportFormat!
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+  reportType: ReportExportType!
+}
+
+input GenerateBillingReportInput {
+  """
+  Required for an Admin caller (there is no "generate for all partners" bulk operation); ignored for a Partner caller, whose own partnerId always wins.
+  """
+  partnerId: ID
+  periodEnd: DateTime!
+  periodStart: DateTime!
+}
 
 """
 Stock levels for a ProductVariant (docs/domain-model.md § Inventory). sellableQuantity = quantityOnHand - quantityReserved, never negative.
@@ -139,6 +229,47 @@ enum InventoryAdjustmentType {
   DECREASE
   INCREASE
   SET
+}
+
+"""
+A point-in-time inventory snapshot for the scoped Partner(s) — no date range, unlike every other report, since stock levels aren't a historical ledger.
+"""
+type InventoryReport {
+  lowStockCount: Int!
+  lowStockItems: InventoryReportItemConnection!
+  totalOnHand: Int!
+  totalReserved: Int!
+  totalVariants: Int!
+}
+
+input InventoryReportFilterInput {
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""
+A single low-stock Product Variant: quantityOnHand < reorderThreshold (docs/domain-model.md § Inventory). Variants with no reorderThreshold set never appear here — a data-completeness gap, not a bug (see the plan's Risks section).
+"""
+type InventoryReportItem {
+  partnerId: ID!
+  productTitle: String!
+  productVariantId: ID!
+  quantityOnHand: Int!
+  quantityReserved: Int!
+  reorderThreshold: Int
+  sku: String!
+}
+
+type InventoryReportItemConnection {
+  edges: [InventoryReportItemEdge!]!
+  pageInfo: PageInfo!
+}
+
+type InventoryReportItemEdge {
+  cursor: String!
+  node: InventoryReportItem!
 }
 
 """A per-Order billing document (docs/domain-model.md § Invoice)."""
@@ -229,9 +360,24 @@ type Mutation {
   createProductVariant(input: CreateProductVariantInput!): ProductVariant!
 
   """
+  GENERATED → FINALIZED (docs/domain-model.md § Billing Report lifecycle).
+  """
+  finalizeBillingReport(id: ID!): BillingReport!
+
+  """
+  Generates a BillingReport for a Partner/period, reconciling gross revenue/commission/net payout from the Invoice ledger. Rejects an overlapping period (any Partner-scoped period that intersects an existing one) with CONFLICT.
+  """
+  generateBillingReport(input: GenerateBillingReportInput!): BillingReport!
+
+  """
   Marks every UNREAD notification for the caller as READ; returns the count updated.
   """
   markAllNotificationsRead: Int!
+
+  """
+  FINALIZED → PAID_OUT (docs/domain-model.md § Billing Report lifecycle).
+  """
+  markBillingReportPaidOut(id: ID!): BillingReport!
 
   """
   Marks one of the caller's own notifications READ. Throws NOT_FOUND on a missing or out-of-scope id. Idempotent — already-READ is a no-op.
@@ -279,6 +425,36 @@ type Notification {
   title: String!
   type: NotificationType!
   updatedAt: DateTime!
+}
+
+"""
+Historical Notification volume for the scoped Partner's staff recipients, regardless of current recipient status/deletedAt — a report reflects what happened, not who's still active today (unlike NotificationsService.notifyPartnerUsers' fan-out filter).
+"""
+type NotificationActivityReport {
+  readCount: Int!
+  totalNotifications: Int!
+  typeBreakdown: [NotificationActivityTypeBreakdown!]!
+  unreadCount: Int!
+}
+
+input NotificationActivityReportFilterInput {
+  """
+  Scopes to Notification.createdAt within this range. Omitted = all time.
+  """
+  dateRange: DateRangeInput
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""
+Notification count for a single NotificationType within the scoped period.
+"""
+type NotificationActivityTypeBreakdown {
+  count: Int!
+  type: NotificationType!
 }
 
 type NotificationConnection {
@@ -411,6 +587,32 @@ type OrderStatusHistoryEntry {
   toStatus: OrderStatus!
 }
 
+"""
+Order-volume summary for the scoped Partner(s)/period. totalRevenue/averageOrderValue exclude CANCELLED orders (a cancelled order was never fulfilled revenue).
+"""
+type OrdersReport {
+  averageOrderValue: Decimal!
+  statusBreakdown: [OrdersReportStatusBreakdown!]!
+  totalOrders: Int!
+  totalRevenue: Decimal!
+}
+
+input OrdersReportFilterInput {
+  """Scopes to Order.createdAt within this range. Omitted = all time."""
+  dateRange: DateRangeInput
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""Order count for a single OrderStatus within the scoped period."""
+type OrdersReportStatusBreakdown {
+  count: Int!
+  status: OrderStatus!
+}
+
 type PageInfo {
   endCursor: String
   hasNextPage: Boolean!
@@ -485,6 +687,51 @@ input ProductFilterInput {
   status: ProductStatus
 }
 
+"""
+Units-sold/revenue ranking for a single Product Variant within the scoped period. "Sold" excludes CANCELLED orders (same convention as OrdersReport).
+"""
+type ProductPerformance {
+  partnerId: ID!
+  productTitle: String!
+  productVariantId: ID!
+  revenue: Decimal!
+  sku: String!
+  unitsSold: Int!
+}
+
+type ProductPerformanceConnection {
+  edges: [ProductPerformanceEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ProductPerformanceEdge {
+  cursor: String!
+  node: ProductPerformance!
+}
+
+input ProductPerformanceFilterInput {
+  """Scopes to Order.createdAt within this range. Omitted = all time."""
+  dateRange: DateRangeInput
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""
+Fields the product performance ranking can be sorted by. Defaults to REVENUE desc.
+"""
+enum ProductPerformanceSortField {
+  REVENUE
+  UNITS_SOLD
+}
+
+input ProductPerformanceSortInput {
+  direction: SortDirection!
+  field: ProductPerformanceSortField!
+}
+
 """Fields the product list can be sorted by."""
 enum ProductSortField {
   CREATED_AT
@@ -545,6 +792,16 @@ type Query {
   """Auth module status"""
   authStatus: String!
 
+  """
+  A single billing report by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
+  """
+  billingReport(id: ID!): BillingReport!
+
+  """
+  A page of the caller's visible billing reports (Admin: all; Partner: own).
+  """
+  billingReports(after: String, filter: BillingReportFilterInput, first: Int, sort: BillingReportSortInput): BillingReportConnection!
+
   """Billing module status"""
   billingStatus: String!
 
@@ -566,6 +823,16 @@ type Query {
   exportInvoicesCsv(filter: InvoiceFilterInput): String!
 
   """
+  Renders the requested report as a raw CSV string, matching the given filter. EXCEL format is a not-yet-implemented placeholder (throws BAD_USER_INPUT today).
+  """
+  exportReport(input: ExportReportInput!): String!
+
+  """
+  A point-in-time inventory snapshot for the scoped Partner(s), including a paginated low-stock item connection.
+  """
+  inventoryReport(after: String, filter: InventoryReportFilterInput, first: Int): InventoryReport!
+
+  """
   A single invoice by id, scoped to the caller. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
   """
   invoice(id: ID!): Invoice!
@@ -581,6 +848,11 @@ type Query {
   """The authenticated caller and their resolved roles/permissions."""
   me: CurrentUser!
 
+  """
+  Historical Notification volume for the scoped Partner's staff recipients, by type/status.
+  """
+  notificationActivityReport(filter: NotificationActivityReportFilterInput): NotificationActivityReport!
+
   """A page of the caller's own notifications, most recent first."""
   notifications(after: String, filter: NotificationFilterInput, first: Int): NotificationConnection!
 
@@ -594,6 +866,11 @@ type Query {
   """
   orders(after: String, filter: OrderFilterInput, first: Int, sort: OrderSortInput): OrderConnection!
 
+  """
+  Order-volume summary + status breakdown for the scoped Partner(s)/period.
+  """
+  ordersReport(filter: OrdersReportFilterInput): OrdersReport!
+
   """Orders module status"""
   ordersStatus: String!
 
@@ -602,14 +879,114 @@ type Query {
   """
   productById(id: ID!): Product!
 
+  """
+  Units-sold/revenue ranking of Product Variants for the scoped Partner(s)/period. Uses an offset-encoded cursor (see ProductPerformanceConnectionOutput's doc comment) since Prisma's groupBy has no cursor support.
+  """
+  productPerformanceReport(after: String, filter: ProductPerformanceFilterInput, first: Int, sort: ProductPerformanceSortInput): ProductPerformanceConnection!
+
   """A page of the caller's visible products (Admin: all; Partner: own)."""
   products(after: String, filter: ProductFilterInput, first: Int, sort: ProductSortInput): ProductConnection!
+
+  """
+  KPI + trend summary for the Reports landing page. A dedicated query — never touches dashboardStats (the M11 marketplace-wide overview card).
+  """
+  reportsDashboard(filter: ReportsDashboardFilterInput): ReportsDashboard!
+
+  """
+  Invoice-ledger-derived revenue summary + trend for the scoped Partner(s)/period.
+  """
+  revenueReport(filter: RevenueReportFilterInput): RevenueReport!
 
   """The caller's own unread notification count."""
   unreadNotificationCount: Int!
 
   """Users module status"""
   usersStatus: String!
+}
+
+"""
+CSV is fully implemented today; EXCEL is a not-yet-implemented placeholder.
+"""
+enum ReportExportFormat {
+  CSV
+  EXCEL
+}
+
+"""Which report exportReport should render."""
+enum ReportExportType {
+  BILLING_REPORTS
+  INVENTORY
+  NOTIFICATION_ACTIVITY
+  ORDERS
+  PRODUCT_PERFORMANCE
+  REVENUE
+}
+
+"""
+KPI + trend summary for the Reports landing page. A dedicated query — never reuses or touches dashboardStats (the M11 marketplace-wide overview card), which stays untouched.
+"""
+type ReportsDashboard {
+  """Same formula as RevenueReport.totalGrossRevenue."""
+  grossRevenue: Decimal!
+
+  """Same definition as InventoryReport.lowStockCount."""
+  lowStockCount: Int!
+
+  """Same formula as OrdersReport.totalRevenue."""
+  ordersRevenue: Decimal!
+  revenueTrend: [RevenueReportBucket!]!
+  totalOrders: Int!
+}
+
+input ReportsDashboardFilterInput {
+  """Omitted = all time."""
+  dateRange: DateRangeInput
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""Trend bucket size for revenueReport.trend. Defaults to MONTH."""
+enum RevenueBucketGranularity {
+  DAY
+  MONTH
+  WEEK
+}
+
+"""
+Invoice-ledger-derived revenue summary + trend for the scoped Partner(s)/period (same aggregation formula as BillingReport, computed on read rather than persisted).
+"""
+type RevenueReport {
+  invoiceCount: Int!
+  totalCommission: Decimal!
+  totalGrossRevenue: Decimal!
+  totalNetPayout: Decimal!
+  trend: [RevenueReportBucket!]!
+}
+
+"""
+One point in the revenue trend series, bucketed by the requested granularity.
+"""
+type RevenueReportBucket {
+  bucketEnd: DateTime!
+  bucketStart: DateTime!
+  grossRevenue: Decimal!
+  invoiceCount: Int!
+}
+
+input RevenueReportFilterInput {
+  """Scopes to Invoice.issuedAt within this range. Omitted = all time."""
+  dateRange: DateRangeInput
+
+  """Defaults to MONTH."""
+  granularity: RevenueBucketGranularity
+
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
 }
 
 enum SortDirection {

@@ -552,7 +552,7 @@ model BillingReport {
   id               String              @id @default(uuid()) @db.Uuid
   partnerId        String              @map("partner_id") @db.Uuid
   // `@db.Date`, not a timestamp: periods are day-granular ("monthly
-  // statement"), and a future Postgres exclusion constraint for
+  // statement"), and the Postgres exclusion constraint below for
   // non-overlapping periods needs `daterange`, which requires `date` inputs.
   periodStart      DateTime            @map("period_start") @db.Date
   periodEnd        DateTime            @map("period_end") @db.Date
@@ -566,11 +566,15 @@ model BillingReport {
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  // Prevents an exact-duplicate period for the same Partner. Does NOT
-  // prevent overlapping-but-not-identical ranges — true non-overlap
-  // enforcement needs a Postgres exclusion constraint
+  // Prevents an exact-duplicate period for the same Partner. Does NOT by
+  // itself prevent overlapping-but-not-identical ranges — true non-overlap
+  // enforcement is a Postgres exclusion constraint
   // (`EXCLUDE USING gist (partner_id WITH =, daterange(period_start, period_end) WITH &&)`),
-  // which Prisma cannot express and must be added by hand in a migration.
+  // which Prisma cannot express in this schema language and is instead
+  // hand-written directly into the initial migration (see
+  // `billing_reports_no_overlapping_periods_excl` in
+  // migrations/20260701110512_init/migration.sql) — already live, not a
+  // future TODO.
   @@unique([partnerId, periodStart, periodEnd])
   @@index([partnerId, periodStart])
   @@map("billing_reports")

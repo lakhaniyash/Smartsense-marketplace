@@ -1,0 +1,14 @@
+query GetRevenueReport($filter: RevenueReportFilterInput) {
+  revenueReport(filter: $filter) {
+    invoiceCount
+    totalCommission
+    totalGrossRevenue
+    totalNetPayout
+    trend {
+      bucketStart
+      bucketEnd
+      grossRevenue
+      invoiceCount
+    }
+  }
+}
