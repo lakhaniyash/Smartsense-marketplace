@@ -15,7 +15,7 @@ registerEnumType(NotificationStatus, {
   description:
     'A recipient-owned, event-sourced notification (docs/domain-model.md § Notification). ' +
     'Never written directly by a resolver — only by NotificationEventsListener reacting to ' +
-    'Orders/Billing domain events.',
+    'Orders/Billing/Customer-Management domain events.',
 })
 export class NotificationOutput {
   @Field(() => ID)

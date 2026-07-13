@@ -12,15 +12,16 @@ import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
 import { OrderCreatedEvent } from '../../orders/events/order-created.event'
 import { NotificationsService } from '../notifications.service'
 
-// The real consumer of Orders' (M13) and Billing's (M16) domain events —
-// unlike modules/orders/listeners/order-events.listener.ts (a throwaway M13
+// The real consumer of Orders' (M13), Billing's (M16), and Customer
+// Management's (Sprint 2, SM-328) domain events — unlike
+// modules/orders/listeners/order-events.listener.ts (a throwaway M13
 // proof-of-wiring listener), this is a real feature and is meant to be
 // extended by future providers (email/SMS) subscribing to these same
 // events. Every handler is wrapped in `safely()`: `eventEmitter.emit(...)`
 // is fire-and-forget and does not propagate an async handler's rejection
 // back to the emitting call site, so an uncaught throw here would become a
 // bare unhandled-promise-rejection that must never be allowed to affect the
-// Order/Invoice/Payment mutation that already committed.
+// Order/Invoice/Payment/Customer mutation that already committed.
 @Injectable()
 export class NotificationEventsListener {
   constructor(
