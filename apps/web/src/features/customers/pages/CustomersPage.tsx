@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { usePermissions } from '@features/auth'
+import type { CustomerFilterInput } from '@lib/graphql/__generated__/graphql'
 import {
   Button,
   EmptyState,
@@ -13,10 +15,13 @@ import {
   TableHeader,
   TableRow,
   TableSkeleton,
+  useToast,
 } from '@shared/components'
 import { ROUTES } from '@shared/constants'
+import { downloadBlob } from '@shared/utils'
 import { CustomerFilterBar, CustomerStatusBadge } from '../components'
 import { useCustomers } from '../hooks'
+import { exportCustomersCsv } from '../services'
 
 const COLUMN_COUNT = 4
 
@@ -53,8 +58,31 @@ export function CustomersPage() {
   // SM-323: createCustomer requires customers:manage (Admin-only, distinct
   // from customers:write's Partner-reachable edit/archive/activate) — no
   // role-check needed now that the permission itself expresses this.
-  const { canCreateCustomers } = usePermissions()
+  const { canViewCustomers, canCreateCustomers } = usePermissions()
+  const { toast } = useToast()
+  const [isExporting, setIsExporting] = useState(false)
   const hasActiveFilter = filters.search !== undefined || filters.status !== undefined
+
+  // Exports the caller's current filtered/searched view — same shape as
+  // BillingPage's handleExportCsv.
+  async function handleExportCsv() {
+    setIsExporting(true)
+    try {
+      const filter: CustomerFilterInput = {}
+      if (filters.search !== undefined) filter.search = filters.search
+      if (filters.status !== undefined) filter.status = filters.status
+      const csv = await exportCustomersCsv(filter)
+      downloadBlob(new Blob([csv], { type: 'text/csv' }), 'customers.csv')
+    } catch (exportError) {
+      toast({
+        title: "Couldn't export customers",
+        ...(exportError instanceof Error && { description: exportError.message }),
+        variant: 'danger',
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   return (
     <div className="flex h-full flex-col gap-6">
@@ -62,14 +90,25 @@ export function CustomersPage() {
         title="Customers"
         description="Buyer organizations and individuals on the marketplace."
         action={
-          canCreateCustomers && (
-            <Link
-              to={`${ROUTES.CUSTOMERS}/new`}
-              className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Create Customer
-            </Link>
-          )
+          <div className="flex gap-2">
+            {canViewCustomers && (
+              <Button
+                variant="secondary"
+                isLoading={isExporting}
+                onClick={() => void handleExportCsv()}
+              >
+                Export CSV
+              </Button>
+            )}
+            {canCreateCustomers && (
+              <Link
+                to={`${ROUTES.CUSTOMERS}/new`}
+                className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Create Customer
+              </Link>
+            )}
+          </div>
         }
       />
       <CustomerFilterBar

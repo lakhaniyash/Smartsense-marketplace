@@ -987,6 +987,11 @@ type Query {
   dashboardStatus: String!
 
   """
+  A CSV export of the caller's visible customers, matching the given filter.
+  """
+  exportCustomersCsv(filter: CustomerFilterInput): String!
+
+  """
   A CSV export of the caller's visible invoices, matching the given filter.
   """
   exportInvoicesCsv(filter: InvoiceFilterInput): String!

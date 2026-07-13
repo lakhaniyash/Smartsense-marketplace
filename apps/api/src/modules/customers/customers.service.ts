@@ -9,6 +9,7 @@ import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { buildCsv } from '../../common/utils/csv.util'
 import { AuditLogEntryOutput } from './dto/audit-log-entry.output'
 import { CustomerBillingSummaryOutput } from './dto/customer-billing-summary.output'
 import { CustomerConnectionOutput, CustomerEdgeOutput } from './dto/customer-connection.output'
@@ -248,6 +249,29 @@ export class CustomersService {
       actorName: entry.actor.fullName,
       actorEmail: entry.actor.email,
     }))
+  }
+
+  /** Same scoping as findCustomers, but fetches every matching row (no pagination). */
+  async exportCustomersCsv(
+    user: AuthenticatedUser,
+    filter?: CustomerFilterInput | undefined,
+  ): Promise<string> {
+    const where = this.buildWhere(user, filter)
+    const customers = await this.prisma.customer.findMany({
+      where,
+      orderBy: this.buildOrderBy(undefined),
+    })
+
+    const header = ['displayName', 'type', 'status', 'billingEmail', 'createdAt']
+    const rows = customers.map((customer) => [
+      customer.displayName,
+      customer.type,
+      customer.status,
+      customer.billingEmail,
+      customer.createdAt.toISOString(),
+    ])
+
+    return buildCsv(header, rows)
   }
 
   private async findOwnedCustomerOrThrow(
