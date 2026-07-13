@@ -2,6 +2,13 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+"""Shipping, Billing, or Registered (docs/domain-model.md § Address)."""
+enum AddressType {
+  BILLING
+  REGISTERED
+  SHIPPING
+}
+
 input AdjustInventoryInput {
   adjustmentType: InventoryAdjustmentType!
   productVariantId: ID!
@@ -9,6 +16,25 @@ input AdjustInventoryInput {
   """Non-negative. Interpreted per adjustmentType."""
   quantity: Int!
   reason: String
+}
+
+"""
+One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity — the first GraphQL exposure of this model, added for the Customer activity timeline.
+"""
+type AuditLogEntry {
+  action: String!
+  actorEmail: String!
+  actorId: ID!
+  actorName: String!
+  entityId: ID!
+  entityType: String!
+  id: ID!
+
+  """
+  JSON-encoded metadata, if any — transported as a string rather than adding a new GraphQL JSON scalar dependency for this one field.
+  """
+  metadata: String
+  occurredAt: DateTime!
 }
 
 """
@@ -88,6 +114,12 @@ type Category {
   slug: String!
 }
 
+input CreateCustomerInput {
+  billingEmail: String!
+  displayName: String!
+  type: CustomerType!
+}
+
 input CreateOrderInput {
   """
   Required when the caller is Admin; ignored (overridden by the caller's own customerId) for a Customer-scoped caller.
@@ -156,6 +188,111 @@ type CurrentUser {
 
   """Role.name values, e.g. ["Admin"]"""
   roles: [String!]!
+}
+
+"""
+A buyer — an individual or organization (docs/domain-model.md § Customer).
+"""
+type Customer {
+  addresses: [CustomerAddress!]!
+
+  """
+  Buyer-contact Users belonging to this Customer (User.customerId) — the "assigned users" tab; not a separate account-manager concept.
+  """
+  assignedUsers: [CustomerUser!]!
+  billingEmail: String!
+
+  """
+  Populated only when fetched via customerById — see that type's own description.
+  """
+  billingSummary: CustomerBillingSummary
+  createdAt: DateTime!
+  displayName: String!
+  id: ID!
+  status: CustomerStatus!
+  type: CustomerType!
+  updatedAt: DateTime!
+}
+
+"""
+One of a Customer's addresses (docs/domain-model.md § Address). `ownerType`/`customerId` are omitted — implied by the parent Customer this is nested under.
+"""
+type CustomerAddress {
+  city: String!
+  country: String!
+  id: ID!
+  isDefault: Boolean!
+  line1: String!
+  line2: String
+  postalCode: String!
+  state: String!
+  type: AddressType!
+}
+
+"""
+Aggregated across all of this Customer's Orders/Invoices. Computed only by `customerById` — the `customers` list intentionally omits it (CustomerOutput.billingSummary is null there) to avoid an aggregate query per row.
+"""
+type CustomerBillingSummary {
+  totalInvoiced: Decimal!
+  totalOrders: Int!
+
+  """
+  Sum of amountDue on invoices not yet fully settled (ISSUED or PARTIALLY_PAID).
+  """
+  totalOutstanding: Decimal!
+}
+
+type CustomerConnection {
+  edges: [CustomerEdge!]!
+  pageInfo: PageInfo!
+}
+
+type CustomerEdge {
+  cursor: String!
+  node: Customer!
+}
+
+input CustomerFilterInput {
+  """Free-text match against the display name and billing email."""
+  search: String
+  status: CustomerStatus
+}
+
+"""Fields the customer list can be sorted by."""
+enum CustomerSortField {
+  CREATED_AT
+  DISPLAY_NAME
+}
+
+input CustomerSortInput {
+  direction: SortDirection!
+  field: CustomerSortField!
+}
+
+"""
+Active or Suspended (docs/domain-model.md § Customer Lifecycle). There is no hard-delete status — Customers are anonymized, never removed, per the same doc.
+"""
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+"""
+Individual buyer vs. buyer organization (docs/domain-model.md § Customer).
+"""
+enum CustomerType {
+  INDIVIDUAL
+  ORGANIZATION
+}
+
+"""
+A buyer-contact User belonging to this Customer (the existing `User.customerId` relation) — not a separate account-manager assignment (docs/domain-model.md § User Ownership).
+"""
+type CustomerUser {
+  email: String!
+  fullName: String!
+  id: ID!
+  status: UserStatus!
 }
 
 """Marketplace-wide summary counts shown on the dashboard overview."""
@@ -330,10 +467,18 @@ enum InvoiceStatus {
 }
 
 type Mutation {
+  """Reactivates a suspended Customer within the caller's scope."""
+  activateCustomer(id: ID!): Customer!
+
   """
   Adjusts a ProductVariant's stock on hand and returns the updated Variant.
   """
   adjustInventory(input: AdjustInventoryInput!): ProductVariant!
+
+  """
+  Suspends a Customer within the caller's scope (soft archive, reversible via activateCustomer).
+  """
+  archiveCustomer(id: ID!): Customer!
 
   """Transitions a Product owned by the caller to ARCHIVED status."""
   archiveProduct(id: ID!): Product!
@@ -347,6 +492,11 @@ type Mutation {
   Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory.
   """
   cancelOrder(id: ID!, reason: String): Order!
+
+  """
+  Creates a new Customer. Admin-only — see CustomersService.createCustomer.
+  """
+  createCustomer(input: CreateCustomerInput!): Customer!
 
   """
   Places a new Order in DRAFT status for the caller (Customer: self; Partner/Admin: on behalf of a specified customerId). No inventory effect yet — reservation happens when the order is confirmed via updateOrderStatus.
@@ -393,6 +543,9 @@ type Mutation {
   Marks a ProductVariant as its Product's default, unsetting any previous default.
   """
   setDefaultProductVariant(id: ID!): ProductVariant!
+
+  """Updates a Customer within the caller's scope."""
+  updateCustomer(input: UpdateCustomerInput!): Customer!
 
   """
   Transitions an Order to a new status per the allowed transition matrix (docs/authorization.md § Orders). Rejects any other requested transition as invalid.
@@ -811,6 +964,22 @@ type Query {
   """Active categories in the global taxonomy, flat."""
   categories: [Category!]!
 
+  """A Customer's activity timeline, most recent first."""
+  customerAuditLog(customerId: ID!): [AuditLogEntry!]!
+
+  """
+  A single customer by id, scoped to the caller, including its billing summary. Throws NOT_FOUND rather than returning null on a missing or out-of-scope id.
+  """
+  customerById(id: ID!): Customer!
+
+  """
+  A page of the caller's visible customers (Admin: all; Partner: only customers with at least one Order placed with that Partner).
+  """
+  customers(after: String, filter: CustomerFilterInput, first: Int, sort: CustomerSortInput): CustomerConnection!
+
+  """Customers module status"""
+  customersStatus: String!
+
   """Summary statistics for the dashboard overview."""
   dashboardStats: DashboardStats!
 
@@ -994,6 +1163,13 @@ enum SortDirection {
   DESC
 }
 
+input UpdateCustomerInput {
+  billingEmail: String
+  displayName: String
+  id: ID!
+  type: CustomerType
+}
+
 input UpdateProductInput {
   brand: String
   categoryId: ID
@@ -1018,4 +1194,14 @@ input UpdateProductVariantInput {
   Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here.
   """
   status: ProductVariantStatus
+}
+
+"""
+A User's lifecycle status (docs/domain-model.md § User). First GraphQL exposure of this enum — introduced for the Customer Management "assigned users" tab.
+"""
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+  INVITED
+  SUSPENDED
 }

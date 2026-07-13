@@ -59,6 +59,18 @@ const PERMISSIONS = [
       'View and generate reports (billing reports, revenue, orders, inventory, product ' +
       'performance, notification activity) and the reports dashboard',
   },
+  // Sprint 2 (Customer Management) — not tied to a docs/milestones.md
+  // milestone. `Customer` has no `partnerId` FK, so a Partner's "own"
+  // Customers are derived through Order (at least one Order placed with
+  // that Partner) rather than a direct ownership column — see
+  // CustomersService.buildWhere. The Customer role itself gets neither key:
+  // this is an Admin/Partner management surface, not buyer self-service.
+  { key: 'customers:read', domain: 'customers', description: 'View customer accounts and their order/billing history' },
+  {
+    key: 'customers:write',
+    domain: 'customers',
+    description: 'Create, edit, and suspend/reactivate customer accounts',
+  },
 ] as const;
 
 const SYSTEM_ROLES = [
@@ -75,6 +87,8 @@ const SYSTEM_ROLES = [
       'orders:write',
       'billing:read',
       'reports:read',
+      'customers:read',
+      'customers:write',
     ],
   },
   {
