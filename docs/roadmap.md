@@ -189,6 +189,24 @@ Organized by domain. "Planned capabilities" describe the target release's scope 
 - **Planned capabilities:** immutable audit trail of business-relevant actions from launch ([domain-model.md § Audit Log](./domain-model.md#audit-log)); an Admin-facing audit browser with search/filter in v2.0.
 - **Future enhancements:** retention policies, compliance-oriented export, alerting on sensitive actions.
 
+### Dynamic Forms Engine — v2.x (proposed, not yet committed)
+
+- **Business value:** lets an Admin or Partner collect structured, validated, conditional data (onboarding
+  intake, order special instructions, product detail questionnaires, and future needs like a Skills
+  Engine) without an engineering change per form — a configuration act, matching this roadmap's
+  "onboarding a new Partner is a configuration act, not an engineering project" objective, extended to
+  form-shaped data generally.
+- **Planned capabilities:** admin-authored, versioned form definitions (sections, typed fields,
+  conditional visibility, validation); a runtime renderer attachable to any existing or future entity via
+  a polymorphic link (the same pattern `AuditLog` already uses); CSV-independent — this is data
+  collection, not a Reports-style export surface.
+- **Future enhancements:** a Reports integration once real submission volume exists; OR-grouped
+  visibility conditions; file-upload field type; drag-and-drop form layout.
+- **Design status:** full technical design exists — [dynamic-forms-engine.md](./dynamic-forms-engine.md)
+  — proposed as milestones M21–M24; release slot (`v2.x` above is provisional) and scope require product
+  owner sign-off per [Roadmap Governance](#roadmap-governance) before work starts, since this capability
+  has no prior roadmap history to anchor it.
+
 ---
 
 ## Future Product Vision
@@ -248,21 +266,23 @@ Targets are set per release by governance; the _dimensions_ are fixed now so ins
 
 ## Related Documentation
 
-| Document                                 | Relationship to this roadmap                                       |
-| ---------------------------------------- | ------------------------------------------------------------------ |
-| [requirements.md](./requirements.md)     | Functional definition of the modules this roadmap sequences        |
-| [domain-model.md](./domain-model.md)     | Business entities and rules the feature domains are built on       |
-| [architecture.md](./architecture.md)     | Technical structure that makes the modular delivery model possible |
-| [milestones.md](./milestones.md)         | Delivery-level status tracking against this roadmap                |
-| [deployment.md](./deployment.md)         | Release engineering mechanics behind the Release Strategy          |
-| [testing.md](./testing.md)               | Quality gates each release must pass                               |
-| [authentication.md](./authentication.md) | Security model underpinning the Security First principle           |
-| [ui-guidelines.md](./ui-guidelines.md)   | Experience standards behind the User Experience principle          |
+| Document                                             | Relationship to this roadmap                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------ |
+| [requirements.md](./requirements.md)                 | Functional definition of the modules this roadmap sequences        |
+| [domain-model.md](./domain-model.md)                 | Business entities and rules the feature domains are built on       |
+| [architecture.md](./architecture.md)                 | Technical structure that makes the modular delivery model possible |
+| [milestones.md](./milestones.md)                     | Delivery-level status tracking against this roadmap                |
+| [deployment.md](./deployment.md)                     | Release engineering mechanics behind the Release Strategy          |
+| [testing.md](./testing.md)                           | Quality gates each release must pass                               |
+| [authentication.md](./authentication.md)             | Security model underpinning the Security First principle           |
+| [ui-guidelines.md](./ui-guidelines.md)               | Experience standards behind the User Experience principle          |
+| [dynamic-forms-engine.md](./dynamic-forms-engine.md) | Full design for the proposed Dynamic Forms Engine (M21–M24)        |
 
 ---
 
 ## Revision History
 
-| Version | Date       | Author       | Changes                                                                                                                      |
-| ------- | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-07-02 | Yash Lakhani | Initial roadmap — replaces placeholder; derived from requirements, domain model, and delivery milestones 1–7 being complete. |
+| Version | Date       | Author       | Changes                                                                                                                                                                                   |
+| ------- | ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-07-02 | Yash Lakhani | Initial roadmap — replaces placeholder; derived from requirements, domain model, and delivery milestones 1–7 being complete.                                                              |
+| 1.1     | 2026-07-13 | Yash Lakhani | Added "Dynamic Forms Engine — v2.x (proposed)" § Feature Roadmap, pointing to [dynamic-forms-engine.md](./dynamic-forms-engine.md); no prior roadmap mention existed for this capability. |
