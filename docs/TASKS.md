@@ -291,13 +291,13 @@ TypeScript limitation), bounded the same way Inventory's low-stock filter alread
 in-memory-paginate tradeoff. CSV export reuses a `common/utils/csv.util.ts` promoted out of Billing's
 existing `exportInvoicesCsv` (Billing itself refactored to call it, behavior-preserving); Excel is
 architecture-only — the enum value and resolver branch exist, but the service throws a clear
-"not yet supported" error rather than generating a file. Frontend ships this codebase's first charting
+"not yet supported" error rather than generating a file (follow-up: Jira `SM-317`). Frontend ships this codebase's first charting
 library (Chart.js via `react-chartjs-2`, one generic `<Chart>` wrapper covering line/bar/doughnut) plus
 three other new shared components (`DateRangePicker`, `KpiCard`, `ExportMenu`) and an 8-page
 `features/reports` module, all gated by one `PermissionRoute permission="reports:read"` route block. No
 GraphQL query exists anywhere in this codebase to list partners, so the Admin partner-selector control
 was descoped to a plain "Partner ID" text input on the Generate Report form rather than a fake dropdown
-— an honest, documented interim gap, not silently invented. A real bundle-splitting regression was
+— an honest, documented interim gap, not silently invented (follow-up: Jira `SM-318`). A real bundle-splitting regression was
 caught and fixed during verification: an eagerly-loaded `AppShell.tsx` importing the shared components
 barrel was pulling Chart.js into the main entry chunk despite every Reports page being route-level
 `lazy()`-split, because Rollup couldn't prove the barrel's other modules were side-effect-free; adding
@@ -422,6 +422,16 @@ frontend Vitest component tests; one Playwright smoke journey
 
 ---
 
+### M21–M24 — Dynamic Forms Engine (proposed — no tasks logged yet)
+
+Design-only at this point: full technical design in [dynamic-forms-engine.md](./dynamic-forms-engine.md),
+proposed milestone rows added to [milestones.md](./milestones.md#extended-capabilities-proposed-v2x).
+Per this document's own reconciliation rule (§ Task Lifecycle), no `M21-T*`–`M24-T*` task rows are opened
+here until the product owner confirms scope and release slot and a Jira epic is created (mirroring
+`SM-249`'s role for M15) — opening task rows before that would misrepresent unapproved work as scheduled.
+
+---
+
 ## Technical Debt
 
 Known, deliberately tracked debt — each item names its planned resolution point rather than floating indefinitely:
@@ -535,21 +545,23 @@ Guidelines for writing tasks in this tracker:
 
 ## Related Documentation
 
-| Document                                     | Relationship                                            |
-| -------------------------------------------- | ------------------------------------------------------- |
-| [requirements.md](./requirements.md)         | Functional scope tasks trace back to                    |
-| [roadmap.md](./roadmap.md)                   | Product releases the milestones (and thus tasks) serve  |
-| [milestones.md](./milestones.md)             | Milestone definitions this backlog decomposes           |
-| [coding-standards.md](./coding-standards.md) | Change-level DoD every task's PRs must meet             |
-| [testing.md](./testing.md)                   | Quality gates; bug reporting and regression rules       |
-| [deployment.md](./deployment.md)             | Release/rollback mechanics behind the Release Checklist |
+| Document                                             | Relationship                                            |
+| ---------------------------------------------------- | ------------------------------------------------------- |
+| [requirements.md](./requirements.md)                 | Functional scope tasks trace back to                    |
+| [roadmap.md](./roadmap.md)                           | Product releases the milestones (and thus tasks) serve  |
+| [milestones.md](./milestones.md)                     | Milestone definitions this backlog decomposes           |
+| [coding-standards.md](./coding-standards.md)         | Change-level DoD every task's PRs must meet             |
+| [testing.md](./testing.md)                           | Quality gates; bug reporting and regression rules       |
+| [deployment.md](./deployment.md)                     | Release/rollback mechanics behind the Release Checklist |
+| [dynamic-forms-engine.md](./dynamic-forms-engine.md) | Design for the proposed M21–M24 (no tasks logged yet)   |
 
 ---
 
 ## Revision History
 
-| Version | Date       | Author       | Changes                                                                                                                                                       |
-| ------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0     | 2026-07-02 | Yash Lakhani | Initial tracker — replaces placeholder; supersedes the root-level historical checklist; M1–M7 task history carried over; TD-1–TD-9 debt register established. |
-| 1.1     | 2026-07-09 | Yash Lakhani | M18-T1 completed: CI now runs unit + backend integration tests as a merge gate; closes TD-2. Playwright stage (M18-T4) remains open.                          |
-| 1.2     | 2026-07-09 | Yash Lakhani | M10-T2–T5 flipped to Completed, matching already-shipped Vitest/RTL tooling and shared primitives (milestones.md already marked M10 complete); closes TD-3.   |
+| Version | Date       | Author       | Changes                                                                                                                                                                                                                                           |
+| ------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | 2026-07-02 | Yash Lakhani | Initial tracker — replaces placeholder; supersedes the root-level historical checklist; M1–M7 task history carried over; TD-1–TD-9 debt register established.                                                                                     |
+| 1.1     | 2026-07-09 | Yash Lakhani | M18-T1 completed: CI now runs unit + backend integration tests as a merge gate; closes TD-2. Playwright stage (M18-T4) remains open.                                                                                                              |
+| 1.2     | 2026-07-09 | Yash Lakhani | M10-T2–T5 flipped to Completed, matching already-shipped Vitest/RTL tooling and shared primitives (milestones.md already marked M10 complete); closes TD-3.                                                                                       |
+| 1.3     | 2026-07-13 | Yash Lakhani | M15 scope notes cross-referenced with follow-up Jira tickets SM-317 (Excel export) and SM-318 (partner selector). Added M21–M24 stub section for the proposed Dynamic Forms Engine — design only, no tasks opened pending product owner sign-off. |
