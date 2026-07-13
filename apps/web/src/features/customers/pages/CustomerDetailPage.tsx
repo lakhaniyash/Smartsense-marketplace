@@ -6,6 +6,7 @@ import {
   ActivateCustomerDocument,
   ArchiveCustomerDocument,
   CustomerStatus,
+  GetCustomerAuditLogDocument,
   GetCustomerByIdDocument,
 } from '@lib/graphql/__generated__/graphql'
 import {
@@ -53,7 +54,10 @@ export function CustomerDetailPage() {
   useBreadcrumb(customer?.displayName)
 
   const [archiveCustomer, { loading: isArchiving }] = useMutation(ArchiveCustomerDocument, {
-    refetchQueries: [GetCustomerByIdDocument],
+    // GetCustomerAuditLogDocument too — the Activity tab's own query would
+    // otherwise keep showing whatever it last fetched (stale Apollo cache),
+    // never picking up the CUSTOMER_ARCHIVED entry this action just wrote.
+    refetchQueries: [GetCustomerByIdDocument, GetCustomerAuditLogDocument],
     onCompleted: () => {
       setIsConfirmingArchive(false)
       toast({ title: 'Customer suspended', variant: 'success' })
@@ -68,7 +72,7 @@ export function CustomerDetailPage() {
   })
 
   const [activateCustomer, { loading: isActivating }] = useMutation(ActivateCustomerDocument, {
-    refetchQueries: [GetCustomerByIdDocument],
+    refetchQueries: [GetCustomerByIdDocument, GetCustomerAuditLogDocument],
     onCompleted: () => toast({ title: 'Customer reactivated', variant: 'success' }),
     onError: (mutationError) => {
       toast({
