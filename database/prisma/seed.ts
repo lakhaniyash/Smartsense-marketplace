@@ -69,7 +69,16 @@ const PERMISSIONS = [
   {
     key: 'customers:write',
     domain: 'customers',
-    description: 'Create, edit, and suspend/reactivate customer accounts',
+    description: 'Edit and suspend/reactivate customer accounts within the caller\'s own scope',
+  },
+  // Distinct from `customers:write`: creating a Customer has no Order yet
+  // to derive a Partner "permitted" floor from (CustomersService.buildWhere),
+  // so it's necessarily unscoped and restricted to Admin — same reasoning
+  // that split `orders:create` from `orders:write` (see that key's comment).
+  {
+    key: 'customers:manage',
+    domain: 'customers',
+    description: 'Create new customer accounts (Admin-only)',
   },
 ] as const;
 

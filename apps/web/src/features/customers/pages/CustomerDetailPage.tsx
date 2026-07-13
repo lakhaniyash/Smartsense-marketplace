@@ -39,7 +39,7 @@ export function CustomerDetailPage() {
   const { customer, isLoading, error } = useCustomer(id)
   const { orders, isLoading: isOrdersLoading } = useCustomerOrders(id)
   const { entries: auditEntries, isLoading: isAuditLoading } = useCustomerAuditLog(id)
-  const { canManageCustomers } = usePermissions()
+  const { canEditCustomers } = usePermissions()
   const { toast } = useToast()
   const [isConfirmingArchive, setIsConfirmingArchive] = useState(false)
   useBreadcrumb(customer?.displayName)
@@ -106,7 +106,7 @@ export function CustomerDetailPage() {
             title={customer.displayName}
             description={customer.billingEmail}
             action={
-              canManageCustomers && (
+              canEditCustomers && (
                 <div className="flex gap-2">
                   <Link
                     to={`${ROUTES.CUSTOMERS}/${customer.id}/edit`}

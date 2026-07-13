@@ -17,9 +17,14 @@ const PERMISSION_KEYS = {
   REPORTS_READ: 'reports:read',
   // Sprint 2 (Customer Management, SM-320) — not tied to a
   // docs/milestones.md milestone. See docs/authorization.md § Resource
-  // Authorization's Customers row.
+  // Authorization's Customers row. `customers:manage` (SM-323) is
+  // deliberately distinct from `customers:write`: creating a Customer has
+  // no Order yet to derive a Partner "permitted" floor from, so it's
+  // Admin-only, unlike edit/archive/activate which a Partner may do within
+  // their own scope.
   CUSTOMERS_READ: 'customers:read',
   CUSTOMERS_WRITE: 'customers:write',
+  CUSTOMERS_MANAGE: 'customers:manage',
 } as const
 
 export function usePermissions() {
@@ -51,6 +56,7 @@ export function usePermissions() {
     canManageUsers: can(PERMISSION_KEYS.USERS_MANAGE),
     canViewReports: can(PERMISSION_KEYS.REPORTS_READ),
     canViewCustomers: can(PERMISSION_KEYS.CUSTOMERS_READ),
-    canManageCustomers: can(PERMISSION_KEYS.CUSTOMERS_WRITE),
+    canEditCustomers: can(PERMISSION_KEYS.CUSTOMERS_WRITE),
+    canCreateCustomers: can(PERMISSION_KEYS.CUSTOMERS_MANAGE),
   }
 }

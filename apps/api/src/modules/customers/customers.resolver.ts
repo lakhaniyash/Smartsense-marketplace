@@ -74,7 +74,7 @@ export class CustomersResolver {
     return this.customersService.getAuditLog(user, customerId)
   }
 
-  @Permissions('customers:write')
+  @Permissions('customers:manage')
   @Mutation(() => CustomerOutput, {
     name: 'createCustomer',
     description: 'Creates a new Customer. Admin-only — see CustomersService.createCustomer.',

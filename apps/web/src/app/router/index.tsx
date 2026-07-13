@@ -169,9 +169,12 @@ const router = createBrowserRouter([
               },
             ],
           },
-          // Sprint 2 (Customer Management, SM-320/SM-322) — not tied to a
-          // docs/milestones.md milestone. Same list/detail + write-gated
-          // create/edit split as Catalog/Orders above.
+          // Sprint 2 (Customer Management, SM-320/SM-322/SM-323) — not tied
+          // to a docs/milestones.md milestone. Same list/detail split as
+          // Catalog/Orders above, but create and edit sit behind two
+          // different keys (customers:manage vs customers:write) rather
+          // than one — creating a Customer is Admin-only, editing one a
+          // Partner may also do within their own scope.
           {
             element: <PermissionRoute permission="customers:read" />,
             children: [
@@ -186,7 +189,7 @@ const router = createBrowserRouter([
             ],
           },
           {
-            element: <PermissionRoute permission="customers:write" />,
+            element: <PermissionRoute permission="customers:manage" />,
             children: [
               {
                 path: `${ROUTES.CUSTOMERS.slice(1)}/new`,
@@ -198,6 +201,11 @@ const router = createBrowserRouter([
                   ],
                 },
               },
+            ],
+          },
+          {
+            element: <PermissionRoute permission="customers:write" />,
+            children: [
               {
                 path: `${ROUTES.CUSTOMERS.slice(1)}/:id/edit`,
                 element: withSuspense(<CustomerFormPage />),
