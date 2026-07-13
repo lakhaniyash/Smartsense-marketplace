@@ -74,6 +74,19 @@ export class CustomersResolver {
     return this.customersService.getAuditLog(user, customerId)
   }
 
+  @Permissions('customers:read')
+  @Query(() => String, {
+    name: 'exportCustomersCsv',
+    description: "A CSV export of the caller's visible customers, matching the given filter.",
+  })
+  exportCustomersCsv(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('filter', { type: () => CustomerFilterInput, nullable: true })
+    filter?: CustomerFilterInput | null,
+  ): Promise<string> {
+    return this.customersService.exportCustomersCsv(user, filter ?? undefined)
+  }
+
   @Permissions('customers:manage')
   @Mutation(() => CustomerOutput, {
     name: 'createCustomer',

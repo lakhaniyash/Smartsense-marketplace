@@ -35,6 +35,7 @@ type Documents = {
     "mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}": typeof types.ActivateCustomerDocument,
     "mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}": typeof types.ArchiveCustomerDocument,
     "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}": typeof types.CreateCustomerDocument,
+    "query ExportCustomersCsv($filter: CustomerFilterInput) {\n  exportCustomersCsv(filter: $filter)\n}": typeof types.ExportCustomersCsvDocument,
     "query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": typeof types.GetCustomerAuditLogDocument,
     "query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}": typeof types.GetCustomerByIdDocument,
     "query GetCustomerOrders($customerId: ID!, $first: Int, $after: String) {\n  orders(first: $first, after: $after, filter: {customerId: $customerId}) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetCustomerOrdersDocument,
@@ -86,6 +87,7 @@ const documents: Documents = {
     "mutation ActivateCustomer($id: ID!) {\n  activateCustomer(id: $id) {\n    id\n    status\n  }\n}": types.ActivateCustomerDocument,
     "mutation ArchiveCustomer($id: ID!) {\n  archiveCustomer(id: $id) {\n    id\n    status\n  }\n}": types.ArchiveCustomerDocument,
     "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}": types.CreateCustomerDocument,
+    "query ExportCustomersCsv($filter: CustomerFilterInput) {\n  exportCustomersCsv(filter: $filter)\n}": types.ExportCustomersCsvDocument,
     "query GetCustomerAuditLog($customerId: ID!) {\n  customerAuditLog(customerId: $customerId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": types.GetCustomerAuditLogDocument,
     "query GetCustomerById($id: ID!) {\n  customerById(id: $id) {\n    id\n    displayName\n    type\n    status\n    billingEmail\n    createdAt\n    updatedAt\n    addresses {\n      id\n      type\n      line1\n      line2\n      city\n      state\n      postalCode\n      country\n      isDefault\n    }\n    assignedUsers {\n      id\n      email\n      fullName\n      status\n    }\n    billingSummary {\n      totalOrders\n      totalInvoiced\n      totalOutstanding\n    }\n  }\n}": types.GetCustomerByIdDocument,
     "query GetCustomerOrders($customerId: ID!, $first: Int, $after: String) {\n  orders(first: $first, after: $after, filter: {customerId: $customerId}) {\n    edges {\n      cursor\n      node {\n        id\n        orderNumber\n        status\n        total\n        placedAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetCustomerOrdersDocument,
@@ -214,6 +216,10 @@ export function gql(source: "mutation ArchiveCustomer($id: ID!) {\n  archiveCust
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation CreateCustomer($input: CreateCustomerInput!) {\n  createCustomer(input: $input) {\n    id\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query ExportCustomersCsv($filter: CustomerFilterInput) {\n  exportCustomersCsv(filter: $filter)\n}"): (typeof documents)["query ExportCustomersCsv($filter: CustomerFilterInput) {\n  exportCustomersCsv(filter: $filter)\n}"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

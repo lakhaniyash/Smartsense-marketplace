@@ -1,0 +1,3 @@
+query ExportCustomersCsv($filter: CustomerFilterInput) {
+  exportCustomersCsv(filter: $filter)
+}

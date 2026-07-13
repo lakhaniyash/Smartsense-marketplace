@@ -468,4 +468,38 @@ describe('CustomersService', () => {
       ])
     })
   })
+
+  describe('exportCustomersCsv', () => {
+    it('scopes rows the same way findCustomers does (Partner floored to permitted customers)', async () => {
+      prisma.customer.findMany.mockResolvedValueOnce([])
+
+      await service.exportCustomersCsv(user({ partnerId: 'partner-1' }), {})
+
+      expect(prisma.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deletedAt: null, orders: { some: { partnerId: 'partner-1' } } },
+        }),
+      )
+    })
+
+    it('builds a CSV header + one row per customer', async () => {
+      prisma.customer.findMany.mockResolvedValueOnce([
+        {
+          displayName: 'Acme Corp',
+          type: CustomerType.ORGANIZATION,
+          status: CustomerStatus.ACTIVE,
+          billingEmail: 'yash.lakhani+acme@smartsensesolutions.com',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ])
+
+      const csv = await service.exportCustomersCsv(user())
+
+      const lines = csv.split('\n')
+      expect(lines[0]).toBe('displayName,type,status,billingEmail,createdAt')
+      expect(lines[1]).toBe(
+        'Acme Corp,ORGANIZATION,ACTIVE,yash.lakhani+acme@smartsensesolutions.com,2026-01-01T00:00:00.000Z',
+      )
+    })
+  })
 })
