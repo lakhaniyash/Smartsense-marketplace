@@ -4,14 +4,23 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { CustomerStatus, InvoiceStatus, Prisma, PaymentStatus } from '@prisma/client'
+import {
+  AddressOwnerType,
+  AddressType,
+  CustomerStatus,
+  InvoiceStatus,
+  Prisma,
+  PaymentStatus,
+} from '@prisma/client'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
 import { buildCsv } from '../../common/utils/csv.util'
+import { AddCustomerAddressInput } from './dto/add-customer-address.input'
 import { AuditLogEntryOutput } from './dto/audit-log-entry.output'
+import { CustomerAddressOutput } from './dto/customer-address.output'
 import { CustomerBillingSummaryOutput } from './dto/customer-billing-summary.output'
 import { CustomerConnectionOutput, CustomerEdgeOutput } from './dto/customer-connection.output'
 import { CustomerFilterInput } from './dto/customer-filter.input'
@@ -19,6 +28,7 @@ import { CustomerSortField } from './dto/customer-sort.enum'
 import { CustomerSortInput } from './dto/customer-sort.input'
 import { CustomerOutput } from './dto/customer.output'
 import { CreateCustomerInput } from './dto/create-customer.input'
+import { UpdateCustomerAddressInput } from './dto/update-customer-address.input'
 import { UpdateCustomerInput } from './dto/update-customer.input'
 import { CustomerActivatedEvent } from './events/customer-activated.event'
 import { CustomerArchivedEvent } from './events/customer-archived.event'
@@ -291,6 +301,122 @@ export class CustomersService {
     return buildCsv(header, rows)
   }
 
+  /**
+   * Adds an Address to a Customer within the caller's scope. Setting
+   * `isDefault: true` unsets the Customer's previous default inside the
+   * same transaction — same pattern as VariantService.createProductVariant
+   * (no DB-level partial-unique-index backs this for Address yet, unlike
+   * ProductVariant; this is an application-level guarantee only).
+   */
+  async addCustomerAddress(
+    user: AuthenticatedUser,
+    input: AddCustomerAddressInput,
+  ): Promise<CustomerAddressOutput> {
+    await this.findOwnedCustomerOrThrow(user, input.customerId)
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      if (input.isDefault === true) {
+        await tx.address.updateMany({
+          where: { customerId: input.customerId, isDefault: true },
+          data: { isDefault: false },
+        })
+      }
+      const address = await tx.address.create({
+        data: {
+          ownerType: AddressOwnerType.CUSTOMER,
+          customerId: input.customerId,
+          type: input.type,
+          line1: input.line1,
+          line2: input.line2 ?? null,
+          city: input.city,
+          state: input.state,
+          postalCode: input.postalCode,
+          country: input.country,
+          isDefault: input.isDefault ?? false,
+        },
+      })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ADDRESS_ADDED',
+        entityType: 'Customer',
+        entityId: input.customerId,
+        metadata: { addressId: address.id, city: address.city },
+      })
+      return address
+    })
+
+    return this.mapAddressToOutput(created)
+  }
+
+  /** Partial update. Ownership is verified via the Address's owning Customer before any write. */
+  async updateCustomerAddress(
+    user: AuthenticatedUser,
+    input: UpdateCustomerAddressInput,
+  ): Promise<CustomerAddressOutput> {
+    const existing = await this.findOwnedAddressOrThrow(user, input.id)
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (input.isDefault === true) {
+        await tx.address.updateMany({
+          where: { customerId: existing.customerId, isDefault: true },
+          data: { isDefault: false },
+        })
+      }
+      const address = await tx.address.update({
+        where: { id: input.id },
+        data: {
+          ...(input.type !== undefined && { type: input.type }),
+          ...(input.line1 !== undefined && { line1: input.line1 }),
+          ...(input.line2 !== undefined && { line2: input.line2 }),
+          ...(input.city !== undefined && { city: input.city }),
+          ...(input.state !== undefined && { state: input.state }),
+          ...(input.postalCode !== undefined && { postalCode: input.postalCode }),
+          ...(input.country !== undefined && { country: input.country }),
+          ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
+        },
+      })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ADDRESS_UPDATED',
+        entityType: 'Customer',
+        entityId: existing.customerId,
+        metadata: { addressId: address.id },
+      })
+      return address
+    })
+
+    return this.mapAddressToOutput(updated)
+  }
+
+  /**
+   * Soft-deactivates an Address (isActive: false) — the same
+   * never-hard-deleted convention every other Address consumer follows
+   * (docs/domain-model.md § Address).
+   */
+  async deactivateCustomerAddress(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<CustomerAddressOutput> {
+    const existing = await this.findOwnedAddressOrThrow(user, id)
+    if (!existing.isActive) {
+      throw new BadRequestException('Address is already inactive')
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const address = await tx.address.update({ where: { id }, data: { isActive: false } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ADDRESS_DEACTIVATED',
+        entityType: 'Customer',
+        entityId: existing.customerId,
+        metadata: { addressId: id },
+      })
+      return address
+    })
+
+    return this.mapAddressToOutput(updated)
+  }
+
   private async findOwnedCustomerOrThrow(
     user: AuthenticatedUser,
     id: string,
@@ -303,6 +429,29 @@ export class CustomersService {
       throw new NotFoundException('Customer not found')
     }
     return customer
+  }
+
+  /**
+   * Ownership flows through the Address's owning Customer — an Address with
+   * no `customerId` (a Partner's own address) is indistinguishable from
+   * "does not exist" for this Customer-scoped surface, same NOT_FOUND
+   * treatment as an out-of-scope Customer.
+   */
+  private async findOwnedAddressOrThrow(
+    user: AuthenticatedUser,
+    addressId: string,
+  ): Promise<{
+    id: string
+    customerId: string
+    isActive: boolean
+    isDefault: boolean
+  }> {
+    const address = await this.prisma.address.findUnique({ where: { id: addressId } })
+    if (address === null || address.customerId === null) {
+      throw new NotFoundException('Address not found')
+    }
+    await this.findOwnedCustomerOrThrow(user, address.customerId)
+    return { ...address, customerId: address.customerId }
   }
 
   private scopeToId(user: AuthenticatedUser, id: string): Prisma.CustomerWhereInput {
@@ -433,17 +582,7 @@ export class CustomersService {
       type: customer.type,
       status: customer.status,
       billingEmail: customer.billingEmail,
-      addresses: customer.addresses.map((address) => ({
-        id: address.id,
-        type: address.type,
-        line1: address.line1,
-        line2: address.line2,
-        city: address.city,
-        state: address.state,
-        postalCode: address.postalCode,
-        country: address.country,
-        isDefault: address.isDefault,
-      })),
+      addresses: customer.addresses.map((address) => this.mapAddressToOutput(address)),
       assignedUsers: customer.users.map((assignedUser) => ({
         id: assignedUser.id,
         email: assignedUser.email,
@@ -453,6 +592,30 @@ export class CustomersService {
       billingSummary,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt,
+    }
+  }
+
+  private mapAddressToOutput(address: {
+    id: string
+    type: AddressType
+    line1: string
+    line2: string | null
+    city: string
+    state: string
+    postalCode: string
+    country: string
+    isDefault: boolean
+  }): CustomerAddressOutput {
+    return {
+      id: address.id,
+      type: address.type,
+      line1: address.line1,
+      line2: address.line2,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      country: address.country,
+      isDefault: address.isDefault,
     }
   }
 

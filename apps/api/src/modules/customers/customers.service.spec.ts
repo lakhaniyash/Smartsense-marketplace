@@ -1,5 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
-import { CustomerStatus, CustomerType, InvoiceStatus, Prisma, UserStatus } from '@prisma/client'
+import {
+  AddressType,
+  CustomerStatus,
+  CustomerType,
+  InvoiceStatus,
+  Prisma,
+  UserStatus,
+} from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { CustomerSortField } from './dto/customer-sort.enum'
 import { CustomersService } from './customers.service'
@@ -59,6 +66,7 @@ describe('CustomersService', () => {
     customer: { findFirst: jest.Mock; findMany: jest.Mock; create: jest.Mock; update: jest.Mock }
     order: { count: jest.Mock }
     invoice: { findMany: jest.Mock }
+    address: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock; updateMany: jest.Mock }
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
@@ -69,6 +77,12 @@ describe('CustomersService', () => {
       customer: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
       order: { count: jest.fn().mockResolvedValue(0) },
       invoice: { findMany: jest.fn().mockResolvedValue([]) },
+      address: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
@@ -499,6 +513,205 @@ describe('CustomersService', () => {
       expect(lines[0]).toBe('displayName,type,status,billingEmail,createdAt')
       expect(lines[1]).toBe(
         'Acme Corp,ORGANIZATION,ACTIVE,yash.lakhani+acme@smartsensesolutions.com,2026-01-01T00:00:00.000Z',
+      )
+    })
+  })
+
+  describe('addCustomerAddress', () => {
+    it("throws NOT_FOUND when the customer is out of the caller's scope", async () => {
+      prisma.customer.findFirst.mockResolvedValueOnce(null)
+
+      await expect(
+        service.addCustomerAddress(user({ partnerId: 'partner-1' }), {
+          customerId: 'customer-1',
+          type: AddressType.SHIPPING,
+          line1: '1 Market St',
+          city: 'San Francisco',
+          state: 'CA',
+          postalCode: '94105',
+          country: 'US',
+        }),
+      ).rejects.toThrow(NotFoundException)
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('unsets the previous default before creating a new default address', async () => {
+      prisma.customer.findFirst.mockResolvedValueOnce({
+        id: 'customer-1',
+        displayName: 'Acme Corp',
+        status: CustomerStatus.ACTIVE,
+      })
+      prisma.address.create.mockResolvedValueOnce({
+        id: 'address-2',
+        type: AddressType.SHIPPING,
+        line1: '2 Market St',
+        line2: null,
+        city: 'San Francisco',
+        state: 'CA',
+        postalCode: '94105',
+        country: 'US',
+        isDefault: true,
+      })
+
+      await service.addCustomerAddress(user(), {
+        customerId: 'customer-1',
+        type: AddressType.SHIPPING,
+        line1: '2 Market St',
+        city: 'San Francisco',
+        state: 'CA',
+        postalCode: '94105',
+        country: 'US',
+        isDefault: true,
+      })
+
+      expect(prisma.address.updateMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1', isDefault: true },
+        data: { isDefault: false },
+      })
+      expect(prisma.address.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          ownerType: 'CUSTOMER',
+          customerId: 'customer-1',
+          isDefault: true,
+        }),
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'ADDRESS_ADDED', entityId: 'customer-1' }),
+      )
+    })
+  })
+
+  describe('updateCustomerAddress', () => {
+    it('throws NOT_FOUND when the address does not exist', async () => {
+      prisma.address.findUnique.mockResolvedValueOnce(null)
+
+      await expect(
+        service.updateCustomerAddress(user(), { id: 'address-1', city: 'Oakland' }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it("throws NOT_FOUND when the address's Customer is out of the caller's scope", async () => {
+      prisma.address.findUnique.mockResolvedValueOnce({
+        id: 'address-1',
+        customerId: 'customer-1',
+        isActive: true,
+        isDefault: false,
+      })
+      prisma.customer.findFirst.mockResolvedValueOnce(null)
+
+      await expect(
+        service.updateCustomerAddress(user({ partnerId: 'partner-1' }), {
+          id: 'address-1',
+          city: 'Oakland',
+        }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('throws NOT_FOUND for an address with no owning Customer (a Partner address)', async () => {
+      prisma.address.findUnique.mockResolvedValueOnce({
+        id: 'address-1',
+        customerId: null,
+        isActive: true,
+        isDefault: false,
+      })
+
+      await expect(
+        service.updateCustomerAddress(user(), { id: 'address-1', city: 'Oakland' }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('updates only the provided fields and records an audit entry', async () => {
+      prisma.address.findUnique.mockResolvedValueOnce({
+        id: 'address-1',
+        customerId: 'customer-1',
+        isActive: true,
+        isDefault: false,
+      })
+      prisma.customer.findFirst.mockResolvedValueOnce({
+        id: 'customer-1',
+        displayName: 'Acme Corp',
+        status: CustomerStatus.ACTIVE,
+      })
+      prisma.address.update.mockResolvedValueOnce({
+        id: 'address-1',
+        type: AddressType.SHIPPING,
+        line1: '1 Market St',
+        line2: null,
+        city: 'Oakland',
+        state: 'CA',
+        postalCode: '94612',
+        country: 'US',
+        isDefault: false,
+      })
+
+      await service.updateCustomerAddress(user(), { id: 'address-1', city: 'Oakland' })
+
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'address-1' },
+        data: { city: 'Oakland' },
+      })
+      expect(prisma.address.updateMany).not.toHaveBeenCalled()
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'ADDRESS_UPDATED', entityId: 'customer-1' }),
+      )
+    })
+  })
+
+  describe('deactivateCustomerAddress', () => {
+    it('rejects deactivating an already-inactive address', async () => {
+      prisma.address.findUnique.mockResolvedValueOnce({
+        id: 'address-1',
+        customerId: 'customer-1',
+        isActive: false,
+        isDefault: false,
+      })
+      prisma.customer.findFirst.mockResolvedValueOnce({
+        id: 'customer-1',
+        displayName: 'Acme Corp',
+        status: CustomerStatus.ACTIVE,
+      })
+
+      await expect(service.deactivateCustomerAddress(user(), 'address-1')).rejects.toThrow(
+        BadRequestException,
+      )
+      expect(prisma.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('deactivates the address and records an audit entry', async () => {
+      prisma.address.findUnique.mockResolvedValueOnce({
+        id: 'address-1',
+        customerId: 'customer-1',
+        isActive: true,
+        isDefault: false,
+      })
+      prisma.customer.findFirst.mockResolvedValueOnce({
+        id: 'customer-1',
+        displayName: 'Acme Corp',
+        status: CustomerStatus.ACTIVE,
+      })
+      prisma.address.update.mockResolvedValueOnce({
+        id: 'address-1',
+        type: AddressType.SHIPPING,
+        line1: '1 Market St',
+        line2: null,
+        city: 'San Francisco',
+        state: 'CA',
+        postalCode: '94105',
+        country: 'US',
+        isDefault: false,
+      })
+
+      await service.deactivateCustomerAddress(user(), 'address-1')
+
+      expect(prisma.address.update).toHaveBeenCalledWith({
+        where: { id: 'address-1' },
+        data: { isActive: false },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'ADDRESS_DEACTIVATED', entityId: 'customer-1' }),
       )
     })
   })

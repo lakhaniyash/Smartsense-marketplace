@@ -2,6 +2,22 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+input AddCustomerAddressInput {
+  city: String!
+  country: String!
+  customerId: ID!
+
+  """
+  Marks this address as the Customer's default, unsetting any existing default.
+  """
+  isDefault: Boolean
+  line1: String!
+  line2: String
+  postalCode: String!
+  state: String!
+  type: AddressType!
+}
+
 """Shipping, Billing, or Registered (docs/domain-model.md § Address)."""
 enum AddressType {
   BILLING
@@ -470,6 +486,9 @@ type Mutation {
   """Reactivates a suspended Customer within the caller's scope."""
   activateCustomer(id: ID!): Customer!
 
+  """Adds an address to a Customer within the caller's scope."""
+  addCustomerAddress(input: AddCustomerAddressInput!): CustomerAddress!
+
   """
   Adjusts a ProductVariant's stock on hand and returns the updated Variant.
   """
@@ -510,6 +529,11 @@ type Mutation {
   createProductVariant(input: CreateProductVariantInput!): ProductVariant!
 
   """
+  Soft-deactivates an address belonging to a Customer within the caller's scope (isActive: false — addresses are never hard-deleted).
+  """
+  deactivateCustomerAddress(id: ID!): CustomerAddress!
+
+  """
   GENERATED → FINALIZED (docs/domain-model.md § Billing Report lifecycle).
   """
   finalizeBillingReport(id: ID!): BillingReport!
@@ -546,6 +570,9 @@ type Mutation {
 
   """Updates a Customer within the caller's scope."""
   updateCustomer(input: UpdateCustomerInput!): Customer!
+
+  """Updates an address belonging to a Customer within the caller's scope."""
+  updateCustomerAddress(input: UpdateCustomerAddressInput!): CustomerAddress!
 
   """
   Transitions an Order to a new status per the allowed transition matrix (docs/authorization.md § Orders). Rejects any other requested transition as invalid.
@@ -1168,6 +1195,22 @@ input RevenueReportFilterInput {
 enum SortDirection {
   ASC
   DESC
+}
+
+input UpdateCustomerAddressInput {
+  city: String
+  country: String
+  id: ID!
+
+  """
+  Marks this address as the Customer's default, unsetting any existing default.
+  """
+  isDefault: Boolean
+  line1: String
+  line2: String
+  postalCode: String
+  state: String
+  type: AddressType
 }
 
 input UpdateCustomerInput {

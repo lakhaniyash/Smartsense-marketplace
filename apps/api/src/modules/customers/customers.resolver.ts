@@ -4,12 +4,15 @@ import { Permissions } from '../auth/decorators/permissions.decorator'
 import { Public } from '../auth/decorators/public.decorator'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { CustomersService } from './customers.service'
+import { AddCustomerAddressInput } from './dto/add-customer-address.input'
 import { AuditLogEntryOutput } from './dto/audit-log-entry.output'
 import { CreateCustomerInput } from './dto/create-customer.input'
+import { CustomerAddressOutput } from './dto/customer-address.output'
 import { CustomerConnectionOutput } from './dto/customer-connection.output'
 import { CustomerFilterInput } from './dto/customer-filter.input'
 import { CustomerSortInput } from './dto/customer-sort.input'
 import { CustomerOutput } from './dto/customer.output'
+import { UpdateCustomerAddressInput } from './dto/update-customer-address.input'
 import { UpdateCustomerInput } from './dto/update-customer.input'
 
 @Resolver()
@@ -134,5 +137,43 @@ export class CustomersResolver {
     @Args('id', { type: () => ID }) id: string,
   ): Promise<CustomerOutput> {
     return this.customersService.activateCustomer(user, id)
+  }
+
+  @Permissions('customers:write')
+  @Mutation(() => CustomerAddressOutput, {
+    name: 'addCustomerAddress',
+    description: "Adds an address to a Customer within the caller's scope.",
+  })
+  addCustomerAddress(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('input') input: AddCustomerAddressInput,
+  ): Promise<CustomerAddressOutput> {
+    return this.customersService.addCustomerAddress(user, input)
+  }
+
+  @Permissions('customers:write')
+  @Mutation(() => CustomerAddressOutput, {
+    name: 'updateCustomerAddress',
+    description: "Updates an address belonging to a Customer within the caller's scope.",
+  })
+  updateCustomerAddress(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('input') input: UpdateCustomerAddressInput,
+  ): Promise<CustomerAddressOutput> {
+    return this.customersService.updateCustomerAddress(user, input)
+  }
+
+  @Permissions('customers:write')
+  @Mutation(() => CustomerAddressOutput, {
+    name: 'deactivateCustomerAddress',
+    description:
+      "Soft-deactivates an address belonging to a Customer within the caller's scope " +
+      '(isActive: false — addresses are never hard-deleted).',
+  })
+  deactivateCustomerAddress(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<CustomerAddressOutput> {
+    return this.customersService.deactivateCustomerAddress(user, id)
   }
 }

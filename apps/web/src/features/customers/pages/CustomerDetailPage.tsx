@@ -29,7 +29,7 @@ import {
 } from '@shared/components'
 import { ROUTES } from '@shared/constants'
 import { useBreadcrumb } from '@shared/layouts'
-import { CustomerStatusBadge, CustomerTimeline } from '../components'
+import { CustomerAddressList, CustomerStatusBadge, CustomerTimeline } from '../components'
 import { useCustomer, useCustomerAuditLog, useCustomerOrders } from '../hooks'
 
 // The shell renders its breadcrumb automatically from route metadata
@@ -242,38 +242,13 @@ export function CustomerDetailPage() {
               {
                 value: 'addresses',
                 label: 'Addresses',
-                content:
-                  customer.addresses.length === 0 ? (
-                    <EmptyState
-                      title="No addresses on file"
-                      description="Addresses added for this customer will show up here."
-                    />
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {customer.addresses.map((address) => (
-                        <Card key={address.id}>
-                          <CardContent className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-fg-default text-sm font-medium">
-                                {address.type}
-                              </span>
-                              {address.isDefault && (
-                                <span className="text-fg-muted text-xs">Default</span>
-                              )}
-                            </div>
-                            <span className="text-fg-secondary text-sm">{address.line1}</span>
-                            {address.line2 !== null && address.line2 !== undefined && (
-                              <span className="text-fg-secondary text-sm">{address.line2}</span>
-                            )}
-                            <span className="text-fg-secondary text-sm">
-                              {address.city}, {address.state} {address.postalCode}
-                            </span>
-                            <span className="text-fg-secondary text-sm">{address.country}</span>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ),
+                content: (
+                  <CustomerAddressList
+                    customerId={customer.id}
+                    addresses={customer.addresses}
+                    canEdit={canEditCustomers}
+                  />
+                ),
               },
               {
                 value: 'users',

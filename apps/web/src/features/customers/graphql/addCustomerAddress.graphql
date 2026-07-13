@@ -1,0 +1,5 @@
+mutation AddCustomerAddress($input: AddCustomerAddressInput!) {
+  addCustomerAddress(input: $input) {
+    id
+  }
+}
