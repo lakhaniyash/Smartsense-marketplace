@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@apollo/client'
 import { GetCustomerOrdersDocument } from '@lib/graphql/__generated__/graphql'
 
@@ -13,13 +13,19 @@ const ORDER_HISTORY_PAGE_SIZE = 10
 // Cursor state is component-local, not URL-backed — unlike the top-level
 // Orders list, a page within a detail-page tab isn't something a user
 // would bookmark (docs/frontend-architecture.md § State Management
-// Strategy), so it resets on navigating away, same as Catalog/Orders'
-// cursor-stack pattern otherwise.
+// Strategy). It must still reset when `customerId` changes: react-router
+// re-renders CustomerDetailPage in place on a param-only transition (e.g.
+// browser back/forward between two previously-visited /customers/:id
+// pages) rather than remounting it, so without this a stale cursor from
+// customer A would otherwise carry over into customer B's query.
 export function useCustomerOrders(customerId: string | undefined) {
   const [after, setAfter] = useState<string | undefined>(undefined)
-  // Only ever updated via its functional form (prev => ...) — the stack
-  // itself is never read outside a setter, so it's write-only state.
-  const [, setCursorStack] = useState<string[]>([])
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+
+  useEffect(() => {
+    setAfter(undefined)
+    setCursorStack([])
+  }, [customerId])
 
   const { data, loading, error } = useQuery(GetCustomerOrdersDocument, {
     variables: {
@@ -33,20 +39,18 @@ export function useCustomerOrders(customerId: string | undefined) {
   function goToNextPage() {
     const endCursor = data?.orders.pageInfo.endCursor
     if (endCursor === undefined || endCursor === null) return
-    setCursorStack((prev) => [...prev, after ?? ''])
+    setCursorStack([...cursorStack, after ?? ''])
     setAfter(endCursor)
   }
 
   function goToPreviousPage() {
-    setCursorStack((prev) => {
-      if (prev.length === 0) {
-        setAfter(undefined)
-        return prev
-      }
-      const previousAfter = prev[prev.length - 1]
-      setAfter(previousAfter === undefined || previousAfter === '' ? undefined : previousAfter)
-      return prev.slice(0, -1)
-    })
+    if (cursorStack.length === 0) {
+      setAfter(undefined)
+      return
+    }
+    const previousAfter = cursorStack[cursorStack.length - 1]
+    setCursorStack(cursorStack.slice(0, -1))
+    setAfter(previousAfter === undefined || previousAfter === '' ? undefined : previousAfter)
   }
 
   return {
