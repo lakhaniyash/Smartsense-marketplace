@@ -17,10 +17,10 @@ import {
   useToast,
 } from '@shared/components'
 import { ROUTES } from '@shared/constants'
+import { downloadBlob } from '@shared/utils'
 import { InvoiceFilterBar, InvoiceStatusBadge } from '../components'
 import { useInvoices } from '../hooks'
 import { exportInvoicesCsv } from '../services'
-import { downloadBlob } from '../utils'
 
 const COLUMN_COUNT = 5
 
