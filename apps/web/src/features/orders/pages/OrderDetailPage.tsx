@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@apollo/client'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { usePermissions } from '@features/auth'
 import {
   CancelOrderDocument,
@@ -25,6 +25,7 @@ import {
   Tabs,
   useToast,
 } from '@shared/components'
+import { ROUTES } from '@shared/constants'
 import { useBreadcrumb } from '@shared/layouts'
 import { OrderStatusBadge, OrderTimeline } from '../components'
 import { useOrder } from '../hooks'
@@ -102,9 +103,12 @@ export function OrderDetailPage() {
           title="Couldn't load this order"
           description="It may not exist, or you may not have access to it."
           action={
-            <Button variant="secondary" onClick={() => window.history.back()}>
+            <Link
+              to={ROUTES.ORDERS}
+              className="border-border-control bg-surface text-fg-secondary hover:bg-surface-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
               Back to orders
-            </Button>
+            </Link>
           }
         />
       )}
