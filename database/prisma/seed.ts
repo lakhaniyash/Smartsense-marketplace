@@ -35,17 +35,29 @@ const PERMISSIONS = [
   // docs/authorization.md § Orders for the full transition/permission matrix.
   { key: 'orders:create', domain: 'orders', description: 'Place a new order and cancel an own order before fulfillment' },
   { key: 'orders:write', domain: 'orders', description: 'Update order status and manage fulfillment' },
-  { key: 'billing:read', domain: 'billing', description: 'View invoices, payments, and billing reports' },
+  { key: 'billing:read', domain: 'billing', description: 'View invoices and payments' },
   {
     key: 'billing:manage',
     domain: 'billing',
-    description: 'Issue invoices, record payments, and finalize billing reports',
+    description: 'Issue invoices and record payments',
   },
   { key: 'users:read', domain: 'users', description: 'View platform users' },
   {
     key: 'users:manage',
     domain: 'users',
     description: 'Invite, suspend, and manage platform users and roles',
+  },
+  // Single key covers both viewing and generating every report type
+  // (billing reports, revenue, orders, inventory, product performance,
+  // notification activity) and the reports dashboard — docs/authorization.md
+  // § Reports. Admin sees all Partners; Partner sees only its own
+  // (enforced in ReportsService, not just here); Customer has no access.
+  {
+    key: 'reports:read',
+    domain: 'reports',
+    description:
+      'View and generate reports (billing reports, revenue, orders, inventory, product ' +
+      'performance, notification activity) and the reports dashboard',
   },
 ] as const;
 
@@ -62,6 +74,7 @@ const SYSTEM_ROLES = [
       'orders:create',
       'orders:write',
       'billing:read',
+      'reports:read',
     ],
   },
   {
