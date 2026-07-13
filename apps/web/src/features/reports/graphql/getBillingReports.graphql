@@ -1,0 +1,30 @@
+query GetBillingReports(
+  $first: Int
+  $after: String
+  $filter: BillingReportFilterInput
+  $sort: BillingReportSortInput
+) {
+  billingReports(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        partnerId
+        periodStart
+        periodEnd
+        status
+        grossRevenue
+        commissionAmount
+        netPayout
+        generatedAt
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

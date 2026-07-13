@@ -7,6 +7,13 @@ export const ROUTES = {
   ORDERS: '/orders',
   BILLING: '/billing',
   NOTIFICATIONS: '/notifications',
+  REPORTS: '/reports',
+  REPORTS_REVENUE: '/reports/revenue',
+  REPORTS_ORDERS: '/reports/orders',
+  REPORTS_INVENTORY: '/reports/inventory',
+  REPORTS_PRODUCT_PERFORMANCE: '/reports/product-performance',
+  REPORTS_NOTIFICATION_ACTIVITY: '/reports/notification-activity',
+  REPORTS_BILLING_REPORTS: '/reports/billing-reports',
   UNAUTHORIZED: '/unauthorized',
   FORBIDDEN: '/forbidden',
 } as const

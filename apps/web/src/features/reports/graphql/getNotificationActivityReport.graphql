@@ -1,0 +1,11 @@
+query GetNotificationActivityReport($filter: NotificationActivityReportFilterInput) {
+  notificationActivityReport(filter: $filter) {
+    totalNotifications
+    readCount
+    unreadCount
+    typeBreakdown {
+      type
+      count
+    }
+  }
+}

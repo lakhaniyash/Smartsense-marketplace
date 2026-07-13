@@ -1,0 +1,11 @@
+query GetOrdersReport($filter: OrdersReportFilterInput) {
+  ordersReport(filter: $filter) {
+    totalOrders
+    totalRevenue
+    averageOrderValue
+    statusBreakdown {
+      status
+      count
+    }
+  }
+}

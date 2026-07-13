@@ -1,0 +1,7 @@
+mutation MarkBillingReportPaidOut($id: ID!) {
+  markBillingReportPaidOut(id: $id) {
+    id
+    status
+    updatedAt
+  }
+}

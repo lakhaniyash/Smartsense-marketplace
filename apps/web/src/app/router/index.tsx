@@ -41,6 +41,30 @@ const InvoiceDetailPage = lazy(() =>
 const NotificationsPage = lazy(() =>
   import('@features/notifications').then((m) => ({ default: m.NotificationsPage })),
 )
+const ReportsDashboardPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.ReportsDashboardPage })),
+)
+const RevenueReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.RevenueReportPage })),
+)
+const OrdersReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.OrdersReportPage })),
+)
+const InventoryReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.InventoryReportPage })),
+)
+const ProductPerformanceReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.ProductPerformanceReportPage })),
+)
+const NotificationActivityReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.NotificationActivityReportPage })),
+)
+const BillingReportsPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.BillingReportsPage })),
+)
+const BillingReportDetailPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.BillingReportDetailPage })),
+)
 
 function withSuspense(element: ReactNode) {
   return <Suspense fallback={<AppLoadingState />}>{element}</Suspense>
@@ -159,6 +183,65 @@ const router = createBrowserRouter([
             path: ROUTES.NOTIFICATIONS.slice(1),
             element: withSuspense(<NotificationsPage />),
             handle: { crumb: [{ label: 'Notifications' }] },
+          },
+          // Every report route shares one `reports:read` permission — it
+          // covers view *and* generate/finalize/mark-paid-out for every
+          // report type (M15 plan § Architectural Decisions) — six distinct
+          // data domains, each its own bookmarkable route, not tabs
+          // (docs/frontend-architecture.md § Routing Architecture).
+          {
+            element: <PermissionRoute permission="reports:read" />,
+            children: [
+              // No `handle.crumb` on any of these 6 — each is the direct,
+              // one-level-deep entry point for its report (reached straight
+              // from the Reports nav/dashboard link grid), the same
+              // relationship Catalog/Orders/Billing's own list pages have to
+              // their sidebar entry, and those get no breadcrumb either
+              // (Breadcrumbs.tsx's own comment: "omitted on top-level list
+              // pages"). A `handle.crumb` here previously added a real
+              // "Reports > X" bar above the page inside `Content`'s bounded
+              // `main` — which the page's own `h-full` flex column doesn't
+              // reserve room for — so the box overflowed `main` by exactly
+              // the crumb's height and Pagination/the KPI body sat just below
+              // the fold instead of fitting flush, unlike Catalog. Only the
+              // true nested detail page below keeps its crumb.
+              { path: ROUTES.REPORTS.slice(1), element: withSuspense(<ReportsDashboardPage />) },
+              {
+                path: ROUTES.REPORTS_REVENUE.slice(1),
+                element: withSuspense(<RevenueReportPage />),
+              },
+              {
+                path: ROUTES.REPORTS_ORDERS.slice(1),
+                element: withSuspense(<OrdersReportPage />),
+              },
+              {
+                path: ROUTES.REPORTS_INVENTORY.slice(1),
+                element: withSuspense(<InventoryReportPage />),
+              },
+              {
+                path: ROUTES.REPORTS_PRODUCT_PERFORMANCE.slice(1),
+                element: withSuspense(<ProductPerformanceReportPage />),
+              },
+              {
+                path: ROUTES.REPORTS_NOTIFICATION_ACTIVITY.slice(1),
+                element: withSuspense(<NotificationActivityReportPage />),
+              },
+              {
+                path: ROUTES.REPORTS_BILLING_REPORTS.slice(1),
+                element: withSuspense(<BillingReportsPage />),
+              },
+              {
+                path: `${ROUTES.REPORTS_BILLING_REPORTS.slice(1)}/:id`,
+                element: withSuspense(<BillingReportDetailPage />),
+                handle: {
+                  crumb: [
+                    { label: 'Reports', href: ROUTES.REPORTS },
+                    { label: 'Billing Reports', href: ROUTES.REPORTS_BILLING_REPORTS },
+                    { label: 'Billing Report' },
+                  ],
+                },
+              },
+            ],
           },
         ],
       },

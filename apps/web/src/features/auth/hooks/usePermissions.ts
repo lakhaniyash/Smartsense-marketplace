@@ -14,6 +14,7 @@ const PERMISSION_KEYS = {
   BILLING_MANAGE: 'billing:manage',
   USERS_READ: 'users:read',
   USERS_MANAGE: 'users:manage',
+  REPORTS_READ: 'reports:read',
 } as const
 
 export function usePermissions() {
@@ -43,5 +44,6 @@ export function usePermissions() {
     canManageBilling: can(PERMISSION_KEYS.BILLING_MANAGE),
     canViewUsers: can(PERMISSION_KEYS.USERS_READ),
     canManageUsers: can(PERMISSION_KEYS.USERS_MANAGE),
+    canViewReports: can(PERMISSION_KEYS.REPORTS_READ),
   }
 }

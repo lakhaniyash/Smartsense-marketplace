@@ -1,0 +1,26 @@
+query GetProductPerformanceReport(
+  $first: Int
+  $after: String
+  $filter: ProductPerformanceFilterInput
+  $sort: ProductPerformanceSortInput
+) {
+  productPerformanceReport(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        productVariantId
+        productTitle
+        sku
+        partnerId
+        unitsSold
+        revenue
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}
