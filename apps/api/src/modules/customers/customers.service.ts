@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { CustomerStatus, InvoiceStatus, Prisma } from '@prisma/client'
+import { CustomerStatus, InvoiceStatus, Prisma, PaymentStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
@@ -292,7 +292,11 @@ export class CustomersService {
       this.prisma.order.count({ where: orderWhere }),
       this.prisma.invoice.findMany({
         where: { order: orderWhere },
-        select: { amountDue: true, status: true },
+        select: {
+          amountDue: true,
+          status: true,
+          payments: { where: { status: PaymentStatus.SUCCEEDED }, select: { amount: true } },
+        },
       }),
     ])
 
@@ -300,13 +304,25 @@ export class CustomersService {
       (sum, invoice) => sum.plus(invoice.amountDue),
       new Prisma.Decimal(0),
     )
+    // Nets SUCCEEDED Payments against amountDue — a PARTIALLY_PAID invoice's
+    // full amountDue otherwise overstates what's actually still owed
+    // (docs/database-schema.md § Constraints Not Enforceable: sum(Succeeded
+    // Payments) tracks toward amountDue, it isn't automatically netted).
+    // Clamped at zero as a defensive floor, not an expected case.
     const totalOutstanding = invoices
       .filter(
         (invoice) =>
           invoice.status === InvoiceStatus.ISSUED ||
           invoice.status === InvoiceStatus.PARTIALLY_PAID,
       )
-      .reduce((sum, invoice) => sum.plus(invoice.amountDue), new Prisma.Decimal(0))
+      .reduce((sum, invoice) => {
+        const paid = invoice.payments.reduce(
+          (paidSum, payment) => paidSum.plus(payment.amount),
+          new Prisma.Decimal(0),
+        )
+        const remaining = invoice.amountDue.minus(paid)
+        return sum.plus(remaining.isNegative() ? new Prisma.Decimal(0) : remaining)
+      }, new Prisma.Decimal(0))
 
     return { totalOrders, totalInvoiced, totalOutstanding }
   }
