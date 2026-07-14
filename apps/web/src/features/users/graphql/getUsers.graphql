@@ -1,0 +1,21 @@
+query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {
+  users(first: $first, after: $after, filter: $filter, sort: $sort) {
+    edges {
+      cursor
+      node {
+        id
+        fullName
+        email
+        status
+        ownerType
+        createdAt
+      }
+    }
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

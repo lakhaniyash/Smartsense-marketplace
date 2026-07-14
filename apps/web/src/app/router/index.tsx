@@ -41,6 +41,7 @@ const CustomerDetailPage = lazy(() =>
 const CustomerFormPage = lazy(() =>
   import('@features/customers').then((m) => ({ default: m.CustomerFormPage })),
 )
+const UsersPage = lazy(() => import('@features/users').then((m) => ({ default: m.UsersPage })))
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
 )
@@ -220,6 +221,15 @@ const router = createBrowserRouter([
                 },
               },
             ],
+          },
+          // Sprint 3 (User Management, SM-339) — not tied to a
+          // docs/milestones.md milestone. Admin-only global resource
+          // (users:read). List page only for now; the detail and Invite
+          // pages arrive with SM-340, so no :id / /invite child yet — the
+          // list deliberately links nowhere rather than to a dead route.
+          {
+            element: <PermissionRoute permission="users:read" />,
+            children: [{ path: ROUTES.USERS.slice(1), element: withSuspense(<UsersPage />) }],
           },
           {
             element: <PermissionRoute permission="billing:read" />,

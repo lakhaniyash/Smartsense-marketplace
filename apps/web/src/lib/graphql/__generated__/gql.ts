@@ -68,6 +68,7 @@ type Documents = {
     "query GetReportsDashboard($filter: ReportsDashboardFilterInput) {\n  reportsDashboard(filter: $filter) {\n    grossRevenue\n    ordersRevenue\n    totalOrders\n    lowStockCount\n    revenueTrend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": typeof types.GetReportsDashboardDocument,
     "query GetRevenueReport($filter: RevenueReportFilterInput) {\n  revenueReport(filter: $filter) {\n    invoiceCount\n    totalCommission\n    totalGrossRevenue\n    totalNetPayout\n    trend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": typeof types.GetRevenueReportDocument,
     "mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}": typeof types.MarkBillingReportPaidOutDocument,
+    "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetUsersDocument,
 };
 const documents: Documents = {
     "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}": types.MeDocument,
@@ -124,6 +125,7 @@ const documents: Documents = {
     "query GetReportsDashboard($filter: ReportsDashboardFilterInput) {\n  reportsDashboard(filter: $filter) {\n    grossRevenue\n    ordersRevenue\n    totalOrders\n    lowStockCount\n    revenueTrend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": types.GetReportsDashboardDocument,
     "query GetRevenueReport($filter: RevenueReportFilterInput) {\n  revenueReport(filter: $filter) {\n    invoiceCount\n    totalCommission\n    totalGrossRevenue\n    totalNetPayout\n    trend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": types.GetRevenueReportDocument,
     "mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}": types.MarkBillingReportPaidOutDocument,
+    "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetUsersDocument,
 };
 
 /**
@@ -356,6 +358,10 @@ export function gql(source: "query GetRevenueReport($filter: RevenueReportFilter
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}"): (typeof documents)["mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};
