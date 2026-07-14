@@ -27,7 +27,7 @@ export function useCustomerOrders(customerId: string | undefined) {
     setCursorStack([])
   }, [customerId])
 
-  const { data, loading, error } = useQuery(GetCustomerOrdersDocument, {
+  const { data, loading, error, refetch } = useQuery(GetCustomerOrdersDocument, {
     variables: {
       customerId: customerId ?? '',
       first: ORDER_HISTORY_PAGE_SIZE,
@@ -58,6 +58,7 @@ export function useCustomerOrders(customerId: string | undefined) {
     pageInfo: data?.orders.pageInfo,
     isLoading: customerId !== undefined && loading,
     error,
+    refetch,
     goToNextPage,
     goToPreviousPage,
     hasPreviousPage: after !== undefined,
