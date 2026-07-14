@@ -1,10 +1,12 @@
-import { Args, ID, Int, Query, Resolver } from '@nestjs/graphql'
+import { Args, ID, Int, Mutation, Query, Resolver } from '@nestjs/graphql'
 import { AuditLogEntryOutput } from '../../common/graphql/audit-log-entry.output'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Permissions } from '../auth/decorators/permissions.decorator'
 import { Public } from '../auth/decorators/public.decorator'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
+import { CreateRoleInput } from './dto/create-role.input'
 import { RoleOutput } from './dto/role.output'
+import { UpdateRolePermissionsInput } from './dto/update-role-permissions.input'
 import { UserConnectionOutput } from './dto/user-connection.output'
 import { UserFilterInput } from './dto/user-filter.input'
 import { UserSortInput } from './dto/user-sort.input'
@@ -79,5 +81,47 @@ export class UsersResolver {
   })
   roles(): Promise<RoleOutput[]> {
     return this.usersService.listRoles()
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => RoleOutput, {
+    name: 'createRole',
+    description:
+      'Creates a custom Role granted the given existing Permission keys. Does not create new ' +
+      'Permission definitions (out of v1 scope, docs/domain-model.md § Permission).',
+  })
+  createRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('input') input: CreateRoleInput,
+  ): Promise<RoleOutput> {
+    return this.usersService.createRole(user, input)
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => RoleOutput, {
+    name: 'updateRolePermissions',
+    description:
+      "Replaces a Role's entire granted-Permission set. Rejected for a system Role " +
+      '(Admin/Partner/Customer).',
+  })
+  updateRolePermissions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('input') input: UpdateRolePermissionsInput,
+  ): Promise<RoleOutput> {
+    return this.usersService.updateRolePermissions(user, input)
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => RoleOutput, {
+    name: 'archiveRole',
+    description:
+      'Soft-archives a custom Role (prevents new assignment; does not strip existing grants). ' +
+      'Rejected for a system Role (Admin/Partner/Customer).',
+  })
+  archiveRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<RoleOutput> {
+    return this.usersService.archiveRole(user, id)
   }
 }
