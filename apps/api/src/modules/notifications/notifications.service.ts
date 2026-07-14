@@ -139,6 +139,27 @@ export class NotificationsService {
     await this.fanOut({ customerId }, input)
   }
 
+  /**
+   * Notifies exactly one User by id, regardless of their current `status`
+   * (Sprint 3, SM-335) — unlike `fanOut`, which only ever targets `ACTIVE`
+   * Users of an organization. A suspended User is precisely the case
+   * `fanOut`'s status filter would otherwise exclude, and the whole point
+   * here is notifying that User about their own status change (they'll see
+   * it once reactivated, or immediately if this event was a reactivation).
+   */
+  async notifyUser(userId: string, input: FanOutInput): Promise<void> {
+    await this.prisma.notification.create({
+      data: {
+        recipientId: userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        entityType: input.entityType ?? null,
+        entityId: input.entityId ?? null,
+      },
+    })
+  }
+
   private async fanOut(scope: Prisma.UserWhereInput, input: FanOutInput): Promise<void> {
     const recipients = await this.prisma.user.findMany({
       where: { ...scope, status: UserStatus.ACTIVE, deletedAt: null },

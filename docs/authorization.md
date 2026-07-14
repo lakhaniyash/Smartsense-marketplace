@@ -212,6 +212,13 @@ Partner/Customer floor here — `users:manage` is unrestricted for whoever holds
 business rules specific to this one mutation pair, enforced entirely in `UsersService`, same
 layering as every other service-level rule in this doc.
 
+**Extended to status in SM-335.** `suspendUser`/`reactivateUser` reuse guardrails 1 and 2 above:
+a caller can never suspend/reactivate themselves, and `suspendUser` rejects suspending the
+platform's last remaining **active** Admin (distinct from guardrail 2's check — this one counts
+`UserRole` rows for the Admin Role joined to `User.status = ACTIVE`, since a `SUSPENDED` User
+cannot log in at all, the same practical effect as having no Admin Role). Guardrail 3 (Admin-grant
+restriction) doesn't apply here — suspending/reactivating never changes which Role a User holds.
+
 **Notifications deliberately has no `notifications:*` permission key** (M16) — this is not an
 oversight to fix later. Every `notifications`/`unreadNotificationCount`/`markNotificationRead`/
 `markAllNotificationsRead` operation is authenticated by `GqlAuthGuard` like everything else, but

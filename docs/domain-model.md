@@ -103,7 +103,7 @@ Notes on the diagram:
 - Deactivating a User does not delete their `AuditLog` history.
 - **Role assignment/removal is never self-service** (Sprint 3, SM-334): a User can never change their own Role grants through the User Management admin surface — another Admin must. The platform must always retain at least one User holding the Admin role — the last remaining Admin can never have that Role removed. Granting the Admin Role to a User requires the caller to already hold it themselves (defense-in-depth against a future non-Admin role ever being granted user-management capability). See `docs/authorization.md` § User Role Assignment Guardrails.
 
-**Lifecycle.** `Invited` (account created, awaiting first login/email verification) → `Active` → `Suspended` (temporary, reversible — e.g., security concern) → `Deactivated` (terminal; login blocked permanently). Suspended and Deactivated Users retain all historical data (Orders, Audit entries) for record-keeping.
+**Lifecycle.** `Invited` (account created, awaiting first login/email verification) → `Active` ⇄ `Suspended` (temporary, reversible — e.g., security concern; Sprint 3, SM-335 confirmed and implemented the reverse `Suspended` → `Active` transition, matching Customer/Partner's already-bidirectional lifecycle) → `Deactivated` (terminal; login blocked permanently — not yet implemented as a mutation, out of SM-335's scope). Suspended and Deactivated Users retain all historical data (Orders, Audit entries) for record-keeping.
 
 ---
 

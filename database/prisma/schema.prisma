@@ -648,6 +648,10 @@ enum NotificationType {
   // docs/milestones.md milestone.
   CUSTOMER_ARCHIVED
   CUSTOMER_ACTIVATED
+  // Sprint 3 (User Management, SM-335) — not tied to a
+  // docs/milestones.md milestone.
+  USER_SUSPENDED
+  USER_REACTIVATED
 
   @@map("notification_type")
 }

@@ -7,15 +7,25 @@ import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
 import { OrderCreatedEvent } from '../../orders/events/order-created.event'
+import { UserReactivatedEvent } from '../../users/events/user-reactivated.event'
+import { UserSuspendedEvent } from '../../users/events/user-suspended.event'
 import { NotificationEventsListener } from './notification-events.listener'
 
 describe('NotificationEventsListener', () => {
   let listener: NotificationEventsListener
-  let notificationsService: { notifyPartnerUsers: jest.Mock; notifyCustomerUsers: jest.Mock }
+  let notificationsService: {
+    notifyPartnerUsers: jest.Mock
+    notifyCustomerUsers: jest.Mock
+    notifyUser: jest.Mock
+  }
   let logger: { error: jest.Mock }
 
   beforeEach(() => {
-    notificationsService = { notifyPartnerUsers: jest.fn(), notifyCustomerUsers: jest.fn() }
+    notificationsService = {
+      notifyPartnerUsers: jest.fn(),
+      notifyCustomerUsers: jest.fn(),
+      notifyUser: jest.fn(),
+    }
     logger = { error: jest.fn() }
     listener = new NotificationEventsListener(notificationsService as never, logger as never)
   })
@@ -133,6 +143,26 @@ describe('NotificationEventsListener', () => {
       expect.objectContaining({ entityId: 'customer-1', entityType: 'Customer' }),
     )
     expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
+  })
+
+  it('notifies the affected User directly on UserSuspended (not a fan-out)', async () => {
+    await listener.handleUserSuspended(new UserSuspendedEvent('user-1', 'Jordan Rivera'))
+
+    expect(notificationsService.notifyUser).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ entityId: 'user-1', entityType: 'User' }),
+    )
+    expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
+    expect(notificationsService.notifyCustomerUsers).not.toHaveBeenCalled()
+  })
+
+  it('notifies the affected User directly on UserReactivated (not a fan-out)', async () => {
+    await listener.handleUserReactivated(new UserReactivatedEvent('user-1', 'Jordan Rivera'))
+
+    expect(notificationsService.notifyUser).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ entityId: 'user-1', entityType: 'User' }),
+    )
   })
 
   it('swallows a rejected fan-out and logs it, instead of rethrowing', async () => {
