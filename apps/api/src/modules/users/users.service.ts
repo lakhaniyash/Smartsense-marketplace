@@ -1,11 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { AuditLogEntryOutput } from '../../common/graphql/audit-log-entry.output'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { CreateRoleInput } from './dto/create-role.input'
 import { RoleOutput } from './dto/role.output'
+import { UpdateRolePermissionsInput } from './dto/update-role-permissions.input'
 import { UserConnectionOutput, UserEdgeOutput } from './dto/user-connection.output'
 import { UserFilterInput } from './dto/user-filter.input'
 import { UserSortField } from './dto/user-sort.enum'
@@ -134,6 +141,147 @@ export class UsersService {
       orderBy: { name: 'asc' },
     })
     return roles.map((role) => this.mapRoleToOutput(role))
+  }
+
+  /**
+   * Admin creates a custom Role and grants it existing seeded Permissions
+   * (docs/domain-model.md § Role) — never new Permission definitions, which
+   * are out of v1 scope (docs/domain-model.md § Permission).
+   */
+  async createRole(user: AuthenticatedUser, input: CreateRoleInput): Promise<RoleOutput> {
+    const permissions = await this.resolvePermissionsByKeys(input.permissionKeys)
+
+    let createdId: string
+    try {
+      createdId = await this.prisma.$transaction(async (tx) => {
+        const role = await tx.role.create({
+          data: {
+            name: input.name,
+            description: input.description ?? null,
+            rolePermissions: {
+              create: permissions.map((permission) => ({ permissionId: permission.id })),
+            },
+          },
+        })
+        await this.auditLogService.record(tx, {
+          actorUserId: user.id,
+          action: 'ROLE_CREATED',
+          entityType: 'Role',
+          entityId: role.id,
+          metadata: { name: role.name, permissionKeys: input.permissionKeys },
+        })
+        return role.id
+      })
+    } catch (error) {
+      this.translatePrismaError(error)
+    }
+
+    return this.getRoleWithPermissions(createdId)
+  }
+
+  /**
+   * Replaces a Role's entire granted-Permission set. Rejected for a system
+   * Role (Admin/Partner/Customer) — those are seeded and protected from edit
+   * (docs/domain-model.md § Role).
+   */
+  async updateRolePermissions(
+    user: AuthenticatedUser,
+    input: UpdateRolePermissionsInput,
+  ): Promise<RoleOutput> {
+    const existing = await this.findActiveRoleOrThrow(input.id)
+    if (existing.isSystemRole) {
+      throw new BadRequestException('System roles cannot be modified')
+    }
+    const permissions = await this.resolvePermissionsByKeys(input.permissionKeys)
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { roleId: input.id } })
+      await tx.rolePermission.createMany({
+        data: permissions.map((permission) => ({ roleId: input.id, permissionId: permission.id })),
+      })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ROLE_PERMISSIONS_UPDATED',
+        entityType: 'Role',
+        entityId: input.id,
+        metadata: { permissionKeys: input.permissionKeys },
+      })
+    })
+
+    return this.getRoleWithPermissions(input.id)
+  }
+
+  /**
+   * Soft-deletes the Role (`deletedAt`) — a real archive, not a status flip
+   * like Customer/Order (Role has no separate status enum), same convention
+   * as CatalogService.archiveProduct. Prevents new assignment (listRoles
+   * filters `deletedAt: null`) but never strips existing UserRole grants,
+   * to avoid silently locking anyone out (docs/domain-model.md § Role).
+   */
+  async archiveRole(user: AuthenticatedUser, id: string): Promise<RoleOutput> {
+    const existing = await this.findActiveRoleOrThrow(id)
+    if (existing.isSystemRole) {
+      throw new BadRequestException('System roles cannot be archived')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.role.update({ where: { id }, data: { deletedAt: new Date() } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'ROLE_ARCHIVED',
+        entityType: 'Role',
+        entityId: id,
+        metadata: { name: existing.name },
+      })
+    })
+
+    return this.getRoleWithPermissions(id)
+  }
+
+  /** Resolves seeded Permission keys to rows, rejecting any that don't exist. */
+  private async resolvePermissionsByKeys(
+    keys: string[],
+  ): Promise<Array<{ id: string; key: string }>> {
+    const uniqueKeys = [...new Set(keys)]
+    const permissions = await this.prisma.permission.findMany({
+      where: { key: { in: uniqueKeys } },
+    })
+    if (permissions.length !== uniqueKeys.length) {
+      const foundKeys = new Set(permissions.map((permission) => permission.key))
+      const missingKeys = uniqueKeys.filter((key) => !foundKeys.has(key))
+      throw new BadRequestException(`Unknown permission key(s): ${missingKeys.join(', ')}`)
+    }
+    return permissions
+  }
+
+  /** Existence + not-already-archived check before a Role mutation — never reached for a system Role's protected fields alone (that check happens at the call site, after this). */
+  private async findActiveRoleOrThrow(
+    id: string,
+  ): Promise<{ id: string; name: string; isSystemRole: boolean }> {
+    const role = await this.prisma.role.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, name: true, isSystemRole: true },
+    })
+    if (role === null) {
+      throw new NotFoundException('Role not found')
+    }
+    return role
+  }
+
+  /** Refetches a Role with its Permissions for a mutation's return value — deliberately not `deletedAt`-filtered, since archiveRole must still return the row it just archived. */
+  private async getRoleWithPermissions(id: string): Promise<RoleOutput> {
+    const role = await this.prisma.role.findUniqueOrThrow({
+      where: { id },
+      include: { rolePermissions: { include: { permission: true } } },
+    })
+    return this.mapRoleToOutput(role)
+  }
+
+  private translatePrismaError(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new ConflictException('A role with this name already exists')
+    }
+    throw error
   }
 
   private buildWhere(filter: UserFilterInput | undefined): Prisma.UserWhereInput {

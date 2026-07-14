@@ -1,5 +1,5 @@
-import { NotFoundException } from '@nestjs/common'
-import { UserOwnerType, UserStatus } from '@prisma/client'
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
+import { Prisma, UserOwnerType, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { UserSortField } from './dto/user-sort.enum'
@@ -55,19 +55,58 @@ function userRowFixture(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function roleWithPermissionsFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'role-custom-1',
+    name: 'Support Agent',
+    description: 'Read-only support access',
+    isSystemRole: false,
+    rolePermissions: [
+      {
+        permission: {
+          id: 'perm-orders-read',
+          key: 'orders:read',
+          description: 'View orders',
+          domain: 'orders',
+        },
+      },
+    ],
+    ...overrides,
+  }
+}
+
 describe('UsersService', () => {
   let service: UsersService
   let prisma: {
     user: { findMany: jest.Mock; findFirst: jest.Mock }
-    role: { findMany: jest.Mock }
+    role: {
+      findMany: jest.Mock
+      findFirst: jest.Mock
+      findUniqueOrThrow: jest.Mock
+      create: jest.Mock
+      update: jest.Mock
+    }
+    rolePermission: { deleteMany: jest.Mock; createMany: jest.Mock }
+    permission: { findMany: jest.Mock }
+    $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
 
   beforeEach(() => {
     prisma = {
       user: { findMany: jest.fn(), findFirst: jest.fn() },
-      role: { findMany: jest.fn() },
+      role: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
+      permission: { findMany: jest.fn() },
+      $transaction: jest.fn(),
     }
+    prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn(), findForEntity: jest.fn() }
     service = new UsersService(prisma as never, auditLogService as never)
   })
@@ -240,6 +279,173 @@ describe('UsersService', () => {
           ],
         },
       ])
+    })
+  })
+
+  describe('createRole', () => {
+    it('rejects an unknown permission key without writing anything', async () => {
+      prisma.permission.findMany.mockResolvedValueOnce([
+        { id: 'perm-orders-read', key: 'orders:read' },
+      ])
+
+      await expect(
+        service.createRole(user(), {
+          name: 'Support Agent',
+          permissionKeys: ['orders:read', 'not-a-real-key'],
+        }),
+      ).rejects.toThrow(BadRequestException)
+      expect(prisma.role.create).not.toHaveBeenCalled()
+    })
+
+    it('translates a duplicate name (P2002) to CONFLICT', async () => {
+      prisma.permission.findMany.mockResolvedValueOnce([
+        { id: 'perm-orders-read', key: 'orders:read' },
+      ])
+      prisma.role.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('duplicate', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        }),
+      )
+
+      await expect(
+        service.createRole(user(), { name: 'Support Agent', permissionKeys: ['orders:read'] }),
+      ).rejects.toThrow(ConflictException)
+    })
+
+    it('creates the Role, grants the resolved permissions, and records an audit entry', async () => {
+      prisma.permission.findMany.mockResolvedValueOnce([
+        { id: 'perm-orders-read', key: 'orders:read' },
+      ])
+      prisma.role.create.mockResolvedValueOnce({ id: 'role-custom-1', name: 'Support Agent' })
+      prisma.role.findUniqueOrThrow.mockResolvedValueOnce(roleWithPermissionsFixture())
+
+      const result = await service.createRole(user(), {
+        name: 'Support Agent',
+        permissionKeys: ['orders:read'],
+      })
+
+      expect(prisma.role.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: 'Support Agent',
+            rolePermissions: { create: [{ permissionId: 'perm-orders-read' }] },
+          }) as unknown,
+        }),
+      )
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'ROLE_CREATED', entityId: 'role-custom-1' }),
+      )
+      expect(result.name).toBe('Support Agent')
+    })
+  })
+
+  describe('updateRolePermissions', () => {
+    it('throws NOT_FOUND when the role does not exist', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce(null)
+
+      await expect(
+        service.updateRolePermissions(user(), { id: 'role-1', permissionKeys: ['orders:read'] }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('rejects modifying a system Role', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-admin',
+        name: 'Admin',
+        isSystemRole: true,
+      })
+
+      await expect(
+        service.updateRolePermissions(user(), {
+          id: 'role-admin',
+          permissionKeys: ['orders:read'],
+        }),
+      ).rejects.toThrow(BadRequestException)
+      expect(prisma.rolePermission.deleteMany).not.toHaveBeenCalled()
+    })
+
+    it('replaces the permission set (delete then recreate) and records an audit entry', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-custom-1',
+        name: 'Support Agent',
+        isSystemRole: false,
+      })
+      prisma.permission.findMany.mockResolvedValueOnce([
+        { id: 'perm-orders-read', key: 'orders:read' },
+        { id: 'perm-billing-read', key: 'billing:read' },
+      ])
+      prisma.role.findUniqueOrThrow.mockResolvedValueOnce(
+        roleWithPermissionsFixture({
+          rolePermissions: [
+            { permission: { id: 'perm-orders-read', key: 'orders:read' } },
+            { permission: { id: 'perm-billing-read', key: 'billing:read' } },
+          ],
+        }),
+      )
+
+      await service.updateRolePermissions(user(), {
+        id: 'role-custom-1',
+        permissionKeys: ['orders:read', 'billing:read'],
+      })
+
+      expect(prisma.rolePermission.deleteMany).toHaveBeenCalledWith({
+        where: { roleId: 'role-custom-1' },
+      })
+      expect(prisma.rolePermission.createMany).toHaveBeenCalledWith({
+        data: [
+          { roleId: 'role-custom-1', permissionId: 'perm-orders-read' },
+          { roleId: 'role-custom-1', permissionId: 'perm-billing-read' },
+        ],
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          action: 'ROLE_PERMISSIONS_UPDATED',
+          entityId: 'role-custom-1',
+        }),
+      )
+    })
+  })
+
+  describe('archiveRole', () => {
+    it('throws NOT_FOUND when the role does not exist (or is already archived)', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.archiveRole(user(), 'role-1')).rejects.toThrow(NotFoundException)
+    })
+
+    it('rejects archiving a system Role', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-admin',
+        name: 'Admin',
+        isSystemRole: true,
+      })
+
+      await expect(service.archiveRole(user(), 'role-admin')).rejects.toThrow(BadRequestException)
+      expect(prisma.role.update).not.toHaveBeenCalled()
+    })
+
+    it('soft-deletes the role and records an audit entry, without touching RolePermission rows', async () => {
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-custom-1',
+        name: 'Support Agent',
+        isSystemRole: false,
+      })
+      prisma.role.findUniqueOrThrow.mockResolvedValueOnce(roleWithPermissionsFixture())
+
+      await service.archiveRole(user(), 'role-custom-1')
+
+      expect(prisma.role.update).toHaveBeenCalledWith({
+        where: { id: 'role-custom-1' },
+        data: { deletedAt: expect.any(Date) as Date },
+      })
+      expect(prisma.rolePermission.deleteMany).not.toHaveBeenCalled()
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'ROLE_ARCHIVED', entityId: 'role-custom-1' }),
+      )
     })
   })
 })

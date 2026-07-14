@@ -193,6 +193,16 @@ input CreateProductVariantInput {
   sku: String!
 }
 
+input CreateRoleInput {
+  description: String
+  name: String!
+
+  """
+  Existing seeded Permission keys to grant this Role — a Role must retain at least one (docs/domain-model.md § Role). Creating new Permission definitions is out of v1 scope.
+  """
+  permissionKeys: [String!]!
+}
+
 """The authenticated caller, plus their resolved roles and permissions."""
 type CurrentUser {
   email: String!
@@ -508,6 +518,11 @@ type Mutation {
   archiveProductVariant(id: ID!): ProductVariant!
 
   """
+  Soft-archives a custom Role (prevents new assignment; does not strip existing grants). Rejected for a system Role (Admin/Partner/Customer).
+  """
+  archiveRole(id: ID!): Role!
+
+  """
   Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory.
   """
   cancelOrder(id: ID!, reason: String): Order!
@@ -527,6 +542,11 @@ type Mutation {
 
   """Adds a ProductVariant to a Product owned by the caller."""
   createProductVariant(input: CreateProductVariantInput!): ProductVariant!
+
+  """
+  Creates a custom Role granted the given existing Permission keys. Does not create new Permission definitions (out of v1 scope, docs/domain-model.md § Permission).
+  """
+  createRole(input: CreateRoleInput!): Role!
 
   """
   Soft-deactivates an address belonging to a Customer within the caller's scope (isActive: false — addresses are never hard-deleted).
@@ -584,6 +604,11 @@ type Mutation {
 
   """Updates a ProductVariant owned by the caller."""
   updateProductVariant(input: UpdateProductVariantInput!): ProductVariant!
+
+  """
+  Replaces a Role's entire granted-Permission set. Rejected for a system Role (Admin/Partner/Customer).
+  """
+  updateRolePermissions(input: UpdateRolePermissionsInput!): Role!
 
   """
   Voids a DRAFT/ISSUED Invoice with zero recorded Payments (docs/domain-model.md § Invoice).
@@ -1281,6 +1306,15 @@ input UpdateProductVariantInput {
   Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here.
   """
   status: ProductVariantStatus
+}
+
+input UpdateRolePermissionsInput {
+  id: ID!
+
+  """
+  Replaces the Role's entire granted-Permission set — a Role must retain at least one (docs/domain-model.md § Role). Rejected for a system Role (Admin/Partner/Customer).
+  """
+  permissionKeys: [String!]!
 }
 
 """
