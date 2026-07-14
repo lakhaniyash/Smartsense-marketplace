@@ -96,6 +96,22 @@
       "authorizationServicesEnabled": false,
       "clientAuthenticatorType": "client-secret",
       "secret": "smartsense-api-dev-secret-change-me"
+    },
+    {
+      "clientId": "smartsense-api-admin",
+      "name": "SmartSense Marketplace API — Admin Operations",
+      "description": "Confidential service-account client for KeycloakAdminService (SM-336) — Admin API calls only (user provisioning, execute-actions emails). Never used for end-user login.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "smartsense-api-admin-dev-secret-change-me"
     }
   ],
 
@@ -147,6 +163,14 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "service-account-smartsense-api-admin",
+      "enabled": true,
+      "serviceAccountClientId": "smartsense-api-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users"]
+      }
     }
   ]
 }

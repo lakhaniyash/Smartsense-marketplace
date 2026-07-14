@@ -106,12 +106,34 @@ Users are assigned to **groups**, not roles directly — this is the mechanism r
 
 ### Clients
 
-| Client ID        | Type                      | Flow                               | Notes                                                                                                                                                                                                                                                                   |
-| ---------------- | ------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `smartsense-web` | Public                    | Authorization Code + PKCE (`S256`) | `standardFlowEnabled: true`, `directAccessGrantsEnabled: false`, no client secret. Redirect URI `http://localhost:5173/*` (the Vite dev server).                                                                                                                        |
-| `smartsense-api` | Confidential, bearer-only | None (never initiates login)       | `bearerOnly: true`, `publicClient: false`, `standardFlowEnabled: false`, `directAccessGrantsEnabled: false`. Carries a dev-only placeholder secret (`smartsense-api-dev-secret-change-me`) for shape-completeness; unused while `serviceAccountsEnabled` stays `false`. |
+| Client ID              | Type                          | Flow                               | Notes                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------- | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `smartsense-web`       | Public                        | Authorization Code + PKCE (`S256`) | `standardFlowEnabled: true`, `directAccessGrantsEnabled: false`, no client secret. Redirect URI `http://localhost:5173/*` (the Vite dev server).                                                                                                                                                                                                                                          |
+| `smartsense-api`       | Confidential, bearer-only     | None (never initiates login)       | `bearerOnly: true`, `publicClient: false`, `standardFlowEnabled: false`, `directAccessGrantsEnabled: false`. Carries a dev-only placeholder secret (`smartsense-api-dev-secret-change-me`) for shape-completeness; unused while `serviceAccountsEnabled` stays `false`.                                                                                                                   |
+| `smartsense-api-admin` | Confidential, service-account | `client_credentials` only          | Sprint 3 (User Management, SM-336) — not tied to a docs/milestones.md milestone. `serviceAccountsEnabled: true`, all interactive flows disabled. Its service-account user is granted the `manage-users` realm-management client role and nothing else. Backend-internal only — never issues or validates end-user tokens; see [`KeycloakAdminService`](#keycloak-admin-api-sm-336) below. |
 
-Both match the client posture already designed in `docs/authentication.md`'s "Keycloak Realm & Client Topology" table — this milestone only provisions them, it doesn't change that decision.
+Both `smartsense-web` and `smartsense-api` match the client posture already designed in `docs/authentication.md`'s "Keycloak Realm & Client Topology" table — this milestone only provisions them, it doesn't change that decision. `smartsense-api-admin` is a later, Sprint 3 addition with no `docs/authentication.md` precedent to match — the Admin REST API integration didn't exist at M7.
+
+### Keycloak Admin API (SM-336)
+
+`apps/api/src/common/services/keycloak-admin.service.ts` is the only caller of Keycloak's Admin
+REST API in this codebase — every other Keycloak interaction is login/token validation. It backs
+the Users module's invite and admin-triggered password-reset mutations (neither of which sends a
+password through this application: `docs/security.md`'s "the application never sees, stores, or
+validates a password" holds unchanged — Keycloak's own hosted `execute-actions-email` flow does).
+
+- **Auth**: `client_credentials` grant against `smartsense-api-admin`, never a user-delegated
+  token — this is a backend-to-Keycloak service call, not something done on a user's behalf.
+- **Fails closed at the call site, not at app boot.** `KEYCLOAK_ADMIN_CLIENT_ID`/
+  `KEYCLOAK_ADMIN_CLIENT_SECRET` are optional config (unlike `KEYCLOAK_API_CLIENT_ID`, which is
+  required) — an environment that hasn't provisioned this client yet still starts normally; it
+  just can't invite users or trigger password resets until configured.
+- **Local dev limitation, not a code defect**: this realm has no SMTP sender configured, so
+  `sendExecuteActionsEmail` reaches Keycloak's authorization/business logic successfully (no
+  401/403 — the service account's `manage-users` role is sufficient) but Keycloak itself then
+  fails to actually send the email (`500`, "No sender address configured"). Verified directly
+  against a real Keycloak instance before this ticket shipped. Configuring realm SMTP is out of
+  this ticket's scope.
 
 ### Users
 
@@ -161,6 +183,10 @@ KEYCLOAK_URL=http://localhost:8080
 KEYCLOAK_REALM=smartsense-marketplace
 KEYCLOAK_API_CLIENT_ID=smartsense-api
 KEYCLOAK_API_CLIENT_SECRET=smartsense-api-dev-secret-change-me
+
+# Keycloak Admin API (KeycloakAdminService, SM-336) — optional, see that section above
+KEYCLOAK_ADMIN_CLIENT_ID=smartsense-api-admin
+KEYCLOAK_ADMIN_CLIENT_SECRET=smartsense-api-admin-dev-secret-change-me
 ```
 
 Inside Docker Compose, `api` receives `KEYCLOAK_URL=http://keycloak:8080` (the service name) instead of `localhost`, since containers reach each other by service name on the compose network — see `KC_DB_URL` in the `keycloak` service definition for the analogous pattern already used for `db`.

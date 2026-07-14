@@ -18,6 +18,8 @@ export interface AppConfig {
     jwksUri: string
     jwksCacheTtlSeconds: number
     clockToleranceSeconds: number
+    adminClientId: string
+    adminClientSecret: string
   }
 }
 
@@ -54,6 +56,12 @@ export default (): AppConfig => {
       jwksUri: process.env['KEYCLOAK_JWKS_URI'] ?? `${issuer}/protocol/openid-connect/certs`,
       jwksCacheTtlSeconds: parseInt(process.env['KEYCLOAK_JWKS_CACHE_TTL_SECONDS'] ?? '600', 10),
       clockToleranceSeconds: parseInt(process.env['JWT_CLOCK_TOLERANCE_SECONDS'] ?? '5', 10),
+      // Optional, unlike apiClientId/apiClientSecret above — KeycloakAdminService
+      // fails closed at the call site (not at boot) when these are absent, since
+      // gating the whole app's startup on credentials only the invite/password-reset
+      // mutations need would break every environment that hasn't configured them yet.
+      adminClientId: process.env['KEYCLOAK_ADMIN_CLIENT_ID'] ?? '',
+      adminClientSecret: process.env['KEYCLOAK_ADMIN_CLIENT_SECRET'] ?? '',
     },
   }
 }
