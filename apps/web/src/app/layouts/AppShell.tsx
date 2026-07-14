@@ -10,6 +10,7 @@ import {
   ProductsIcon,
   ReportsIcon,
   RevenueIcon,
+  UserIcon,
 } from '@shared/icons'
 import { ROUTES } from '@shared/constants'
 import { AppLayout, Content, Header, Sidebar, type SidebarItem } from '@shared/layouts'
@@ -46,6 +47,15 @@ const NAV_ITEMS: Array<SidebarItem & { permission: string }> = [
     href: ROUTES.CUSTOMERS,
     permission: 'customers:read',
     icon: <CustomersIcon className="size-4 shrink-0" aria-hidden="true" />,
+  },
+  // Sprint 3 (User Management, SM-339) — not tied to a docs/milestones.md
+  // milestone. Admin-only global resource (users:read), positioned after
+  // Customers.
+  {
+    label: 'Users',
+    href: ROUTES.USERS,
+    permission: 'users:read',
+    icon: <UserIcon className="size-4 shrink-0" aria-hidden="true" />,
   },
   {
     label: 'Billing',

@@ -48,7 +48,7 @@ export type AdjustInventoryInput = {
   reason?: InputMaybe<Scalars['String']['input']>;
 };
 
-/** One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity — the first GraphQL exposure of this model, added for the Customer activity timeline. */
+/** One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity. Added for the Customer activity timeline; promoted here once Users became its second consumer (CLAUDE.md: "Promote, don't pre-share"). */
 export type AuditLogEntry = {
   __typename?: 'AuditLogEntry';
   action: Scalars['String']['output'];
@@ -180,6 +180,13 @@ export type CreateProductVariantInput = {
   price: Scalars['Decimal']['input'];
   productId: Scalars['ID']['input'];
   sku: Scalars['String']['input'];
+};
+
+export type CreateRoleInput = {
+  description?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  /** Existing seeded Permission keys to grant this Role — a Role must retain at least one (docs/domain-model.md § Role). Creating new Permission definitions is out of v1 scope. */
+  permissionKeys: Array<Scalars['String']['input']>;
 };
 
 /** The authenticated caller, plus their resolved roles and permissions. */
@@ -402,6 +409,19 @@ export type InventoryReportItemEdge = {
   node: InventoryReportItem;
 };
 
+export type InviteUserInput = {
+  /** Required when ownerType is CUSTOMER; must be null otherwise. */
+  customerId?: InputMaybe<Scalars['ID']['input']>;
+  email: Scalars['String']['input'];
+  fullName: Scalars['String']['input'];
+  /** Which organization, if any, this User acts on behalf of. NONE for platform staff; PARTNER/CUSTOMER requires the matching partnerId/customerId (docs/domain-model.md § User). */
+  ownerType: UserOwnerType;
+  /** Required when ownerType is PARTNER; must be null otherwise. */
+  partnerId?: InputMaybe<Scalars['ID']['input']>;
+  /** Roles to grant the invited User — at least one. Granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails). */
+  roleIds: Array<Scalars['ID']['input']>;
+};
+
 /** A per-Order billing document (docs/domain-model.md § Invoice). */
 export type Invoice = {
   __typename?: 'Invoice';
@@ -472,6 +492,10 @@ export type Mutation = {
   archiveProduct: Product;
   /** Soft-deletes a ProductVariant. Rejected if it is the Product's default Variant or its only remaining Variant. */
   archiveProductVariant: ProductVariant;
+  /** Soft-archives a custom Role (prevents new assignment; does not strip existing grants). Rejected for a system Role (Admin/Partner/Customer). */
+  archiveRole: Role;
+  /** Grants a Role to a User. A caller can never assign a role to themselves, and granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails). */
+  assignUserRole: User;
   /** Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory. */
   cancelOrder: Order;
   /** Creates a new Customer. Admin-only — see CustomersService.createCustomer. */
@@ -482,22 +506,34 @@ export type Mutation = {
   createProduct: Product;
   /** Adds a ProductVariant to a Product owned by the caller. */
   createProductVariant: ProductVariant;
+  /** Creates a custom Role granted the given existing Permission keys. Does not create new Permission definitions (out of v1 scope, docs/domain-model.md § Permission). */
+  createRole: Role;
   /** Soft-deactivates an address belonging to a Customer within the caller's scope (isActive: false — addresses are never hard-deleted). */
   deactivateCustomerAddress: CustomerAddress;
   /** GENERATED → FINALIZED (docs/domain-model.md § Billing Report lifecycle). */
   finalizeBillingReport: BillingReport;
   /** Generates a BillingReport for a Partner/period, reconciling gross revenue/commission/net payout from the Invoice ledger. Rejects an overlapping period (any Partner-scoped period that intersects an existing one) with CONFLICT. */
   generateBillingReport: BillingReport;
+  /** Invites a new User: provisions a Keycloak identity (set-password + verify-email) and creates a local INVITED row with the requested roles. Idempotent on email. Granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails). */
+  inviteUser: User;
   /** Marks every UNREAD notification for the caller as READ; returns the count updated. */
   markAllNotificationsRead: Scalars['Int']['output'];
   /** FINALIZED → PAID_OUT (docs/domain-model.md § Billing Report lifecycle). */
   markBillingReportPaidOut: BillingReport;
   /** Marks one of the caller's own notifications READ. Throws NOT_FOUND on a missing or out-of-scope id. Idempotent — already-READ is a no-op. */
   markNotificationRead: Notification;
+  /** Reactivates a suspended User. */
+  reactivateUser: User;
   /** Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate. */
   recordPayment: Payment;
+  /** Removes a Role from a User. A caller can never remove a role from themselves, and the platform's last remaining Admin can never have that role removed (docs/authorization.md § User Role Assignment Guardrails). */
+  removeUserRole: User;
+  /** Triggers Keycloak's hosted password-reset email for an active User. The application never sees, stores, or validates a password (docs/security.md); only an ACTIVE user can be reset (INVITED/SUSPENDED are rejected). */
+  sendPasswordResetEmail: Scalars['Boolean']['output'];
   /** Marks a ProductVariant as its Product's default, unsetting any previous default. */
   setDefaultProductVariant: ProductVariant;
+  /** Suspends a User (soft, reversible via reactivateUser). A caller can never suspend themselves, and the platform's last remaining active Admin can never be suspended (docs/authorization.md § User Role Assignment Guardrails). */
+  suspendUser: User;
   /** Updates a Customer within the caller's scope. */
   updateCustomer: Customer;
   /** Updates an address belonging to a Customer within the caller's scope. */
@@ -508,6 +544,8 @@ export type Mutation = {
   updateProduct: Product;
   /** Updates a ProductVariant owned by the caller. */
   updateProductVariant: ProductVariant;
+  /** Replaces a Role's entire granted-Permission set. Rejected for a system Role (Admin/Partner/Customer). */
+  updateRolePermissions: Role;
   /** Voids a DRAFT/ISSUED Invoice with zero recorded Payments (docs/domain-model.md § Invoice). */
   voidInvoice: Invoice;
 };
@@ -543,6 +581,17 @@ export type MutationArchiveProductVariantArgs = {
 };
 
 
+export type MutationArchiveRoleArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationAssignUserRoleArgs = {
+  roleId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
 export type MutationCancelOrderArgs = {
   id: Scalars['ID']['input'];
   reason?: InputMaybe<Scalars['String']['input']>;
@@ -569,6 +618,11 @@ export type MutationCreateProductVariantArgs = {
 };
 
 
+export type MutationCreateRoleArgs = {
+  input: CreateRoleInput;
+};
+
+
 export type MutationDeactivateCustomerAddressArgs = {
   id: Scalars['ID']['input'];
 };
@@ -584,6 +638,11 @@ export type MutationGenerateBillingReportArgs = {
 };
 
 
+export type MutationInviteUserArgs = {
+  input: InviteUserInput;
+};
+
+
 export type MutationMarkBillingReportPaidOutArgs = {
   id: Scalars['ID']['input'];
 };
@@ -594,12 +653,33 @@ export type MutationMarkNotificationReadArgs = {
 };
 
 
+export type MutationReactivateUserArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationRecordPaymentArgs = {
   input: CreatePaymentInput;
 };
 
 
+export type MutationRemoveUserRoleArgs = {
+  roleId: Scalars['ID']['input'];
+  userId: Scalars['ID']['input'];
+};
+
+
+export type MutationSendPasswordResetEmailArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationSetDefaultProductVariantArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationSuspendUserArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -628,6 +708,11 @@ export type MutationUpdateProductArgs = {
 
 export type MutationUpdateProductVariantArgs = {
   input: UpdateProductVariantInput;
+};
+
+
+export type MutationUpdateRolePermissionsArgs = {
+  input: UpdateRolePermissionsInput;
 };
 
 
@@ -704,7 +789,10 @@ export enum NotificationType {
   OrderCompleted = 'ORDER_COMPLETED',
   OrderConfirmed = 'ORDER_CONFIRMED',
   OrderCreated = 'ORDER_CREATED',
-  PaymentRecorded = 'PAYMENT_RECORDED'
+  PaymentRecorded = 'PAYMENT_RECORDED',
+  UserInvited = 'USER_INVITED',
+  UserReactivated = 'USER_REACTIVATED',
+  UserSuspended = 'USER_SUSPENDED'
 }
 
 /** A single-Partner order (docs/domain-model.md § Order). */
@@ -856,6 +944,15 @@ export enum PaymentStatus {
   Refunded = 'REFUNDED',
   Succeeded = 'SUCCEEDED'
 }
+
+/** A single seeded capability key (docs/authorization.md § The Seeded Catalog). Read-only — permissions are seeded/managed by the platform, not created ad hoc through the UI in v1 (docs/domain-model.md § Permission). */
+export type Permission = {
+  __typename?: 'Permission';
+  description?: Maybe<Scalars['String']['output']>;
+  domain: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  key: Scalars['String']['output'];
+};
 
 /** A Partner catalog listing. Always has at least one ProductVariant (docs/domain-model.md § Product Variant); `sku` is flattened from the default one for convenience, and `variants` carries the full list for management. */
 export type Product = {
@@ -1050,8 +1147,16 @@ export type Query = {
   reportsDashboard: ReportsDashboard;
   /** Invoice-ledger-derived revenue summary + trend for the scoped Partner(s)/period. */
   revenueReport: RevenueReport;
+  /** Every assignable Role with its granted Permissions. */
+  roles: Array<Role>;
   /** The caller's own unread notification count. */
   unreadNotificationCount: Scalars['Int']['output'];
+  /** A User's activity timeline, most recent first. */
+  userAuditLog: Array<AuditLogEntry>;
+  /** A single user by id. Throws NOT_FOUND rather than returning null on a missing id. */
+  userById: User;
+  /** A page of platform users (Admin-only global resource — no ownership scoping, docs/authorization.md § Users row). */
+  users: UserConnection;
   /** Users module status */
   usersStatus: Scalars['String']['output'];
 };
@@ -1193,6 +1298,24 @@ export type QueryRevenueReportArgs = {
   filter?: InputMaybe<RevenueReportFilterInput>;
 };
 
+
+export type QueryUserAuditLogArgs = {
+  userId: Scalars['ID']['input'];
+};
+
+
+export type QueryUserByIdArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryUsersArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<UserFilterInput>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  sort?: InputMaybe<UserSortInput>;
+};
+
 /** CSV is fully implemented today; EXCEL is a not-yet-implemented placeholder. */
 export enum ReportExportFormat {
   Csv = 'CSV',
@@ -1265,6 +1388,16 @@ export type RevenueReportFilterInput = {
   partnerId?: InputMaybe<Scalars['ID']['input']>;
 };
 
+/** A named bundle of Permissions a User can be assigned (docs/domain-model.md § Role). System roles (Admin/Partner/Customer) are seeded and protected from rename/delete/permission edits. */
+export type Role = {
+  __typename?: 'Role';
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  isSystemRole: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  permissions: Array<Permission>;
+};
+
 export enum SortDirection {
   Asc = 'ASC',
   Desc = 'DESC'
@@ -1308,6 +1441,65 @@ export type UpdateProductVariantInput = {
   sku?: InputMaybe<Scalars['String']['input']>;
   /** Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here. */
   status?: InputMaybe<ProductVariantStatus>;
+};
+
+export type UpdateRolePermissionsInput = {
+  id: Scalars['ID']['input'];
+  /** Replaces the Role's entire granted-Permission set — a Role must retain at least one (docs/domain-model.md § Role). Rejected for a system Role (Admin/Partner/Customer). */
+  permissionKeys: Array<Scalars['String']['input']>;
+};
+
+/** A platform user — Admin, Partner staff, or Customer buyer-contact (docs/domain-model.md § User). Sprint 3 (User Management, Jira Epic SM-331) — not tied to a docs/milestones.md milestone. */
+export type User = {
+  __typename?: 'User';
+  createdAt: Scalars['DateTime']['output'];
+  customerId?: Maybe<Scalars['ID']['output']>;
+  email: Scalars['String']['output'];
+  fullName: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  ownerType: UserOwnerType;
+  partnerId?: Maybe<Scalars['ID']['output']>;
+  roles: Array<Role>;
+  status: UserStatus;
+  updatedAt: Scalars['DateTime']['output'];
+};
+
+export type UserConnection = {
+  __typename?: 'UserConnection';
+  edges: Array<UserEdge>;
+  pageInfo: PageInfo;
+};
+
+export type UserEdge = {
+  __typename?: 'UserEdge';
+  cursor: Scalars['String']['output'];
+  node: User;
+};
+
+export type UserFilterInput = {
+  ownerType?: InputMaybe<UserOwnerType>;
+  /** Free-text match against email and full name. */
+  search?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<UserStatus>;
+};
+
+/** Which organization, if any, this User acts on behalf of (docs/domain-model.md § User). */
+export enum UserOwnerType {
+  Customer = 'CUSTOMER',
+  None = 'NONE',
+  Partner = 'PARTNER'
+}
+
+/** Fields the user list can be sorted by. */
+export enum UserSortField {
+  CreatedAt = 'CREATED_AT',
+  Email = 'EMAIL',
+  FullName = 'FULL_NAME'
+}
+
+export type UserSortInput = {
+  direction: SortDirection;
+  field: UserSortField;
 };
 
 /** A User's lifecycle status (docs/domain-model.md § User). First GraphQL exposure of this enum — introduced for the Customer Management "assigned users" tab. */
@@ -1712,6 +1904,16 @@ export type MarkBillingReportPaidOutMutationVariables = Exact<{
 
 export type MarkBillingReportPaidOutMutation = { __typename?: 'Mutation', markBillingReportPaidOut: { __typename?: 'BillingReport', id: string, status: BillingReportStatus, updatedAt: any } };
 
+export type GetUsersQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  filter?: InputMaybe<UserFilterInput>;
+  sort?: InputMaybe<UserSortInput>;
+}>;
+
+
+export type GetUsersQuery = { __typename?: 'Query', users: { __typename?: 'UserConnection', edges: Array<{ __typename?: 'UserEdge', cursor: string, node: { __typename?: 'User', id: string, fullName: string, email: string, status: UserStatus, ownerType: UserOwnerType, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null } } };
+
 
 export const MeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"me"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"fullName"}},{"kind":"Field","name":{"kind":"Name","value":"roles"}},{"kind":"Field","name":{"kind":"Name","value":"permissions"}}]}}]}}]} as unknown as DocumentNode<MeQuery, MeQueryVariables>;
 export const ExportInvoicesCsvDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ExportInvoicesCsv"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"InvoiceFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"exportInvoicesCsv"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}]}]}}]} as unknown as DocumentNode<ExportInvoicesCsvQuery, ExportInvoicesCsvQueryVariables>;
@@ -1767,3 +1969,4 @@ export const GetProductPerformanceReportDocument = {"kind":"Document","definitio
 export const GetReportsDashboardDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetReportsDashboard"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ReportsDashboardFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"reportsDashboard"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"ordersRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"totalOrders"}},{"kind":"Field","name":{"kind":"Name","value":"lowStockCount"}},{"kind":"Field","name":{"kind":"Name","value":"revenueTrend"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bucketStart"}},{"kind":"Field","name":{"kind":"Name","value":"bucketEnd"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}}]}}]}}]}}]} as unknown as DocumentNode<GetReportsDashboardQuery, GetReportsDashboardQueryVariables>;
 export const GetRevenueReportDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetRevenueReport"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"RevenueReportFilterInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"revenueReport"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}},{"kind":"Field","name":{"kind":"Name","value":"totalCommission"}},{"kind":"Field","name":{"kind":"Name","value":"totalGrossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"totalNetPayout"}},{"kind":"Field","name":{"kind":"Name","value":"trend"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bucketStart"}},{"kind":"Field","name":{"kind":"Name","value":"bucketEnd"}},{"kind":"Field","name":{"kind":"Name","value":"grossRevenue"}},{"kind":"Field","name":{"kind":"Name","value":"invoiceCount"}}]}}]}}]}}]} as unknown as DocumentNode<GetRevenueReportQuery, GetRevenueReportQueryVariables>;
 export const MarkBillingReportPaidOutDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"MarkBillingReportPaidOut"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markBillingReportPaidOut"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<MarkBillingReportPaidOutMutation, MarkBillingReportPaidOutMutationVariables>;
+export const GetUsersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetUsers"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UserFilterInput"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sort"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UserSortInput"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"users"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"sort"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sort"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"edges"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cursor"}},{"kind":"Field","name":{"kind":"Name","value":"node"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"fullName"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"ownerType"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"hasPreviousPage"}},{"kind":"Field","name":{"kind":"Name","value":"startCursor"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}}]}}]} as unknown as DocumentNode<GetUsersQuery, GetUsersQueryVariables>;
