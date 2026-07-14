@@ -35,7 +35,7 @@ input AdjustInventoryInput {
 }
 
 """
-One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity — the first GraphQL exposure of this model, added for the Customer activity timeline.
+One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single entity. Added for the Customer activity timeline; promoted here once Users became its second consumer (CLAUDE.md: "Promote, don't pre-share").
 """
 type AuditLogEntry {
   action: String!
@@ -864,6 +864,16 @@ enum PaymentStatus {
 }
 
 """
+A single seeded capability key (docs/authorization.md § The Seeded Catalog). Read-only — permissions are seeded/managed by the platform, not created ad hoc through the UI in v1 (docs/domain-model.md § Permission).
+"""
+type Permission {
+  description: String
+  domain: String!
+  id: ID!
+  key: String!
+}
+
+"""
 A Partner catalog listing. Always has at least one ProductVariant (docs/domain-model.md § Product Variant); `sku` is flattened from the default one for convenience, and `variants` carries the full list for management.
 """
 type Product {
@@ -1135,8 +1145,24 @@ type Query {
   """
   revenueReport(filter: RevenueReportFilterInput): RevenueReport!
 
+  """Every assignable Role with its granted Permissions."""
+  roles: [Role!]!
+
   """The caller's own unread notification count."""
   unreadNotificationCount: Int!
+
+  """A User's activity timeline, most recent first."""
+  userAuditLog(userId: ID!): [AuditLogEntry!]!
+
+  """
+  A single user by id. Throws NOT_FOUND rather than returning null on a missing id.
+  """
+  userById(id: ID!): User!
+
+  """
+  A page of platform users (Admin-only global resource — no ownership scoping, docs/authorization.md § Users row).
+  """
+  users(after: String, filter: UserFilterInput, first: Int, sort: UserSortInput): UserConnection!
 
   """Users module status"""
   usersStatus: String!
@@ -1228,6 +1254,17 @@ input RevenueReportFilterInput {
   partnerId: ID
 }
 
+"""
+A named bundle of Permissions a User can be assigned (docs/domain-model.md § Role). System roles (Admin/Partner/Customer) are seeded and protected from rename/delete/permission edits.
+"""
+type Role {
+  description: String
+  id: ID!
+  isSystemRole: Boolean!
+  name: String!
+  permissions: [Permission!]!
+}
+
 enum SortDirection {
   ASC
   DESC
@@ -1280,6 +1317,61 @@ input UpdateProductVariantInput {
   Only DISCONTINUED may be set directly — ACTIVE/OUT_OF_STOCK are derived from Inventory and rejected by the service if supplied here.
   """
   status: ProductVariantStatus
+}
+
+"""
+A platform user — Admin, Partner staff, or Customer buyer-contact (docs/domain-model.md § User). Sprint 3 (User Management, Jira Epic SM-331) — not tied to a docs/milestones.md milestone.
+"""
+type User {
+  createdAt: DateTime!
+  customerId: ID
+  email: String!
+  fullName: String!
+  id: ID!
+  ownerType: UserOwnerType!
+  partnerId: ID
+  roles: [Role!]!
+  status: UserStatus!
+  updatedAt: DateTime!
+}
+
+type UserConnection {
+  edges: [UserEdge!]!
+  pageInfo: PageInfo!
+}
+
+type UserEdge {
+  cursor: String!
+  node: User!
+}
+
+input UserFilterInput {
+  ownerType: UserOwnerType
+
+  """Free-text match against email and full name."""
+  search: String
+  status: UserStatus
+}
+
+"""
+Which organization, if any, this User acts on behalf of (docs/domain-model.md § User).
+"""
+enum UserOwnerType {
+  CUSTOMER
+  NONE
+  PARTNER
+}
+
+"""Fields the user list can be sorted by."""
+enum UserSortField {
+  CREATED_AT
+  EMAIL
+  FULL_NAME
+}
+
+input UserSortInput {
+  direction: SortDirection!
+  field: UserSortField!
 }
 
 """

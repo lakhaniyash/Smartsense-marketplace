@@ -3,7 +3,8 @@ import { Field, ID, ObjectType } from '@nestjs/graphql'
 @ObjectType('AuditLogEntry', {
   description:
     'One AuditLog row (docs/database-schema.md § Audit Log), read-only and scoped to a single ' +
-    'entity — the first GraphQL exposure of this model, added for the Customer activity timeline.',
+    'entity. Added for the Customer activity timeline; promoted here once Users became its ' +
+    'second consumer (CLAUDE.md: "Promote, don\'t pre-share").',
 })
 export class AuditLogEntryOutput {
   @Field(() => ID)
