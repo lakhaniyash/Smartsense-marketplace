@@ -16,6 +16,8 @@ services:
       KEYCLOAK_REALM: smartsense-marketplace
       KEYCLOAK_API_CLIENT_ID: smartsense-api
       KEYCLOAK_API_CLIENT_SECRET: smartsense-api-dev-secret-change-me
+      KEYCLOAK_ADMIN_CLIENT_ID: smartsense-api-admin
+      KEYCLOAK_ADMIN_CLIENT_SECRET: smartsense-api-admin-dev-secret-change-me
     depends_on:
       db:
         condition: service_healthy
