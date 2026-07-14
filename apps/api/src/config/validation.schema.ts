@@ -20,4 +20,8 @@ export const validationSchema = Joi.object({
   KEYCLOAK_JWKS_URI: Joi.string().uri().optional(),
   KEYCLOAK_JWKS_CACHE_TTL_SECONDS: Joi.number().integer().min(1).default(600),
   JWT_CLOCK_TOLERANCE_SECONDS: Joi.number().integer().min(0).default(5),
+  // Optional — see configuration.ts's identical comment on why this doesn't
+  // gate app boot the way KEYCLOAK_API_CLIENT_ID does.
+  KEYCLOAK_ADMIN_CLIENT_ID: Joi.string().allow('').default(''),
+  KEYCLOAK_ADMIN_CLIENT_SECRET: Joi.string().allow('').default(''),
 })
