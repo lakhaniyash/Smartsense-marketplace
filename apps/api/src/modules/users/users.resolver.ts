@@ -156,4 +156,31 @@ export class UsersResolver {
   ): Promise<UserOutput> {
     return this.usersService.removeUserRole(user, userId, roleId)
   }
+
+  @Permissions('users:manage')
+  @Mutation(() => UserOutput, {
+    name: 'suspendUser',
+    description:
+      'Suspends a User (soft, reversible via reactivateUser). A caller can never suspend ' +
+      "themselves, and the platform's last remaining active Admin can never be suspended " +
+      '(docs/authorization.md § User Role Assignment Guardrails).',
+  })
+  suspendUser(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<UserOutput> {
+    return this.usersService.suspendUser(user, id)
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => UserOutput, {
+    name: 'reactivateUser',
+    description: 'Reactivates a suspended User.',
+  })
+  reactivateUser(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<UserOutput> {
+    return this.usersService.reactivateUser(user, id)
+  }
 }

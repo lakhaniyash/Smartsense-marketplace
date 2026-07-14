@@ -8,6 +8,8 @@ import { Prisma, UserOwnerType, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { UserSortField } from './dto/user-sort.enum'
+import { UserReactivatedEvent } from './events/user-reactivated.event'
+import { UserSuspendedEvent } from './events/user-suspended.event'
 import { UsersService } from './users.service'
 
 function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
@@ -83,7 +85,7 @@ function roleWithPermissionsFixture(overrides: Record<string, unknown> = {}) {
 describe('UsersService', () => {
   let service: UsersService
   let prisma: {
-    user: { findMany: jest.Mock; findFirst: jest.Mock }
+    user: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock }
     role: {
       findMany: jest.Mock
       findFirst: jest.Mock
@@ -94,14 +96,21 @@ describe('UsersService', () => {
     }
     rolePermission: { deleteMany: jest.Mock; createMany: jest.Mock }
     permission: { findMany: jest.Mock }
-    userRole: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; delete: jest.Mock }
+    userRole: {
+      findUnique: jest.Mock
+      findFirst: jest.Mock
+      count: jest.Mock
+      create: jest.Mock
+      delete: jest.Mock
+    }
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
+  let eventEmitter: { emit: jest.Mock }
 
   beforeEach(() => {
     prisma = {
-      user: { findMany: jest.fn(), findFirst: jest.fn() },
+      user: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
       role: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -114,6 +123,7 @@ describe('UsersService', () => {
       permission: { findMany: jest.fn() },
       userRole: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         count: jest.fn(),
         create: jest.fn(),
         delete: jest.fn(),
@@ -122,7 +132,8 @@ describe('UsersService', () => {
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn(), findForEntity: jest.fn() }
-    service = new UsersService(prisma as never, auditLogService as never)
+    eventEmitter = { emit: jest.fn() }
+    service = new UsersService(prisma as never, auditLogService as never, eventEmitter as never)
   })
 
   describe('findUsers', () => {
@@ -638,6 +649,137 @@ describe('UsersService', () => {
 
       expect(prisma.userRole.count).not.toHaveBeenCalled()
       expect(prisma.userRole.delete).toHaveBeenCalled()
+    })
+  })
+
+  describe('suspendUser', () => {
+    it('rejects a caller suspending themselves', async () => {
+      await expect(service.suspendUser(user({ id: 'admin-1' }), 'admin-1')).rejects.toThrow(
+        ForbiddenException,
+      )
+      expect(prisma.user.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('throws NOT_FOUND when the target user does not exist', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.suspendUser(user(), 'user-1')).rejects.toThrow(NotFoundException)
+    })
+
+    it('rejects suspending an already-suspended user', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.SUSPENDED,
+      })
+
+      await expect(service.suspendUser(user(), 'user-1')).rejects.toThrow(BadRequestException)
+      expect(prisma.user.update).not.toHaveBeenCalled()
+    })
+
+    it("rejects suspending the platform's last remaining active Admin", async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.ACTIVE,
+      })
+      prisma.userRole.findFirst.mockResolvedValueOnce({ userId: 'user-1', roleId: 'role-admin' })
+      prisma.userRole.count.mockResolvedValueOnce(0)
+
+      await expect(service.suspendUser(user(), 'user-1')).rejects.toThrow(BadRequestException)
+      expect(prisma.user.update).not.toHaveBeenCalled()
+      expect(eventEmitter.emit).not.toHaveBeenCalled()
+    })
+
+    it('suspends an Admin when other active Admins remain', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.ACTIVE,
+      })
+      prisma.userRole.findFirst.mockResolvedValueOnce({ userId: 'user-1', roleId: 'role-admin' })
+      prisma.userRole.count.mockResolvedValueOnce(1)
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.suspendUser(user(), 'user-1')
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { status: UserStatus.SUSPENDED },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_SUSPENDED', entityId: 'user-1' }),
+      )
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        UserSuspendedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: 'user-1', fullName: 'Jordan Rivera' }),
+      )
+    })
+
+    it('does not check Admin-holder count for a non-Admin user', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.ACTIVE,
+      })
+      prisma.userRole.findFirst.mockResolvedValueOnce(null)
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.suspendUser(user(), 'user-1')
+
+      expect(prisma.userRole.count).not.toHaveBeenCalled()
+      expect(prisma.user.update).toHaveBeenCalled()
+    })
+  })
+
+  describe('reactivateUser', () => {
+    it('rejects a caller reactivating themselves', async () => {
+      await expect(service.reactivateUser(user({ id: 'admin-1' }), 'admin-1')).rejects.toThrow(
+        ForbiddenException,
+      )
+      expect(prisma.user.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('throws NOT_FOUND when the target user does not exist', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.reactivateUser(user(), 'user-1')).rejects.toThrow(NotFoundException)
+    })
+
+    it('rejects reactivating an already-active user', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.ACTIVE,
+      })
+
+      await expect(service.reactivateUser(user(), 'user-1')).rejects.toThrow(BadRequestException)
+      expect(prisma.user.update).not.toHaveBeenCalled()
+    })
+
+    it('reactivates a suspended user, records an audit entry, and emits the event', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        fullName: 'Jordan Rivera',
+        status: UserStatus.SUSPENDED,
+      })
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.reactivateUser(user(), 'user-1')
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { status: UserStatus.ACTIVE },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_REACTIVATED', entityId: 'user-1' }),
+      )
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        UserReactivatedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: 'user-1', fullName: 'Jordan Rivera' }),
+      )
     })
   })
 })

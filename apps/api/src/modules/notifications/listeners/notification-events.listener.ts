@@ -10,6 +10,8 @@ import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
 import { OrderCreatedEvent } from '../../orders/events/order-created.event'
+import { UserReactivatedEvent } from '../../users/events/user-reactivated.event'
+import { UserSuspendedEvent } from '../../users/events/user-suspended.event'
 import { NotificationsService } from '../notifications.service'
 
 // The real consumer of Orders' (M13), Billing's (M16), and Customer
@@ -159,6 +161,37 @@ export class NotificationEventsListener {
         body: `${event.displayName}'s account was reactivated. Orders can be placed again.`,
         entityType: 'Customer',
         entityId: event.customerId,
+      })
+    })
+  }
+
+  // Sprint 3 (User Management, SM-335) — not tied to a docs/milestones.md
+  // milestone. Unlike the Customer handlers above, this notifies the
+  // affected User directly (notifyUser, not a fanOut), since there is no
+  // "organization" to fan out to — a User's suspension/reactivation is its
+  // own affected party.
+  @OnEvent(UserSuspendedEvent.EVENT_NAME)
+  async handleUserSuspended(event: UserSuspendedEvent): Promise<void> {
+    await this.safely(UserSuspendedEvent.EVENT_NAME, event.fullName, async () => {
+      await this.notificationsService.notifyUser(event.userId, {
+        type: NotificationType.USER_SUSPENDED,
+        title: 'Account suspended',
+        body: 'Your account was suspended. Contact an administrator for details.',
+        entityType: 'User',
+        entityId: event.userId,
+      })
+    })
+  }
+
+  @OnEvent(UserReactivatedEvent.EVENT_NAME)
+  async handleUserReactivated(event: UserReactivatedEvent): Promise<void> {
+    await this.safely(UserReactivatedEvent.EVENT_NAME, event.fullName, async () => {
+      await this.notificationsService.notifyUser(event.userId, {
+        type: NotificationType.USER_REACTIVATED,
+        title: 'Account reactivated',
+        body: 'Your account was reactivated.',
+        entityType: 'User',
+        entityId: event.userId,
       })
     })
   }

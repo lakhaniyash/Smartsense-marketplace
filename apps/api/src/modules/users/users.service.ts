@@ -5,7 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { Prisma, UserStatus } from '@prisma/client'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { AuditLogEntryOutput } from '../../common/graphql/audit-log-entry.output'
 import { PrismaService } from '../../prisma/prisma.service'
@@ -19,6 +20,8 @@ import { UserFilterInput } from './dto/user-filter.input'
 import { UserSortField } from './dto/user-sort.enum'
 import { UserSortInput } from './dto/user-sort.input'
 import { UserOutput } from './dto/user.output'
+import { UserReactivatedEvent } from './events/user-reactivated.event'
+import { UserSuspendedEvent } from './events/user-suspended.event'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -51,6 +54,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   getStatus(): string {
@@ -335,16 +339,100 @@ export class UsersService {
     return this.findUserById(user, userId)
   }
 
+  /**
+   * Suspends a User (ACTIVE -> SUSPENDED, docs/domain-model.md § User
+   * Lifecycle) — mirrors CustomersService.archiveCustomer. Guarded the same
+   * way as assignUserRole/removeUserRole (docs/authorization.md § User Role
+   * Assignment Guardrails, extended to status here): no self-suspension,
+   * and rejects suspending the platform's last remaining active Admin — a
+   * SUSPENDED User cannot log in (AuthService.validateAndProvisionUser
+   * rejects non-ACTIVE status), so this has the same practical effect as
+   * removeUserRole's last-Admin guard even though the Role itself is
+   * untouched.
+   */
+  async suspendUser(user: AuthenticatedUser, id: string): Promise<UserOutput> {
+    this.assertNotSelf(user, id, 'suspend')
+    const existing = await this.findActiveUserOrThrow(id)
+    if (existing.status === UserStatus.SUSPENDED) {
+      throw new BadRequestException('User is already suspended')
+    }
+
+    const holdsAdmin = await this.prisma.userRole.findFirst({
+      where: { userId: id, role: { name: 'Admin' } },
+    })
+    if (holdsAdmin !== null) {
+      const otherActiveAdmins = await this.prisma.userRole.count({
+        where: {
+          role: { name: 'Admin' },
+          user: { status: UserStatus.ACTIVE, deletedAt: null, id: { not: id } },
+        },
+      })
+      if (otherActiveAdmins === 0) {
+        throw new BadRequestException("Cannot suspend the platform's last remaining active Admin")
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { status: UserStatus.SUSPENDED } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'USER_SUSPENDED',
+        entityType: 'User',
+        entityId: id,
+        metadata: { fullName: existing.fullName },
+      })
+    })
+
+    // Emitted only once the transaction has committed — NotificationEventsListener
+    // must never see a suspension that then rolled back (same reasoning as
+    // CustomersService.archiveCustomer's identical comment).
+    this.eventEmitter.emit(
+      UserSuspendedEvent.EVENT_NAME,
+      new UserSuspendedEvent(id, existing.fullName),
+    )
+
+    return this.findUserById(user, id)
+  }
+
+  /** Reverses suspendUser — the lifecycle is bidirectional (docs/domain-model.md § User Lifecycle: Active ⇄ Suspended). */
+  async reactivateUser(user: AuthenticatedUser, id: string): Promise<UserOutput> {
+    this.assertNotSelf(user, id, 'reactivate')
+    const existing = await this.findActiveUserOrThrow(id)
+    if (existing.status === UserStatus.ACTIVE) {
+      throw new BadRequestException('User is already active')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { status: UserStatus.ACTIVE } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'USER_REACTIVATED',
+        entityType: 'User',
+        entityId: id,
+        metadata: { fullName: existing.fullName },
+      })
+    })
+
+    this.eventEmitter.emit(
+      UserReactivatedEvent.EVENT_NAME,
+      new UserReactivatedEvent(id, existing.fullName),
+    )
+
+    return this.findUserById(user, id)
+  }
+
   private assertNotSelf(user: AuthenticatedUser, targetUserId: string, action: string): void {
     if (targetUserId === user.id) {
       throw new ForbiddenException(`Cannot ${action} yourself — ask another Admin`)
     }
   }
 
-  private async findActiveUserOrThrow(id: string): Promise<{ id: string }> {
+  private async findActiveUserOrThrow(
+    id: string,
+  ): Promise<{ id: string; fullName: string; status: UserStatus }> {
     const row = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true },
+      select: { id: true, fullName: true, status: true },
     })
     if (row === null) {
       throw new NotFoundException('User not found')

@@ -45,6 +45,7 @@ describe('NotificationsService', () => {
       updateMany: jest.Mock
       count: jest.Mock
       createMany: jest.Mock
+      create: jest.Mock
     }
     user: { findMany: jest.Mock }
   }
@@ -58,6 +59,7 @@ describe('NotificationsService', () => {
         updateMany: jest.fn(),
         count: jest.fn(),
         createMany: jest.fn(),
+        create: jest.fn(),
       },
       user: { findMany: jest.fn() },
     }
@@ -247,6 +249,32 @@ describe('NotificationsService', () => {
       })
 
       expect(prisma.notification.createMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('notifyUser', () => {
+    it('creates exactly one Notification for the given recipient, regardless of their status', async () => {
+      await service.notifyUser('user-9', {
+        type: NotificationType.USER_SUSPENDED,
+        title: 'Account suspended',
+        body: 'Your account was suspended. Contact an administrator for details.',
+        entityType: 'User',
+        entityId: 'user-9',
+      })
+
+      // No `prisma.user.findMany` status/deletedAt gate — unlike fanOut,
+      // this must still reach a User whose status just became SUSPENDED.
+      expect(prisma.user.findMany).not.toHaveBeenCalled()
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: {
+          recipientId: 'user-9',
+          type: NotificationType.USER_SUSPENDED,
+          title: 'Account suspended',
+          body: 'Your account was suspended. Contact an administrator for details.',
+          entityType: 'User',
+          entityId: 'user-9',
+        },
+      })
     })
   })
 })

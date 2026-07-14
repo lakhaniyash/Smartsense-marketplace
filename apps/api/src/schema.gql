@@ -613,6 +613,9 @@ type Mutation {
   """
   markNotificationRead(id: ID!): Notification!
 
+  """Reactivates a suspended User."""
+  reactivateUser(id: ID!): User!
+
   """
   Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate.
   """
@@ -627,6 +630,11 @@ type Mutation {
   Marks a ProductVariant as its Product's default, unsetting any previous default.
   """
   setDefaultProductVariant(id: ID!): ProductVariant!
+
+  """
+  Suspends a User (soft, reversible via reactivateUser). A caller can never suspend themselves, and the platform's last remaining active Admin can never be suspended (docs/authorization.md § User Role Assignment Guardrails).
+  """
+  suspendUser(id: ID!): User!
 
   """Updates a Customer within the caller's scope."""
   updateCustomer(input: UpdateCustomerInput!): Customer!
@@ -732,6 +740,8 @@ enum NotificationType {
   ORDER_CONFIRMED
   ORDER_CREATED
   PAYMENT_RECORDED
+  USER_REACTIVATED
+  USER_SUSPENDED
 }
 
 """A single-Partner order (docs/domain-model.md § Order)."""
