@@ -8,6 +8,12 @@ export { OrdersTrendChart } from './OrdersTrendChart'
 export type { OrdersStatusBreakdown, OrdersTrendChartProps } from './OrdersTrendChart'
 export { InventoryStatusChart } from './InventoryStatusChart'
 export type { InventoryStatusChartProps } from './InventoryStatusChart'
+export { CustomersBreakdownChart } from './CustomersBreakdownChart'
+export type {
+  CustomersBreakdownChartProps,
+  CustomersStatusBreakdown,
+  CustomersTypeBreakdown,
+} from './CustomersBreakdownChart'
 export { ProductPerformanceChart } from './ProductPerformanceChart'
 export type {
   ProductPerformanceChartProps,

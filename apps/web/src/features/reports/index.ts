@@ -7,6 +7,7 @@ export {
   NotificationActivityReportPage,
   BillingReportsPage,
   BillingReportDetailPage,
+  CustomersReportPage,
 } from './pages'
 export type {
   ReportDateRangeFilters,

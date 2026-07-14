@@ -1,0 +1,13 @@
+query GetCustomersReport($filter: CustomersReportFilterInput) {
+  customersReport(filter: $filter) {
+    totalCustomers
+    statusBreakdown {
+      status
+      count
+    }
+    typeBreakdown {
+      type
+      count
+    }
+  }
+}

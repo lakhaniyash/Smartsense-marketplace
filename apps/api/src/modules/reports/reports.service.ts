@@ -28,6 +28,8 @@ import { BillingReportFilterInput } from './dto/billing-report-filter.input'
 import { BillingReportSortField } from './dto/billing-report-sort.enum'
 import { BillingReportSortInput } from './dto/billing-report-sort.input'
 import { BillingReportOutput } from './dto/billing-report.output'
+import { CustomersReportFilterInput } from './dto/customers-report-filter.input'
+import { CustomersReportOutput } from './dto/customers-report.output'
 import { ExportReportInput } from './dto/export-report.input'
 import { GenerateBillingReportInput } from './dto/generate-billing-report.input'
 import {
@@ -503,6 +505,45 @@ export class ReportsService {
   }
 
   // ---------------------------------------------------------------------
+  // Customers Report — computed on read, point-in-time snapshot (SM-330)
+  // ---------------------------------------------------------------------
+
+  /**
+   * `Customer` has no `partnerId` column (docs/domain-model.md § Customer) —
+   * a Partner's "own" Customers are derived through Order (at least one
+   * Order placed with that Partner), the exact same relation-filter
+   * CustomersService.buildWhere uses. Reports never imports another
+   * module's service (resolver -> service -> Prisma layering only), so this
+   * predicate is re-derived here rather than shared — same tradeoff every
+   * other report's ownership `where` already accepts (each re-derives
+   * `resolvePartnerScope`'s result into its own entity's `where` shape).
+   */
+  async getCustomersReport(
+    user: AuthenticatedUser,
+    filter: CustomersReportFilterInput | undefined,
+  ): Promise<CustomersReportOutput> {
+    const partnerId = this.resolvePartnerScope(user, filter?.partnerId ?? undefined)
+    const where: Prisma.CustomerWhereInput = {
+      deletedAt: null,
+      ...(partnerId !== undefined && { orders: { some: { partnerId } } }),
+    }
+
+    const [statusGrouped, typeGrouped] = await Promise.all([
+      this.prisma.customer.groupBy({ by: ['status'], where, _count: { _all: true } }),
+      this.prisma.customer.groupBy({ by: ['type'], where, _count: { _all: true } }),
+    ])
+
+    return {
+      totalCustomers: statusGrouped.reduce((sum, group) => sum + group._count._all, 0),
+      statusBreakdown: statusGrouped.map((group) => ({
+        status: group.status,
+        count: group._count._all,
+      })),
+      typeBreakdown: typeGrouped.map((group) => ({ type: group.type, count: group._count._all })),
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Product Performance Report — computed on read, offset-cursor (see
   // ProductPerformanceConnectionOutput's doc comment for why)
   // ---------------------------------------------------------------------
@@ -672,6 +713,8 @@ export class ReportsService {
         return this.exportProductPerformanceCsv(user, input)
       case ReportExportType.NOTIFICATION_ACTIVITY:
         return this.exportNotificationActivityCsv(user, input)
+      case ReportExportType.CUSTOMERS:
+        return this.exportCustomersReportCsv(user, input)
     }
   }
 
@@ -836,6 +879,23 @@ export class ReportsService {
     return buildCsv(
       ['type', 'count'],
       report.typeBreakdown.map((entry) => [entry.type, String(entry.count)]),
+    )
+  }
+
+  private async exportCustomersReportCsv(
+    user: AuthenticatedUser,
+    input: ExportReportInput,
+  ): Promise<string> {
+    const report = await this.getCustomersReport(
+      user,
+      this.buildPartnerFilter<CustomersReportFilterInput>(input.partnerId),
+    )
+    return buildCsv(
+      ['dimension', 'value', 'count'],
+      [
+        ...report.statusBreakdown.map((entry) => ['status', entry.status, String(entry.count)]),
+        ...report.typeBreakdown.map((entry) => ['type', entry.type, String(entry.count)]),
+      ],
     )
   }
 

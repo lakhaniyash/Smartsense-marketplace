@@ -6,6 +6,8 @@ import { BillingReportConnectionOutput } from './dto/billing-report-connection.o
 import { BillingReportFilterInput } from './dto/billing-report-filter.input'
 import { BillingReportSortInput } from './dto/billing-report-sort.input'
 import { BillingReportOutput } from './dto/billing-report.output'
+import { CustomersReportFilterInput } from './dto/customers-report-filter.input'
+import { CustomersReportOutput } from './dto/customers-report.output'
 import { ExportReportInput } from './dto/export-report.input'
 import { GenerateBillingReportInput } from './dto/generate-billing-report.input'
 import { InventoryReportFilterInput } from './dto/inventory-report-filter.input'
@@ -154,6 +156,20 @@ export class ReportsResolver {
       after: after ?? undefined,
       filter: filter ?? undefined,
     })
+  }
+
+  @Permissions('reports:read')
+  @Query(() => CustomersReportOutput, {
+    name: 'customersReport',
+    description:
+      'A point-in-time Customer count snapshot for the scoped Partner(s), by status and type.',
+  })
+  customersReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('filter', { type: () => CustomersReportFilterInput, nullable: true })
+    filter?: CustomersReportFilterInput | null,
+  ): Promise<CustomersReportOutput> {
+    return this.reportsService.getCustomersReport(user, filter ?? undefined)
   }
 
   @Permissions('reports:read')

@@ -30,7 +30,8 @@ export class ExportReportInput {
 
   @Field(() => DateRangeInput, {
     nullable: true,
-    description: 'Ignored for a BILLING_REPORTS or INVENTORY export. Omitted = all time.',
+    description:
+      'Ignored for a BILLING_REPORTS, INVENTORY, or CUSTOMERS export. Omitted = all time.',
   })
   @IsOptional()
   @ValidateNested()

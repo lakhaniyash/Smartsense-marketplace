@@ -40,6 +40,10 @@ test.describe('Reports', () => {
     await expect(page.getByText('Total orders')).toBeVisible()
     await expect(page.getByRole('link', { name: /Revenue/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /Billing Reports/ })).toBeVisible()
+    // Disambiguated from the sidebar's own plain "Customers" nav link
+    // (Customer Management, /customers) by the nav card's composite
+    // accessible name (title + description).
+    await expect(page.getByRole('link', { name: /^Customers Customer count by/ })).toBeVisible()
 
     // Revenue report: KPI cards + chart + CSV export.
     await page.getByRole('link', { name: /^Revenue\b/ }).click()
@@ -81,6 +85,18 @@ test.describe('Reports', () => {
       page.getByRole('heading', { name: 'Notification Activity', exact: true }),
     ).toBeVisible()
     await expect(page.getByText('Total notifications')).toBeVisible()
+
+    // Customers report (SM-330) — point-in-time snapshot, no date-range
+    // control, same as Inventory above.
+    await page.goto('/reports/customers')
+    await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible()
+    await expect(page.getByText('Total customers')).toBeVisible()
+    await expect(page.getByLabel('Date range')).not.toBeVisible()
+    downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export' }).click()
+    await page.getByRole('menuitem', { name: 'Export as CSV' }).click()
+    download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('customers-report.csv')
 
     // Billing reports: generate -> finalize -> mark paid out, end to end.
     await page.goto('/reports/billing-reports')
