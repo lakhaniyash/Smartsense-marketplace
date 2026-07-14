@@ -175,6 +175,21 @@ export class UsersResolver {
   }
 
   @Permissions('users:manage')
+  @Mutation(() => Boolean, {
+    name: 'sendPasswordResetEmail',
+    description:
+      "Triggers Keycloak's hosted password-reset email for an active User. The application " +
+      'never sees, stores, or validates a password (docs/security.md); only an ACTIVE user ' +
+      'can be reset (INVITED/SUSPENDED are rejected).',
+  })
+  sendPasswordResetEmail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<boolean> {
+    return this.usersService.sendPasswordResetEmail(user, id)
+  }
+
+  @Permissions('users:manage')
   @Mutation(() => UserOutput, {
     name: 'suspendUser',
     description:

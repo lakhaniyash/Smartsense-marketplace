@@ -646,6 +646,52 @@ describe('UsersService', () => {
     })
   })
 
+  describe('sendPasswordResetEmail', () => {
+    it('throws NOT_FOUND when the user does not exist, without calling Keycloak', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.sendPasswordResetEmail(user(), 'user-1')).rejects.toThrow(
+        NotFoundException,
+      )
+      expect(keycloakAdminService.sendExecuteActionsEmail).not.toHaveBeenCalled()
+    })
+
+    it('rejects a non-ACTIVE target (e.g. still INVITED) before calling Keycloak', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'yash.lakhani+invitee@smartsensesolutions.com',
+        status: UserStatus.INVITED,
+        keycloakSubjectId: 'kc-1',
+      })
+
+      await expect(service.sendPasswordResetEmail(user(), 'user-1')).rejects.toThrow(
+        BadRequestException,
+      )
+      expect(keycloakAdminService.sendExecuteActionsEmail).not.toHaveBeenCalled()
+    })
+
+    it('triggers the UPDATE_PASSWORD email, audits, and returns true for an ACTIVE user', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({
+        id: 'user-1',
+        email: 'yash.lakhani+jordan@smartsensesolutions.com',
+        status: UserStatus.ACTIVE,
+        keycloakSubjectId: 'kc-jordan-1',
+      })
+      keycloakAdminService.sendExecuteActionsEmail.mockResolvedValueOnce(undefined)
+
+      const result = await service.sendPasswordResetEmail(user(), 'user-1')
+
+      expect(keycloakAdminService.sendExecuteActionsEmail).toHaveBeenCalledWith('kc-jordan-1', [
+        'UPDATE_PASSWORD',
+      ])
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_PASSWORD_RESET_SENT', entityId: 'user-1' }),
+      )
+      expect(result).toBe(true)
+    })
+  })
+
   describe('assignUserRole — guardrails', () => {
     it('rejects a caller assigning a role to themselves', async () => {
       await expect(
