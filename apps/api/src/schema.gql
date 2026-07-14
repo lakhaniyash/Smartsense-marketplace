@@ -652,6 +652,11 @@ type Mutation {
   removeUserRole(roleId: ID!, userId: ID!): User!
 
   """
+  Triggers Keycloak's hosted password-reset email for an active User. The application never sees, stores, or validates a password (docs/security.md); only an ACTIVE user can be reset (INVITED/SUSPENDED are rejected).
+  """
+  sendPasswordResetEmail(id: ID!): Boolean!
+
+  """
   Marks a ProductVariant as its Product's default, unsetting any previous default.
   """
   setDefaultProductVariant(id: ID!): ProductVariant!

@@ -548,6 +548,56 @@ export class UsersService {
   }
 
   /**
+   * Admin-triggered password reset (SM-338). The application never sees,
+   * stores, or validates a password (docs/security.md — "there is no password
+   * field anywhere in the schema"), so this cannot accept a new password
+   * value; it delegates to Keycloak's own hosted reset flow via
+   * `sendExecuteActionsEmail(..., ['UPDATE_PASSWORD'])`. Returns true once the
+   * email has been handed off to Keycloak.
+   *
+   * Only an ACTIVE User can be reset: an INVITED User is still mid-invite (the
+   * invite email already carries an `UPDATE_PASSWORD` action, and their
+   * `keycloakSubjectId` may not yet be a real logged-in identity), and a
+   * SUSPENDED/DEACTIVATED User cannot log in at all, so a reset is pointless.
+   * A missing/soft-deleted row is NOT_FOUND; a wrong-status target is
+   * BAD_REQUEST — same status-rejection convention as suspendUser's "already
+   * suspended" guard. (The ticket's wording said NOT_FOUND for the mid-invite
+   * case, but the row genuinely exists, so BAD_REQUEST represents it honestly;
+   * noted as a deliberate, documented divergence.)
+   */
+  async sendPasswordResetEmail(user: AuthenticatedUser, id: string): Promise<boolean> {
+    const target = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, email: true, status: true, keycloakSubjectId: true },
+    })
+    if (target === null) {
+      throw new NotFoundException('User not found')
+    }
+    if (target.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('A password reset can only be sent to an active user')
+    }
+
+    // External call — no password value ever transits this app, only the
+    // required-action key. Cannot live inside a Prisma transaction.
+    await this.keycloakAdminService.sendExecuteActionsEmail(target.keycloakSubjectId, [
+      'UPDATE_PASSWORD',
+    ])
+
+    // Single audit write with nothing to be atomic against (the "mutation" is
+    // an external email that already happened), so `this.prisma` is passed
+    // directly rather than opening a pointless one-statement transaction.
+    await this.auditLogService.record(this.prisma, {
+      actorUserId: user.id,
+      action: 'USER_PASSWORD_RESET_SENT',
+      entityType: 'User',
+      entityId: target.id,
+      metadata: { email: target.email },
+    })
+
+    return true
+  }
+
+  /**
    * Validates the ownerType/organization triple and confirms the referenced
    * organization exists (docs/domain-model.md § User): NONE staff belong to
    * no org; PARTNER/CUSTOMER users require exactly their own org id and reject

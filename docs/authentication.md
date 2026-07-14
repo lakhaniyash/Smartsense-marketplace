@@ -131,6 +131,10 @@ The flow spans two systems and is deliberately **not** transactional across them
 
 **Known limitation (flagged, not solved here):** if step 2 fails after step 1 succeeded, the Keycloak user is orphaned. No saga/2PC pattern exists in this codebase to unwind it, so `UsersService` logs the orphaned subject id at `error` level for manual reconciliation and rethrows — introducing distributed-transaction infrastructure for this one flow is out of scope.
 
+### Admin-triggered password reset
+
+Implemented in SM-338 as the `sendPasswordResetEmail(id: ID!): Boolean!` mutation (`users:manage`). Because the application never sees, stores, or validates a password (§ this doc, and `docs/security.md`), it cannot accept a new password value — it delegates entirely to Keycloak's hosted flow via `KeycloakAdminService.sendExecuteActionsEmail(keycloakSubjectId, ['UPDATE_PASSWORD'])`, records a `USER_PASSWORD_RESET_SENT` audit entry, and returns `true`. Only an **ACTIVE** User can be reset: an `INVITED` User is still mid-invite (their invite mail already carries the `UPDATE_PASSWORD` action), and a `SUSPENDED`/`DEACTIVATED` User cannot log in at all. A missing/soft-deleted row is `NOT_FOUND`; a wrong-status target is `BAD_REQUEST`.
+
 - **The backend, not the SPA, is the source of truth for roles/permissions** actually enforced — the SPA's copy of the user's roles (parsed from the ID token / a `me` query) is for rendering only.
 
 ---
