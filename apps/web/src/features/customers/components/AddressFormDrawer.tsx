@@ -1,6 +1,7 @@
 import { useMutation } from '@apollo/client'
 import {
   AddCustomerAddressDocument,
+  GetCustomerAuditLogDocument,
   GetCustomerByIdDocument,
   UpdateCustomerAddressDocument,
 } from '@lib/graphql/__generated__/graphql'
@@ -42,7 +43,11 @@ export function AddressFormDrawer({
   const isEditMode = address !== undefined
 
   const [addCustomerAddress, { loading: isAdding }] = useMutation(AddCustomerAddressDocument, {
-    refetchQueries: [GetCustomerByIdDocument],
+    // GetCustomerAuditLogDocument too — same reason CustomerDetailPage's
+    // archiveCustomer/activateCustomer mutations refetch it (SM-329): the
+    // Activity tab's own query otherwise keeps showing stale data, never
+    // picking up the ADDRESS_ADDED entry this action just wrote.
+    refetchQueries: [GetCustomerByIdDocument, GetCustomerAuditLogDocument],
     onCompleted: () => {
       toast({ title: 'Address added', variant: 'success' })
       onOpenChange(false)
@@ -59,7 +64,7 @@ export function AddressFormDrawer({
   const [updateCustomerAddress, { loading: isUpdating }] = useMutation(
     UpdateCustomerAddressDocument,
     {
-      refetchQueries: [GetCustomerByIdDocument],
+      refetchQueries: [GetCustomerByIdDocument, GetCustomerAuditLogDocument],
       onCompleted: () => {
         toast({ title: 'Address updated', variant: 'success' })
         onOpenChange(false)
