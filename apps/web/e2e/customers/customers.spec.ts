@@ -6,12 +6,14 @@ import { KeycloakLoginPage } from '../auth/login.page'
 //
 // The comprehensive flow below needs Admin (createCustomer is Admin-only,
 // docs/authorization.md § Ownership Rules). reports.spec.ts's second test is
-// this suite's only other Admin login — both are isolated to their own
-// test/file and never intentionally run at the exact same instant, but a
-// worker-level race between the two is the same accepted risk that file's
-// own comment already documents for this realm's `bruteForceProtected: true`
-// setting, not a new one introduced here. The negative-access test below
-// logs in as a different account (Customer) and carries no such risk.
+// this suite's only other Admin login, so a worker-level race between the
+// two is a real (not merely theoretical) risk under this realm's
+// `bruteForceProtected: true` setting on a local, non-CI, multi-worker run —
+// CI is unaffected (`playwright.config.ts` pins `workers: 1` there). This is
+// the same tradeoff the project already accepts at larger scale for the
+// Partner account, shared across seven other spec files in this folder. The
+// negative-access test below logs in as a different account (Customer) and
+// carries no such risk.
 const ADMIN_EMAIL = 'yash.lakhani+admin@smartsensesolutions.com'
 const ADMIN_PASSWORD = 'Admin@12345'
 const CUSTOMER_EMAIL = 'yash.lakhani+customer@smartsensesolutions.com'
