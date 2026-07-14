@@ -652,6 +652,9 @@ enum NotificationType {
   // docs/milestones.md milestone.
   USER_SUSPENDED
   USER_REACTIVATED
+  // Sprint 3 (User Management, SM-337) — the invited User's own "welcome"
+  // notification, seen once their account activates on first login.
+  USER_INVITED
 
   @@map("notification_type")
 }

@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod } from '@prisma/client'
+import { NotificationType, OrderStatus, PaymentMethod } from '@prisma/client'
 import { InvoiceGeneratedEvent } from '../../billing/events/invoice-generated.event'
 import { PaymentRecordedEvent } from '../../billing/events/payment-recorded.event'
 import { CustomerActivatedEvent } from '../../customers/events/customer-activated.event'
@@ -7,6 +7,7 @@ import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
 import { OrderCreatedEvent } from '../../orders/events/order-created.event'
+import { UserInvitedEvent } from '../../users/events/user-invited.event'
 import { UserReactivatedEvent } from '../../users/events/user-reactivated.event'
 import { UserSuspendedEvent } from '../../users/events/user-suspended.event'
 import { NotificationEventsListener } from './notification-events.listener'
@@ -151,6 +152,21 @@ describe('NotificationEventsListener', () => {
     expect(notificationsService.notifyUser).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ entityId: 'user-1', entityType: 'User' }),
+    )
+    expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
+    expect(notificationsService.notifyCustomerUsers).not.toHaveBeenCalled()
+  })
+
+  it('notifies the invited User directly on UserInvited (not a fan-out)', async () => {
+    await listener.handleUserInvited(new UserInvitedEvent('user-1', 'Riley Morgan'))
+
+    expect(notificationsService.notifyUser).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        type: NotificationType.USER_INVITED,
+        entityId: 'user-1',
+        entityType: 'User',
+      }),
     )
     expect(notificationsService.notifyPartnerUsers).not.toHaveBeenCalled()
     expect(notificationsService.notifyCustomerUsers).not.toHaveBeenCalled()

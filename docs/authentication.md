@@ -116,8 +116,21 @@ sequenceDiagram
 Key points:
 
 - **PKCE, not implicit flow.** Authorization Code + PKCE is the current best practice for public SPA clients — no client secret, and the code exchange is bound to a locally-generated verifier so an intercepted authorization code alone is useless.
-- **Just-in-time provisioning.** A `User` row is created on first successful login, keyed by `keycloakSubjectId` (matches the schema's `@unique` constraint on that column). This is what turns the seed data's placeholder `keycloakSubjectId` values (`docs/database-schema.md`: "not real identity-provider subjects... will later be populated by a real Keycloak flow") into real ones.
+- **Just-in-time provisioning.** A `User` row is created on first successful login, keyed by `keycloakSubjectId` (matches the schema's `@unique` constraint on that column). This is what turns the seed data's placeholder `keycloakSubjectId` values (`docs/database-schema.md`: "not real identity-provider subjects... will later be populated by a real Keycloak flow") into real ones. Invited users (below) already have a real `keycloakSubjectId` on their row from invite time, so their first login matches directly by subject id and skips the email fallback.
 - **`ownerType`/`partnerId`/`customerId` are not derived from the token alone.** Whether a new user is a Partner-side or Customer-side account is determined by the invitation/onboarding context that created their Keycloak account (see `docs/domain-model.md`'s Partner Onboarding flow: "Admin creates initial Partner User"), not guessed from JWT claims. First-login provisioning attaches to an existing pending `User` record (created during invite) rather than fabricating organization membership from the token.
+
+### Invite provisioning
+
+Implemented in SM-337 as the `inviteUser` mutation (`users:manage`, [authorization.md § User Role Assignment Guardrails](./authorization.md#user-role-assignment-guardrails-sprint-3-sm-334)). It closes the loop the bullets above describe — before it, the "existing pending `User` record (created during invite)" could only be hand-seeded.
+
+The flow spans two systems and is deliberately **not** transactional across them (Keycloak is a separate service):
+
+1. `KeycloakAdminService.createUser` provisions the identity with `requiredActions: ['UPDATE_PASSWORD', 'VERIFY_EMAIL']`. This is an external call and cannot sit inside a Prisma transaction. It is **idempotent on email** — a `409 Conflict` is resolved by looking the existing user up and reusing their id, so retrying after a partial failure re-attaches rather than double-provisions (the invite's equivalent of Billing's idempotency key).
+2. One `prisma.$transaction` then creates the local `User` row (`status: INVITED`, the schema default), its `UserRole` rows, and a `USER_INVITED` `AuditLog` entry.
+3. After commit, Keycloak's hosted set-password / verify-email mail is sent (best-effort — the account is already usable, so a mail failure is logged for a re-invite, not rolled back), and a `USER_INVITED` in-app notification is queued for the invitee to see on first login.
+
+**Known limitation (flagged, not solved here):** if step 2 fails after step 1 succeeded, the Keycloak user is orphaned. No saga/2PC pattern exists in this codebase to unwind it, so `UsersService` logs the orphaned subject id at `error` level for manual reconciliation and rethrows — introducing distributed-transaction infrastructure for this one flow is out of scope.
+
 - **The backend, not the SPA, is the source of truth for roles/permissions** actually enforced — the SPA's copy of the user's roles (parsed from the ID token / a `me` query) is for rendering only.
 
 ---

@@ -10,6 +10,7 @@ import { OrderCancelledEvent } from '../../orders/events/order-cancelled.event'
 import { OrderCompletedEvent } from '../../orders/events/order-completed.event'
 import { OrderConfirmedEvent } from '../../orders/events/order-confirmed.event'
 import { OrderCreatedEvent } from '../../orders/events/order-created.event'
+import { UserInvitedEvent } from '../../users/events/user-invited.event'
 import { UserReactivatedEvent } from '../../users/events/user-reactivated.event'
 import { UserSuspendedEvent } from '../../users/events/user-suspended.event'
 import { NotificationsService } from '../notifications.service'
@@ -177,6 +178,23 @@ export class NotificationEventsListener {
         type: NotificationType.USER_SUSPENDED,
         title: 'Account suspended',
         body: 'Your account was suspended. Contact an administrator for details.',
+        entityType: 'User',
+        entityId: event.userId,
+      })
+    })
+  }
+
+  // Sprint 3 (User Management, SM-337) — not tied to a docs/milestones.md
+  // milestone. The invited User's row starts INVITED (they can't log in yet),
+  // so notifyUser (which ignores status, unlike fanOut) queues this now and
+  // they see it the moment their account activates on first login.
+  @OnEvent(UserInvitedEvent.EVENT_NAME)
+  async handleUserInvited(event: UserInvitedEvent): Promise<void> {
+    await this.safely(UserInvitedEvent.EVENT_NAME, event.fullName, async () => {
+      await this.notificationsService.notifyUser(event.userId, {
+        type: NotificationType.USER_INVITED,
+        title: 'Welcome to SmartSense Marketplace',
+        body: 'Your account has been created. Check your email to set a password and sign in.',
         entityType: 'User',
         entityId: event.userId,
       })

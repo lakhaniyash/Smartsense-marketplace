@@ -5,6 +5,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator'
 import { Public } from '../auth/decorators/public.decorator'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { CreateRoleInput } from './dto/create-role.input'
+import { InviteUserInput } from './dto/invite-user.input'
 import { RoleOutput } from './dto/role.output'
 import { UpdateRolePermissionsInput } from './dto/update-role-permissions.input'
 import { UserConnectionOutput } from './dto/user-connection.output'
@@ -123,6 +124,22 @@ export class UsersResolver {
     @Args('id', { type: () => ID }) id: string,
   ): Promise<RoleOutput> {
     return this.usersService.archiveRole(user, id)
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => UserOutput, {
+    name: 'inviteUser',
+    description:
+      'Invites a new User: provisions a Keycloak identity (set-password + verify-email) and ' +
+      'creates a local INVITED row with the requested roles. Idempotent on email. Granting the ' +
+      'Admin role requires the caller to already hold it (docs/authorization.md § User Role ' +
+      'Assignment Guardrails).',
+  })
+  inviteUser(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('input') input: InviteUserInput,
+  ): Promise<UserOutput> {
+    return this.usersService.inviteUser(user, input)
   }
 
   @Permissions('users:manage')

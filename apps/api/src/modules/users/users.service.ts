@@ -5,14 +5,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { Prisma, UserStatus } from '@prisma/client'
+import { Prisma, UserOwnerType, UserStatus } from '@prisma/client'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { AuditLogEntryOutput } from '../../common/graphql/audit-log-entry.output'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { KeycloakAdminService } from '../../common/services/keycloak-admin.service'
+import { LoggingService } from '../../common/services/logging.service'
 import { CreateRoleInput } from './dto/create-role.input'
+import { InviteUserInput } from './dto/invite-user.input'
 import { RoleOutput } from './dto/role.output'
 import { UpdateRolePermissionsInput } from './dto/update-role-permissions.input'
 import { UserConnectionOutput, UserEdgeOutput } from './dto/user-connection.output'
@@ -20,8 +23,13 @@ import { UserFilterInput } from './dto/user-filter.input'
 import { UserSortField } from './dto/user-sort.enum'
 import { UserSortInput } from './dto/user-sort.input'
 import { UserOutput } from './dto/user.output'
+import { UserInvitedEvent } from './events/user-invited.event'
 import { UserReactivatedEvent } from './events/user-reactivated.event'
 import { UserSuspendedEvent } from './events/user-suspended.event'
+
+/** Keycloak required-actions set on the invited identity — force a password
+ *  set and email verification before the account can be used. */
+const INVITE_REQUIRED_ACTIONS = ['UPDATE_PASSWORD', 'VERIFY_EMAIL'] as const
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -55,6 +63,8 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly keycloakAdminService: KeycloakAdminService,
+    private readonly logger: LoggingService,
   ) {}
 
   getStatus(): string {
@@ -419,6 +429,220 @@ export class UsersService {
     )
 
     return this.findUserById(user, id)
+  }
+
+  /**
+   * Provisions a brand-new User by invitation (SM-337): a Keycloak identity
+   * plus a local `INVITED` row the invitee inherits on first login. This is
+   * the flow AuthService.resolveUser's comment flags as "an invite flow this
+   * task does not implement" — until now, a User could only reach the app via
+   * a hand-seeded row.
+   *
+   * Ordering is deliberate and non-transactional across systems (SM-337, and
+   * unavoidable — Keycloak is a separate service): create the Keycloak user
+   * FIRST (external, cannot sit inside a Prisma transaction), then persist the
+   * local `User` + `UserRole` rows + `USER_INVITED` audit entry in one
+   * `prisma.$transaction`. The Keycloak step is idempotent on email
+   * (KeycloakAdminService.createUser), so retrying after a partial failure
+   * re-attaches to the same identity instead of double-provisioning. If the
+   * DB transaction still fails after Keycloak succeeded, the Keycloak user is
+   * orphaned — no saga/2PC pattern exists in this codebase to unwind it, so we
+   * log loudly for manual reconciliation and rethrow rather than silently
+   * swallow the inconsistency (a known limitation, flagged in the PR).
+   *
+   * Guarded like every other User Management mutation: `users:manage` at the
+   * resolver, plus SM-334's Admin-grant restriction here (granting the Admin
+   * role requires the caller to already hold it). No self-edit guard is
+   * needed — the invitee is always a new identity, never the caller.
+   */
+  async inviteUser(user: AuthenticatedUser, input: InviteUserInput): Promise<UserOutput> {
+    const email = input.email.trim()
+    const fullName = input.fullName.trim()
+
+    const { partnerId, customerId } = await this.resolveInviteOwnership(input)
+    const roles = await this.resolveInviteRoles(user, input.roleIds)
+
+    // App-level idempotency guard: reject a re-invite before any external
+    // call, so the happy path never provisions a second Keycloak identity for
+    // an email that already has a local row (email is `@unique`).
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    })
+    if (existing !== null) {
+      throw new ConflictException('A user with this email already exists')
+    }
+
+    const { firstName, lastName } = this.splitFullName(fullName)
+    const keycloakSubjectId = await this.keycloakAdminService.createUser({
+      email,
+      firstName,
+      lastName,
+      requiredActions: [...INVITE_REQUIRED_ACTIONS],
+    })
+
+    let createdUserId: string
+    try {
+      createdUserId = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            keycloakSubjectId,
+            email,
+            fullName,
+            status: UserStatus.INVITED,
+            ownerType: input.ownerType,
+            partnerId,
+            customerId,
+            userRoles: { create: roles.map((role) => ({ roleId: role.id })) },
+          },
+        })
+        await this.auditLogService.record(tx, {
+          actorUserId: user.id,
+          action: 'USER_INVITED',
+          entityType: 'User',
+          entityId: created.id,
+          metadata: {
+            email,
+            ownerType: input.ownerType,
+            roleNames: roles.map((role) => role.name),
+          },
+        })
+        return created.id
+      })
+    } catch (error) {
+      this.logger.error(
+        `Invite for ${email} left an orphaned Keycloak user ${keycloakSubjectId}: the local ` +
+          'User transaction failed after provisioning. Manual reconciliation required — delete ' +
+          'the Keycloak user, or retry the invite (idempotent on email).',
+        error instanceof Error ? error.stack : undefined,
+        UsersService.name,
+      )
+      throw error
+    }
+
+    // Emitted only after commit — NotificationEventsListener must never see an
+    // invite that then rolled back (same reasoning as suspendUser's comment).
+    // The invitee sees this once their account activates on first login.
+    this.eventEmitter.emit(
+      UserInvitedEvent.EVENT_NAME,
+      new UserInvitedEvent(createdUserId, fullName),
+    )
+
+    // Trigger Keycloak's hosted set-password / verify-email mail. Best-effort
+    // after commit: the account IS provisioned, so a mail failure is logged
+    // (a re-invite resends) rather than rolling back a real, usable User.
+    try {
+      await this.keycloakAdminService.sendExecuteActionsEmail(keycloakSubjectId, [
+        ...INVITE_REQUIRED_ACTIONS,
+      ])
+    } catch (error) {
+      this.logger.error(
+        `Invited user ${email} was provisioned but the invite email failed to send — ` +
+          're-invite to resend.',
+        error instanceof Error ? error.stack : undefined,
+        UsersService.name,
+      )
+    }
+
+    return this.findUserById(user, createdUserId)
+  }
+
+  /**
+   * Validates the ownerType/organization triple and confirms the referenced
+   * organization exists (docs/domain-model.md § User): NONE staff belong to
+   * no org; PARTNER/CUSTOMER users require exactly their own org id and reject
+   * the other. Mirrors how ownership is "set at invite/provisioning"
+   * (docs/authorization.md § Ownership Rules).
+   */
+  private async resolveInviteOwnership(
+    input: InviteUserInput,
+  ): Promise<{ partnerId: string | null; customerId: string | null }> {
+    const partnerId = input.partnerId ?? null
+    const customerId = input.customerId ?? null
+
+    switch (input.ownerType) {
+      case UserOwnerType.NONE:
+        if (partnerId !== null || customerId !== null) {
+          throw new BadRequestException('A NONE-owner user cannot belong to a partner or customer')
+        }
+        return { partnerId: null, customerId: null }
+      case UserOwnerType.PARTNER:
+        if (partnerId === null || customerId !== null) {
+          throw new BadRequestException('A PARTNER-owner user requires partnerId and no customerId')
+        }
+        await this.assertPartnerExists(partnerId)
+        return { partnerId, customerId: null }
+      case UserOwnerType.CUSTOMER:
+        if (customerId === null || partnerId !== null) {
+          throw new BadRequestException(
+            'A CUSTOMER-owner user requires customerId and no partnerId',
+          )
+        }
+        await this.assertCustomerExists(customerId)
+        return { partnerId: null, customerId }
+    }
+  }
+
+  private async assertPartnerExists(partnerId: string): Promise<void> {
+    const partner = await this.prisma.partner.findFirst({
+      where: { id: partnerId, deletedAt: null },
+      select: { id: true },
+    })
+    if (partner === null) {
+      throw new BadRequestException('Partner not found')
+    }
+  }
+
+  private async assertCustomerExists(customerId: string): Promise<void> {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, deletedAt: null },
+      select: { id: true },
+    })
+    if (customer === null) {
+      throw new BadRequestException('Customer not found')
+    }
+  }
+
+  /**
+   * Resolves the requested role ids to active Roles, rejecting any unknown or
+   * archived id, and reuses SM-334's Admin-grant restriction (docs/
+   * authorization.md § User Role Assignment Guardrails): granting the Admin
+   * role at invite time requires the caller to already hold it.
+   */
+  private async resolveInviteRoles(
+    user: AuthenticatedUser,
+    roleIds: string[],
+  ): Promise<Array<{ id: string; name: string }>> {
+    const uniqueIds = [...new Set(roleIds)]
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: uniqueIds }, deletedAt: null },
+      select: { id: true, name: true },
+    })
+    if (roles.length !== uniqueIds.length) {
+      const foundIds = new Set(roles.map((role) => role.id))
+      const missingIds = uniqueIds.filter((id) => !foundIds.has(id))
+      throw new BadRequestException(`Unknown or archived role id(s): ${missingIds.join(', ')}`)
+    }
+
+    if (roles.some((role) => role.name === 'Admin') && !user.roles.includes('Admin')) {
+      throw new ForbiddenException('Only an existing Admin can grant the Admin role')
+    }
+
+    return roles
+  }
+
+  /**
+   * Keycloak's create-user API wants firstName/lastName; our model's single
+   * source of truth is `fullName`. Split on the first whitespace run — these
+   * derived names are only ever Keycloak display fields, never re-read into
+   * the app, so a single-token name legitimately yields an empty lastName.
+   */
+  private splitFullName(fullName: string): { firstName: string; lastName: string } {
+    const parts = fullName.split(/\s+/)
+    return {
+      firstName: parts[0] ?? fullName,
+      lastName: parts.slice(1).join(' '),
+    }
   }
 
   private assertNotSelf(user: AuthenticatedUser, targetUserId: string, action: string): void {
