@@ -465,6 +465,26 @@ type InventoryReportItemEdge {
   node: InventoryReportItem!
 }
 
+input InviteUserInput {
+  """Required when ownerType is CUSTOMER; must be null otherwise."""
+  customerId: ID
+  email: String!
+  fullName: String!
+
+  """
+  Which organization, if any, this User acts on behalf of. NONE for platform staff; PARTNER/CUSTOMER requires the matching partnerId/customerId (docs/domain-model.md § User).
+  """
+  ownerType: UserOwnerType!
+
+  """Required when ownerType is PARTNER; must be null otherwise."""
+  partnerId: ID
+
+  """
+  Roles to grant the invited User — at least one. Granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails).
+  """
+  roleIds: [ID!]!
+}
+
 """A per-Order billing document (docs/domain-model.md § Invoice)."""
 type Invoice {
   amountDue: Decimal!
@@ -597,6 +617,11 @@ type Mutation {
   Generates a BillingReport for a Partner/period, reconciling gross revenue/commission/net payout from the Invoice ledger. Rejects an overlapping period (any Partner-scoped period that intersects an existing one) with CONFLICT.
   """
   generateBillingReport(input: GenerateBillingReportInput!): BillingReport!
+
+  """
+  Invites a new User: provisions a Keycloak identity (set-password + verify-email) and creates a local INVITED row with the requested roles. Idempotent on email. Granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails).
+  """
+  inviteUser(input: InviteUserInput!): User!
 
   """
   Marks every UNREAD notification for the caller as READ; returns the count updated.
@@ -740,6 +765,7 @@ enum NotificationType {
   ORDER_CONFIRMED
   ORDER_CREATED
   PAYMENT_RECORDED
+  USER_INVITED
   USER_REACTIVATED
   USER_SUSPENDED
 }

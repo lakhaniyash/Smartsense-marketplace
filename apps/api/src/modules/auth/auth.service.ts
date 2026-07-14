@@ -49,12 +49,13 @@ export class AuthService {
   }
 
   /**
-   * Looks up the User by keycloakSubjectId (returning user), falling back
-   * to email (first real login attaching to a pre-provisioned/seeded
-   * "pending" row). Never fabricates a new User from token claims alone —
-   * ownerType/partnerId/customerId come from an invite flow this task does
-   * not implement, so an identity with no matching row fails closed rather
-   * than guessing organization membership (docs/authentication.md's
+   * Looks up the User by keycloakSubjectId (returning user, and the invite
+   * flow's case — SM-337's inviteUser writes the real subject id at invite
+   * time), falling back to email (first real login attaching to a
+   * pre-provisioned/seeded "pending" row). Never fabricates a new User from
+   * token claims alone — ownerType/partnerId/customerId come from the invite
+   * flow (UsersService.inviteUser), so an identity with no matching row fails
+   * closed rather than guessing organization membership (docs/authentication.md's
    * "not derived from the token alone" rule).
    */
   private async resolveUser(payload: KeycloakJwtPayload): Promise<User> {

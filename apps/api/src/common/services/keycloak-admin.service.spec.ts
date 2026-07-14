@@ -135,7 +135,44 @@ describe('KeycloakAdminService', () => {
     it('throws when Keycloak rejects the create-user call', async () => {
       fetchMock
         .mockResolvedValueOnce(jsonResponse({ access_token: 'token-1' }))
+        .mockResolvedValueOnce(jsonResponse({ error: 'bad_request' }, { status: 400 }))
+
+      await expect(
+        service.createUser({
+          email: 'yash.lakhani+invitee@smartsensesolutions.com',
+          firstName: 'Jordan',
+          lastName: 'Rivera',
+          requiredActions: ['UPDATE_PASSWORD'],
+        }),
+      ).rejects.toThrow(InternalServerErrorException)
+    })
+
+    it('is idempotent on email: a 409 conflict reuses the existing user id', async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ access_token: 'token-1' }))
         .mockResolvedValueOnce(jsonResponse({ error: 'conflict' }, { status: 409 }))
+        .mockResolvedValueOnce(jsonResponse([{ id: 'kc-existing-1' }]))
+
+      const result = await service.createUser({
+        email: 'yash.lakhani+invitee@smartsensesolutions.com',
+        firstName: 'Jordan',
+        lastName: 'Rivera',
+        requiredActions: ['UPDATE_PASSWORD'],
+      })
+
+      expect(result).toBe('kc-existing-1')
+      const [lookupUrl] = fetchMock.mock.calls[2] as [string, RequestInit]
+      expect(lookupUrl).toBe(
+        'http://localhost:8080/admin/realms/smartsense-marketplace/users?' +
+          'email=yash.lakhani%2Binvitee%40smartsensesolutions.com&exact=true',
+      )
+    })
+
+    it('throws when a 409 lookup returns no matching user', async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ access_token: 'token-1' }))
+        .mockResolvedValueOnce(jsonResponse({ error: 'conflict' }, { status: 409 }))
+        .mockResolvedValueOnce(jsonResponse([]))
 
       await expect(
         service.createUser({

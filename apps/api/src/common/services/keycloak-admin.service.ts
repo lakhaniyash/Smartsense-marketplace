@@ -25,6 +25,17 @@ export interface CreateKeycloakUserInput {
 export class KeycloakAdminService {
   constructor(private readonly configService: ConfigService) {}
 
+  /**
+   * Idempotent on `email` (SM-337): Keycloak answers a duplicate-username/
+   * email create with `409 Conflict`, and we treat that as success by
+   * looking the existing identity up and returning its id — so a retry of
+   * the invite flow after a partial failure (Keycloak user created, but the
+   * local DB transaction then rolled back) re-attaches to the same Keycloak
+   * user instead of erroring or double-provisioning. This is the invite's
+   * equivalent of Billing's idempotency-key replay (docs/api-conventions.md
+   * § Idempotency); `email` is the natural key since it is `@unique` on both
+   * the Keycloak user and the local `User` row.
+   */
   async createUser(input: CreateKeycloakUserInput): Promise<string> {
     const keycloak = this.configService.getOrThrow<AppConfig['keycloak']>('keycloak')
     const token = await this.getAccessToken(keycloak)
@@ -46,6 +57,10 @@ export class KeycloakAdminService {
       }),
     })
 
+    if (response.status === 409) {
+      return this.findUserIdByEmail(keycloak, token, input.email)
+    }
+
     if (!response.ok) {
       throw new InternalServerErrorException(
         `Failed to create the Keycloak user (${response.status})`,
@@ -60,6 +75,39 @@ export class KeycloakAdminService {
       throw new InternalServerErrorException("Keycloak did not return the created user's id")
     }
     return keycloakSubjectId
+  }
+
+  /**
+   * Resolves an existing Keycloak user's id from their email — only reached
+   * on the 409 idempotency path above, where the create told us a user with
+   * this email already exists. `exact=true` avoids Keycloak's default
+   * substring matching so we can't attach to the wrong identity.
+   */
+  private async findUserIdByEmail(
+    keycloak: AppConfig['keycloak'],
+    token: string,
+    email: string,
+  ): Promise<string> {
+    const query = new URLSearchParams({ email, exact: 'true' })
+    const response = await fetch(
+      `${keycloak.url}/admin/realms/${keycloak.realm}/users?${query.toString()}`,
+      { headers: { authorization: `Bearer ${token}` } },
+    )
+
+    if (!response.ok) {
+      throw new InternalServerErrorException(
+        `Failed to look up the existing Keycloak user (${response.status})`,
+      )
+    }
+
+    const users = (await response.json()) as Array<{ id: string }>
+    const existingId = users[0]?.id
+    if (existingId === undefined || existingId === '') {
+      throw new InternalServerErrorException(
+        'Keycloak reported a conflicting user but returned none on lookup',
+      )
+    }
+    return existingId
   }
 
   /**

@@ -8,6 +8,7 @@ import { Prisma, UserOwnerType, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { UserSortField } from './dto/user-sort.enum'
+import { UserInvitedEvent } from './events/user-invited.event'
 import { UserReactivatedEvent } from './events/user-reactivated.event'
 import { UserSuspendedEvent } from './events/user-suspended.event'
 import { UsersService } from './users.service'
@@ -85,7 +86,15 @@ function roleWithPermissionsFixture(overrides: Record<string, unknown> = {}) {
 describe('UsersService', () => {
   let service: UsersService
   let prisma: {
-    user: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock }
+    user: {
+      findMany: jest.Mock
+      findFirst: jest.Mock
+      findUnique: jest.Mock
+      create: jest.Mock
+      update: jest.Mock
+    }
+    partner: { findFirst: jest.Mock }
+    customer: { findFirst: jest.Mock }
     role: {
       findMany: jest.Mock
       findFirst: jest.Mock
@@ -107,10 +116,20 @@ describe('UsersService', () => {
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
   let eventEmitter: { emit: jest.Mock }
+  let keycloakAdminService: { createUser: jest.Mock; sendExecuteActionsEmail: jest.Mock }
+  let logger: { error: jest.Mock }
 
   beforeEach(() => {
     prisma = {
-      user: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+      user: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      partner: { findFirst: jest.fn() },
+      customer: { findFirst: jest.fn() },
       role: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -133,7 +152,15 @@ describe('UsersService', () => {
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn(), findForEntity: jest.fn() }
     eventEmitter = { emit: jest.fn() }
-    service = new UsersService(prisma as never, auditLogService as never, eventEmitter as never)
+    keycloakAdminService = { createUser: jest.fn(), sendExecuteActionsEmail: jest.fn() }
+    logger = { error: jest.fn() }
+    service = new UsersService(
+      prisma as never,
+      auditLogService as never,
+      eventEmitter as never,
+      keycloakAdminService as never,
+      logger as never,
+    )
   })
 
   describe('findUsers', () => {
@@ -471,6 +498,151 @@ describe('UsersService', () => {
         prisma,
         expect.objectContaining({ action: 'ROLE_ARCHIVED', entityId: 'role-custom-1' }),
       )
+    })
+  })
+
+  describe('inviteUser', () => {
+    const baseInvite = {
+      email: 'yash.lakhani+invitee@smartsensesolutions.com',
+      fullName: 'Riley Morgan',
+      ownerType: UserOwnerType.NONE,
+      roleIds: ['role-custom-1'],
+    }
+
+    function stubHappyPath(): void {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-custom-1', name: 'Support Agent' }])
+      prisma.user.findUnique.mockResolvedValueOnce(null)
+      keycloakAdminService.createUser.mockResolvedValueOnce('kc-new-1')
+      prisma.user.create.mockResolvedValueOnce({ id: 'user-new-1' })
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture({ id: 'user-new-1' }))
+      keycloakAdminService.sendExecuteActionsEmail.mockResolvedValueOnce(undefined)
+    }
+
+    it('rejects a NONE-owner user carrying a partnerId, before any external call', async () => {
+      await expect(
+        service.inviteUser(user(), { ...baseInvite, partnerId: 'partner-1' }),
+      ).rejects.toThrow(BadRequestException)
+      expect(keycloakAdminService.createUser).not.toHaveBeenCalled()
+    })
+
+    it('rejects a PARTNER-owner user with no partnerId', async () => {
+      await expect(
+        service.inviteUser(user(), { ...baseInvite, ownerType: UserOwnerType.PARTNER }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects when the referenced partner does not exist', async () => {
+      prisma.partner.findFirst.mockResolvedValueOnce(null)
+
+      await expect(
+        service.inviteUser(user(), {
+          ...baseInvite,
+          ownerType: UserOwnerType.PARTNER,
+          partnerId: 'partner-1',
+        }),
+      ).rejects.toThrow(BadRequestException)
+      expect(keycloakAdminService.createUser).not.toHaveBeenCalled()
+    })
+
+    it('rejects an unknown or archived role id', async () => {
+      prisma.partner.findFirst.mockResolvedValueOnce({ id: 'partner-1' })
+      prisma.role.findMany.mockResolvedValueOnce([])
+
+      await expect(
+        service.inviteUser(user(), {
+          ...baseInvite,
+          ownerType: UserOwnerType.PARTNER,
+          partnerId: 'partner-1',
+        }),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects granting the Admin role when the caller is not an Admin, before provisioning', async () => {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-admin', name: 'Admin' }])
+
+      await expect(
+        service.inviteUser(user({ roles: ['Partner'] }), {
+          ...baseInvite,
+          roleIds: ['role-admin'],
+        }),
+      ).rejects.toThrow(ForbiddenException)
+      expect(keycloakAdminService.createUser).not.toHaveBeenCalled()
+    })
+
+    it('rejects a re-invite for an email that already has a local user, before Keycloak', async () => {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-custom-1', name: 'Support Agent' }])
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'existing-user' })
+
+      await expect(service.inviteUser(user(), baseInvite)).rejects.toThrow(ConflictException)
+      expect(keycloakAdminService.createUser).not.toHaveBeenCalled()
+    })
+
+    it('provisions Keycloak, creates an INVITED user with roles, audits, notifies, and mails', async () => {
+      stubHappyPath()
+
+      const result = await service.inviteUser(user(), baseInvite)
+
+      expect(keycloakAdminService.createUser).toHaveBeenCalledWith({
+        email: baseInvite.email,
+        firstName: 'Riley',
+        lastName: 'Morgan',
+        requiredActions: ['UPDATE_PASSWORD', 'VERIFY_EMAIL'],
+      })
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            keycloakSubjectId: 'kc-new-1',
+            email: baseInvite.email,
+            status: UserStatus.INVITED,
+            ownerType: UserOwnerType.NONE,
+            partnerId: null,
+            customerId: null,
+            userRoles: { create: [{ roleId: 'role-custom-1' }] },
+          }) as unknown,
+        }),
+      )
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_INVITED', entityId: 'user-new-1' }),
+      )
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        UserInvitedEvent.EVENT_NAME,
+        expect.objectContaining({ userId: 'user-new-1' }),
+      )
+      expect(keycloakAdminService.sendExecuteActionsEmail).toHaveBeenCalledWith('kc-new-1', [
+        'UPDATE_PASSWORD',
+        'VERIFY_EMAIL',
+      ])
+      expect(result.id).toBe('user-new-1')
+    })
+
+    it('logs for manual reconciliation and rethrows when the DB transaction fails after Keycloak', async () => {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-custom-1', name: 'Support Agent' }])
+      prisma.user.findUnique.mockResolvedValueOnce(null)
+      keycloakAdminService.createUser.mockResolvedValueOnce('kc-orphan-1')
+      prisma.user.create.mockRejectedValueOnce(new Error('db down'))
+
+      await expect(service.inviteUser(user(), baseInvite)).rejects.toThrow('db down')
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('kc-orphan-1'),
+        expect.anything(),
+        'UsersService',
+      )
+      expect(keycloakAdminService.sendExecuteActionsEmail).not.toHaveBeenCalled()
+    })
+
+    it('does not fail the invite when the invite email fails to send (logs instead)', async () => {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-custom-1', name: 'Support Agent' }])
+      prisma.user.findUnique.mockResolvedValueOnce(null)
+      keycloakAdminService.createUser.mockResolvedValueOnce('kc-new-1')
+      prisma.user.create.mockResolvedValueOnce({ id: 'user-new-1' })
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture({ id: 'user-new-1' }))
+      keycloakAdminService.sendExecuteActionsEmail.mockRejectedValueOnce(new Error('smtp down'))
+
+      const result = await service.inviteUser(user(), baseInvite)
+
+      expect(result.id).toBe('user-new-1')
+      expect(logger.error).toHaveBeenCalled()
     })
   })
 

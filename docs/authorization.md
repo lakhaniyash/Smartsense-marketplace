@@ -219,6 +219,13 @@ platform's last remaining **active** Admin (distinct from guardrail 2's check �
 cannot log in at all, the same practical effect as having no Admin Role). Guardrail 3 (Admin-grant
 restriction) doesn't apply here — suspending/reactivating never changes which Role a User holds.
 
+**Applied to invites in SM-337.** `inviteUser` (which provisions a new Keycloak identity plus a
+local `INVITED` `User` row with its initial roles — see [authentication.md § Invite provisioning](./authentication.md#invite-provisioning))
+reuses guardrail 3: including the Admin Role in a new invitee's `roleIds` requires the caller to
+already hold the Admin Role. Guardrails 1 and 2 are structurally inapplicable — the invitee is
+always a brand-new identity (never the caller, so no self-edit), and an invite only ever _adds_ an
+Admin, never removes the last one.
+
 **Notifications deliberately has no `notifications:*` permission key** (M16) — this is not an
 oversight to fix later. Every `notifications`/`unreadNotificationCount`/`markNotificationRead`/
 `markAllNotificationsRead` operation is authenticated by `GqlAuthGuard` like everything else, but
