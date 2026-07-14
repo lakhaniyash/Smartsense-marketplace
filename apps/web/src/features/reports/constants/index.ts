@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react'
 import { ROUTES } from '@shared/constants'
 import {
   BillingReportsIcon,
+  CustomersIcon,
   InventoryIcon,
   NotificationsIcon,
   OrdersIcon,
@@ -62,6 +63,13 @@ export const REPORTS_NAV_ITEMS: ReportNavItem[] = [
     description: 'Generate and manage per-partner billing statements.',
     href: ROUTES.REPORTS_BILLING_REPORTS,
     icon: BillingReportsIcon,
+  },
+  {
+    key: 'customers',
+    title: 'Customers',
+    description: 'Customer count by status and type.',
+    href: ROUTES.REPORTS_CUSTOMERS,
+    icon: CustomersIcon,
   },
 ]
 

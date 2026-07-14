@@ -15,6 +15,7 @@ export const ROUTES = {
   REPORTS_PRODUCT_PERFORMANCE: '/reports/product-performance',
   REPORTS_NOTIFICATION_ACTIVITY: '/reports/notification-activity',
   REPORTS_BILLING_REPORTS: '/reports/billing-reports',
+  REPORTS_CUSTOMERS: '/reports/customers',
   UNAUTHORIZED: '/unauthorized',
   FORBIDDEN: '/forbidden',
 } as const

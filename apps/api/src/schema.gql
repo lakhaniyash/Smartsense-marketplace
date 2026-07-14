@@ -311,6 +311,34 @@ type CustomerUser {
   status: UserStatus!
 }
 
+"""
+A point-in-time Customer count snapshot for the scoped Partner(s), broken down by status and type. No date range or trend field — SM-330's own ticket flagged "new customers over time"/"top customers by spend" as separate, larger scope than this first slice, which mirrors the Orders/Notification Activity report shape.
+"""
+type CustomersReport {
+  statusBreakdown: [CustomersReportStatusBreakdown!]!
+  totalCustomers: Int!
+  typeBreakdown: [CustomersReportTypeBreakdown!]!
+}
+
+input CustomersReportFilterInput {
+  """
+  Narrows within the caller's own scope; only Admin can broaden beyond it.
+  """
+  partnerId: ID
+}
+
+"""Customer count for a single CustomerStatus."""
+type CustomersReportStatusBreakdown {
+  count: Int!
+  status: CustomerStatus!
+}
+
+"""Customer count for a single CustomerType."""
+type CustomersReportTypeBreakdown {
+  count: Int!
+  type: CustomerType!
+}
+
 """Marketplace-wide summary counts shown on the dashboard overview."""
 type DashboardStats {
   """Total non-deleted Customer count, marketplace-wide."""
@@ -340,7 +368,9 @@ Arbitrary-precision decimal (money, percentages), transported as a string to avo
 scalar Decimal
 
 input ExportReportInput {
-  """Ignored for a BILLING_REPORTS or INVENTORY export. Omitted = all time."""
+  """
+  Ignored for a BILLING_REPORTS, INVENTORY, or CUSTOMERS export. Omitted = all time.
+  """
   dateRange: DateRangeInput
   format: ReportExportFormat!
 
@@ -1006,6 +1036,11 @@ type Query {
   """
   customers(after: String, filter: CustomerFilterInput, first: Int, sort: CustomerSortInput): CustomerConnection!
 
+  """
+  A point-in-time Customer count snapshot for the scoped Partner(s), by status and type.
+  """
+  customersReport(filter: CustomersReportFilterInput): CustomersReport!
+
   """Customers module status"""
   customersStatus: String!
 
@@ -1118,6 +1153,7 @@ enum ReportExportFormat {
 """Which report exportReport should render."""
 enum ReportExportType {
   BILLING_REPORTS
+  CUSTOMERS
   INVENTORY
   NOTIFICATION_ACTIVITY
   ORDERS

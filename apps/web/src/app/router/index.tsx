@@ -74,6 +74,9 @@ const BillingReportsPage = lazy(() =>
 const BillingReportDetailPage = lazy(() =>
   import('@features/reports').then((m) => ({ default: m.BillingReportDetailPage })),
 )
+const CustomersReportPage = lazy(() =>
+  import('@features/reports').then((m) => ({ default: m.CustomersReportPage })),
+)
 
 function withSuspense(element: ReactNode) {
   return <Suspense fallback={<AppLoadingState />}>{element}</Suspense>
@@ -287,6 +290,10 @@ const router = createBrowserRouter([
               {
                 path: ROUTES.REPORTS_BILLING_REPORTS.slice(1),
                 element: withSuspense(<BillingReportsPage />),
+              },
+              {
+                path: ROUTES.REPORTS_CUSTOMERS.slice(1),
+                element: withSuspense(<CustomersReportPage />),
               },
               {
                 path: `${ROUTES.REPORTS_BILLING_REPORTS.slice(1)}/:id`,

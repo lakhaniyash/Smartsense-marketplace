@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common'
 import {
   BillingReportStatus,
+  CustomerStatus,
+  CustomerType,
   NotificationStatus,
   OrderStatus,
   Prisma,
@@ -70,6 +72,7 @@ describe('ReportsService', () => {
     productVariant: { count: jest.Mock; findMany: jest.Mock }
     inventory: { aggregate: jest.Mock; findMany: jest.Mock }
     notification: { count: jest.Mock; groupBy: jest.Mock }
+    customer: { groupBy: jest.Mock }
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock }
@@ -89,6 +92,7 @@ describe('ReportsService', () => {
       productVariant: { count: jest.fn(), findMany: jest.fn() },
       inventory: { aggregate: jest.fn(), findMany: jest.fn() },
       notification: { count: jest.fn(), groupBy: jest.fn() },
+      customer: { groupBy: jest.fn() },
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
@@ -414,6 +418,64 @@ describe('ReportsService', () => {
 
       expect(result.totalRevenue.toString()).toBe('0')
       expect(result.averageOrderValue.toString()).toBe('0')
+    })
+  })
+
+  describe('customersReport — status/type breakdown', () => {
+    it('scopes to the caller-supplied partnerId via the orders relation, not a direct column', async () => {
+      prisma.customer.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+
+      await service.getCustomersReport(user({ partnerId: null }), { partnerId: 'partner-9' })
+
+      expect(prisma.customer.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            deletedAt: null,
+            orders: { some: { partnerId: 'partner-9' } },
+          }) as unknown,
+        }),
+      )
+    })
+
+    it("omits the orders relation filter for Admin viewing all partners' customers", async () => {
+      prisma.customer.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([])
+
+      await service.getCustomersReport(user({ partnerId: null }), undefined)
+
+      const call = prisma.customer.groupBy.mock.calls[0]?.[0] as { where: Record<string, unknown> }
+      expect(call.where).toEqual({ deletedAt: null })
+    })
+
+    it('sums totalCustomers from the status breakdown and maps both breakdowns', async () => {
+      prisma.customer.groupBy
+        .mockResolvedValueOnce([
+          { status: CustomerStatus.ACTIVE, _count: { _all: 7 } },
+          { status: CustomerStatus.SUSPENDED, _count: { _all: 2 } },
+        ])
+        .mockResolvedValueOnce([
+          { type: CustomerType.INDIVIDUAL, _count: { _all: 5 } },
+          { type: CustomerType.ORGANIZATION, _count: { _all: 4 } },
+        ])
+
+      const result = await service.getCustomersReport(user({ partnerId: 'partner-1' }), undefined)
+
+      expect(result.totalCustomers).toBe(9)
+      expect(result.statusBreakdown).toEqual([
+        { status: CustomerStatus.ACTIVE, count: 7 },
+        { status: CustomerStatus.SUSPENDED, count: 2 },
+      ])
+      expect(result.typeBreakdown).toEqual([
+        { type: CustomerType.INDIVIDUAL, count: 5 },
+        { type: CustomerType.ORGANIZATION, count: 4 },
+      ])
+    })
+
+    it('rejects a Partner requesting another Partner via filter.partnerId', async () => {
+      await expect(
+        service.getCustomersReport(user({ partnerId: 'partner-1' }), {
+          partnerId: 'other-partner',
+        }),
+      ).rejects.toThrow(ForbiddenException)
     })
   })
 
