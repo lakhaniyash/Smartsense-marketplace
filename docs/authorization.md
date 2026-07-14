@@ -187,6 +187,31 @@ row. A Partner's billing summary for a shared Customer is further scoped to invo
 `Invoice.partnerId` matches their own — never the Customer's total across every Partner (same
 principle as the Billing row above).
 
+### User Role Assignment Guardrails (Sprint 3, SM-334)
+
+`assignUserRole`/`removeUserRole` are gated by `users:manage` like every other User Management
+mutation, but the seeded catalog's coarse verb isn't enough on its own here — this is the one
+surface that can grant/revoke the very capability that gates itself, so `UsersService` enforces
+three additional guardrails no permission key can express:
+
+1. **No self-edit.** A caller can never assign or remove a Role on their own User row — this must
+   always be done by a different Admin. Enforced by comparing the target `userId` against the
+   caller's own id before any lookup, so a self-edit attempt never even reaches the Role/User
+   existence checks.
+2. **Last-Admin-standing protection.** Removing the Admin Role from a User is rejected if that
+   User is the platform's only remaining Admin (`UserRole` rows for the Admin Role number exactly
+   one). This has no ownership-style exception — it applies regardless of who the caller is.
+3. **Admin-grant restriction.** Granting the Admin Role to a User requires the caller to already
+   hold the Admin Role themselves. `users:manage` is Admin-only in the seeded catalog today, so
+   this is defense-in-depth, not a live restriction yet — it protects against a future non-Admin
+   Role ever being granted `users:manage`, at which point this guard (not the permission key)
+   is what still stops that Role's holders from minting new Admins.
+
+None of these are ownership checks in the [Ownership Rules](#ownership-rules) sense (there is no
+Partner/Customer floor here — `users:manage` is unrestricted for whoever holds it); they are
+business rules specific to this one mutation pair, enforced entirely in `UsersService`, same
+layering as every other service-level rule in this doc.
+
 **Notifications deliberately has no `notifications:*` permission key** (M16) — this is not an
 oversight to fix later. Every `notifications`/`unreadNotificationCount`/`markNotificationRead`/
 `markAllNotificationsRead` operation is authenticated by `GqlAuthGuard` like everything else, but
@@ -356,17 +381,18 @@ Developer checklist for any new operation, page, or field:
 
 ## Anti-Patterns
 
-| Anti-pattern                                                                             | Why it's a problem                                                                                        | Instead                                                                                                                      |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `if (user.roles.includes('Admin'))` scattered through services                           | Role names become load-bearing string literals everywhere; adding a role means auditing every conditional | `@Permissions()` metadata / `PermissionService.can()` with capability keys                                                   |
-| Frontend-only protection (hidden button, guarded route, no backend check)                | The API is directly callable; the SPA's checks are advisory by design                                     | Backend guard + service check always; frontend mirrors for UX                                                                |
-| Permission check without ownership check on Partner-scoped data                          | One Partner's `orders:read` reads every Partner's orders — capability leaks across tenant boundaries      | Compose both, per [Ownership Rules](#ownership-rules)                                                                        |
-| Ownership check by trusting a client-supplied `partnerId` argument                       | The caller chooses their own scope — scoping becomes decorative                                           | Derive scope from `req.user`'s provisioned organization, always                                                              |
-| Returning `FORBIDDEN` for single-record ownership misses                                 | Confirms the record exists — an enumeration oracle over other tenants' IDs                                | `NOT_FOUND` for reads outside the caller's scope                                                                             |
-| Resolving permissions from JWT claims instead of the database                            | Revocations and role edits don't take effect until token expiry — stale grants linger                     | Request-scoped resolution from Postgres ([authentication.md § Permission Strategy](./authentication.md#permission-strategy)) |
-| Caching a user's permission set across requests                                          | Same staleness problem, self-inflicted                                                                    | Resolution is per-request by design; optimize the query before adding a cache                                                |
-| Speculative fine-grained keys (`catalog:create`/`update`/`delete`) with identical grants | Triples the catalog's surface with zero behavioral difference — audit noise                               | Coarse verbs; split a key when a real requirement distinguishes them ([Permission Model](#permission-model))                 |
-| A feature flag standing in for a permission                                              | Flags are global on/off, unowned, and unaudited — none of authorization's properties                      | Flags gate rollout; permissions gate access ([Frontend Authorization](#frontend-authorization))                              |
+| Anti-pattern                                                                                 | Why it's a problem                                                                                        | Instead                                                                                                                                    |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `if (user.roles.includes('Admin'))` scattered through services                               | Role names become load-bearing string literals everywhere; adding a role means auditing every conditional | `@Permissions()` metadata / `PermissionService.can()` with capability keys                                                                 |
+| Frontend-only protection (hidden button, guarded route, no backend check)                    | The API is directly callable; the SPA's checks are advisory by design                                     | Backend guard + service check always; frontend mirrors for UX                                                                              |
+| Permission check without ownership check on Partner-scoped data                              | One Partner's `orders:read` reads every Partner's orders — capability leaks across tenant boundaries      | Compose both, per [Ownership Rules](#ownership-rules)                                                                                      |
+| Ownership check by trusting a client-supplied `partnerId` argument                           | The caller chooses their own scope — scoping becomes decorative                                           | Derive scope from `req.user`'s provisioned organization, always                                                                            |
+| Returning `FORBIDDEN` for single-record ownership misses                                     | Confirms the record exists — an enumeration oracle over other tenants' IDs                                | `NOT_FOUND` for reads outside the caller's scope                                                                                           |
+| Resolving permissions from JWT claims instead of the database                                | Revocations and role edits don't take effect until token expiry — stale grants linger                     | Request-scoped resolution from Postgres ([authentication.md § Permission Strategy](./authentication.md#permission-strategy))               |
+| Caching a user's permission set across requests                                              | Same staleness problem, self-inflicted                                                                    | Resolution is per-request by design; optimize the query before adding a cache                                                              |
+| Speculative fine-grained keys (`catalog:create`/`update`/`delete`) with identical grants     | Triples the catalog's surface with zero behavioral difference — audit noise                               | Coarse verbs; split a key when a real requirement distinguishes them ([Permission Model](#permission-model))                               |
+| A feature flag standing in for a permission                                                  | Flags are global on/off, unowned, and unaudited — none of authorization's properties                      | Flags gate rollout; permissions gate access ([Frontend Authorization](#frontend-authorization))                                            |
+| A user-management mutation trusts a permission key alone, with no self-edit/last-Admin guard | A caller could self-escalate, or the platform could reach zero Admins, locking everyone out               | Service-level guardrails beyond the permission check ([User Role Assignment Guardrails](#user-role-assignment-guardrails-sprint-3-sm-334)) |
 
 ---
 

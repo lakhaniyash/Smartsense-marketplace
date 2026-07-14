@@ -523,6 +523,11 @@ type Mutation {
   archiveRole(id: ID!): Role!
 
   """
+  Grants a Role to a User. A caller can never assign a role to themselves, and granting the Admin role requires the caller to already hold it (docs/authorization.md § User Role Assignment Guardrails).
+  """
+  assignUserRole(roleId: ID!, userId: ID!): User!
+
+  """
   Cancels an Order (caller's own order from DRAFT/CONFIRMED; vendor Partner/Admin only from PROCESSING). Releases any reserved inventory.
   """
   cancelOrder(id: ID!, reason: String): Order!
@@ -582,6 +587,11 @@ type Mutation {
   Records a Payment against an Invoice (v1 has no live payment gateway — "recorded, not processed", per docs/roadmap.md). Idempotent on input.idempotencyKey: a retry with the same key returns the original Payment rather than creating a duplicate.
   """
   recordPayment(input: CreatePaymentInput!): Payment!
+
+  """
+  Removes a Role from a User. A caller can never remove a role from themselves, and the platform's last remaining Admin can never have that role removed (docs/authorization.md § User Role Assignment Guardrails).
+  """
+  removeUserRole(roleId: ID!, userId: ID!): User!
 
   """
   Marks a ProductVariant as its Product's default, unsetting any previous default.
