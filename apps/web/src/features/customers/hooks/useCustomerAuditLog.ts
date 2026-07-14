@@ -6,7 +6,7 @@ import { GetCustomerAuditLogDocument } from '@lib/graphql/__generated__/graphql'
 // open that tab, same reasoning as useOrderableVariants being separate from
 // useOrder.
 export function useCustomerAuditLog(customerId: string | undefined) {
-  const { data, loading, error } = useQuery(GetCustomerAuditLogDocument, {
+  const { data, loading, error, refetch } = useQuery(GetCustomerAuditLogDocument, {
     variables: { customerId: customerId ?? '' },
     skip: customerId === undefined,
   })
@@ -15,5 +15,6 @@ export function useCustomerAuditLog(customerId: string | undefined) {
     entries: data?.customerAuditLog ?? [],
     isLoading: customerId !== undefined && loading,
     error,
+    refetch,
   }
 }
