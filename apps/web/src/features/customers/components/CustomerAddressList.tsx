@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@apollo/client'
 import {
   DeactivateCustomerAddressDocument,
+  GetCustomerAuditLogDocument,
   GetCustomerByIdDocument,
   type Customer,
 } from '@lib/graphql/__generated__/graphql'
@@ -32,7 +33,11 @@ export function CustomerAddressList({ customerId, addresses, canEdit }: Customer
   const [deactivateCustomerAddress, { loading: isDeactivating }] = useMutation(
     DeactivateCustomerAddressDocument,
     {
-      refetchQueries: [GetCustomerByIdDocument],
+      // GetCustomerAuditLogDocument too — same reason CustomerDetailPage's
+      // archiveCustomer/activateCustomer mutations refetch it (SM-329): the
+      // Activity tab's own query otherwise keeps showing stale data, never
+      // picking up the ADDRESS_DEACTIVATED entry this action just wrote.
+      refetchQueries: [GetCustomerByIdDocument, GetCustomerAuditLogDocument],
       onCompleted: () => {
         toast({ title: 'Address deactivated', variant: 'success' })
         setDeactivatingAddress(undefined)
