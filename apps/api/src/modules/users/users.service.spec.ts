@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common'
 import { Prisma, UserOwnerType, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
@@ -82,12 +87,14 @@ describe('UsersService', () => {
     role: {
       findMany: jest.Mock
       findFirst: jest.Mock
+      findUnique: jest.Mock
       findUniqueOrThrow: jest.Mock
       create: jest.Mock
       update: jest.Mock
     }
     rolePermission: { deleteMany: jest.Mock; createMany: jest.Mock }
     permission: { findMany: jest.Mock }
+    userRole: { findUnique: jest.Mock; count: jest.Mock; create: jest.Mock; delete: jest.Mock }
     $transaction: jest.Mock
   }
   let auditLogService: { record: jest.Mock; findForEntity: jest.Mock }
@@ -98,12 +105,19 @@ describe('UsersService', () => {
       role: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
       rolePermission: { deleteMany: jest.fn(), createMany: jest.fn() },
       permission: { findMany: jest.fn() },
+      userRole: {
+        findUnique: jest.fn(),
+        count: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
       $transaction: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
@@ -446,6 +460,184 @@ describe('UsersService', () => {
         prisma,
         expect.objectContaining({ action: 'ROLE_ARCHIVED', entityId: 'role-custom-1' }),
       )
+    })
+  })
+
+  describe('assignUserRole — guardrails', () => {
+    it('rejects a caller assigning a role to themselves', async () => {
+      await expect(
+        service.assignUserRole(user({ id: 'admin-1' }), 'admin-1', 'role-custom-1'),
+      ).rejects.toThrow(ForbiddenException)
+      expect(prisma.user.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('throws NOT_FOUND when the target user does not exist', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.assignUserRole(user(), 'user-1', 'role-custom-1')).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('throws NOT_FOUND when the role does not exist or is archived', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.assignUserRole(user(), 'user-1', 'role-custom-1')).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('rejects granting the Admin role when the caller is not themselves an Admin', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-admin',
+        name: 'Admin',
+        isSystemRole: true,
+      })
+
+      await expect(
+        service.assignUserRole(
+          user({ id: 'partner-user-1', roles: ['Partner'] }),
+          'user-1',
+          'role-admin',
+        ),
+      ).rejects.toThrow(ForbiddenException)
+      expect(prisma.userRole.create).not.toHaveBeenCalled()
+    })
+
+    it('lets an Admin caller grant the Admin role to someone else', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-admin',
+        name: 'Admin',
+        isSystemRole: true,
+      })
+      prisma.userRole.findUnique.mockResolvedValueOnce(null)
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.assignUserRole(
+        user({ id: 'admin-1', roles: ['Admin'] }),
+        'user-1',
+        'role-admin',
+      )
+
+      expect(prisma.userRole.create).toHaveBeenCalledWith({
+        data: { userId: 'user-1', roleId: 'role-admin' },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_ROLE_ASSIGNED', entityId: 'user-1' }),
+      )
+    })
+
+    it('rejects re-granting a role the user already has', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-custom-1',
+        name: 'Support Agent',
+        isSystemRole: false,
+      })
+      prisma.userRole.findUnique.mockResolvedValueOnce({
+        userId: 'user-1',
+        roleId: 'role-custom-1',
+      })
+
+      await expect(service.assignUserRole(user(), 'user-1', 'role-custom-1')).rejects.toThrow(
+        BadRequestException,
+      )
+      expect(prisma.userRole.create).not.toHaveBeenCalled()
+    })
+
+    it('does not require Admin-holding to grant a non-Admin role', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findFirst.mockResolvedValueOnce({
+        id: 'role-custom-1',
+        name: 'Support Agent',
+        isSystemRole: false,
+      })
+      prisma.userRole.findUnique.mockResolvedValueOnce(null)
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await expect(
+        service.assignUserRole(
+          user({ id: 'partner-user-1', roles: ['Partner'] }),
+          'user-1',
+          'role-custom-1',
+        ),
+      ).resolves.toBeDefined()
+    })
+  })
+
+  describe('removeUserRole — guardrails', () => {
+    it('rejects a caller removing a role from themselves', async () => {
+      await expect(
+        service.removeUserRole(user({ id: 'admin-1' }), 'admin-1', 'role-admin'),
+      ).rejects.toThrow(ForbiddenException)
+      expect(prisma.user.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('throws NOT_FOUND when the target user does not exist', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce(null)
+
+      await expect(service.removeUserRole(user(), 'user-1', 'role-admin')).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('throws NOT_FOUND when the user does not currently hold this role', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findUnique.mockResolvedValueOnce({ id: 'role-custom-1', name: 'Support Agent' })
+      prisma.userRole.findUnique.mockResolvedValueOnce(null)
+
+      await expect(service.removeUserRole(user(), 'user-1', 'role-custom-1')).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it("rejects removing the Admin role from the platform's last remaining Admin", async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findUnique.mockResolvedValueOnce({ id: 'role-admin', name: 'Admin' })
+      prisma.userRole.findUnique.mockResolvedValueOnce({ userId: 'user-1', roleId: 'role-admin' })
+      prisma.userRole.count.mockResolvedValueOnce(1)
+
+      await expect(service.removeUserRole(user(), 'user-1', 'role-admin')).rejects.toThrow(
+        BadRequestException,
+      )
+      expect(prisma.userRole.delete).not.toHaveBeenCalled()
+    })
+
+    it('lets the Admin role be removed from a User when other Admins remain', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findUnique.mockResolvedValueOnce({ id: 'role-admin', name: 'Admin' })
+      prisma.userRole.findUnique.mockResolvedValueOnce({ userId: 'user-1', roleId: 'role-admin' })
+      prisma.userRole.count.mockResolvedValueOnce(2)
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.removeUserRole(user(), 'user-1', 'role-admin')
+
+      expect(prisma.userRole.delete).toHaveBeenCalledWith({
+        where: { userId_roleId: { userId: 'user-1', roleId: 'role-admin' } },
+      })
+      expect(auditLogService.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ action: 'USER_ROLE_REMOVED', entityId: 'user-1' }),
+      )
+    })
+
+    it('does not check Admin-holder count when removing a non-Admin role', async () => {
+      prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
+      prisma.role.findUnique.mockResolvedValueOnce({ id: 'role-custom-1', name: 'Support Agent' })
+      prisma.userRole.findUnique.mockResolvedValueOnce({
+        userId: 'user-1',
+        roleId: 'role-custom-1',
+      })
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
+
+      await service.removeUserRole(user(), 'user-1', 'role-custom-1')
+
+      expect(prisma.userRole.count).not.toHaveBeenCalled()
+      expect(prisma.userRole.delete).toHaveBeenCalled()
     })
   })
 })

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
@@ -236,6 +237,119 @@ export class UsersService {
     })
 
     return this.getRoleWithPermissions(id)
+  }
+
+  /**
+   * Grants a Role to a User. Guarded (docs/authorization.md § User Role
+   * Assignment Guardrails):
+   *  1. No self-edit — a caller can never change their own Role grants.
+   *  2. Granting the Admin Role requires the caller to already hold it
+   *     (defense-in-depth: `users:manage` is Admin-only today, but this
+   *     protects against a future non-Admin role ever being granted it).
+   * Idempotent-rejecting, not idempotent-succeeding: re-granting an
+   * already-held Role is a caller error, same as CustomersService's
+   * "already suspended" guard.
+   */
+  async assignUserRole(
+    user: AuthenticatedUser,
+    userId: string,
+    roleId: string,
+  ): Promise<UserOutput> {
+    this.assertNotSelf(user, userId, 'assign a role to')
+    await this.findActiveUserOrThrow(userId)
+    const role = await this.findActiveRoleOrThrow(roleId)
+
+    if (role.name === 'Admin' && !user.roles.includes('Admin')) {
+      throw new ForbiddenException('Only an existing Admin can grant the Admin role')
+    }
+
+    const alreadyAssigned = await this.prisma.userRole.findUnique({
+      where: { userId_roleId: { userId, roleId } },
+    })
+    if (alreadyAssigned !== null) {
+      throw new BadRequestException('User already has this role')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userRole.create({ data: { userId, roleId } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'USER_ROLE_ASSIGNED',
+        entityType: 'User',
+        entityId: userId,
+        metadata: { roleId, roleName: role.name },
+      })
+    })
+
+    return this.findUserById(user, userId)
+  }
+
+  /**
+   * Removes a Role from a User. Guarded (docs/authorization.md § User Role
+   * Assignment Guardrails):
+   *  1. No self-edit — a caller can never change their own Role grants.
+   *  2. Removing the Admin Role is rejected if this User is the platform's
+   *     last remaining Admin — the platform must always retain at least one.
+   * Unlike assignUserRole's role lookup, this does NOT require the Role to
+   * still be active: a User may hold a since-archived Role (archiving never
+   * strips existing grants, docs/domain-model.md § Role), and support must
+   * still be able to remove that stale grant.
+   */
+  async removeUserRole(
+    user: AuthenticatedUser,
+    userId: string,
+    roleId: string,
+  ): Promise<UserOutput> {
+    this.assertNotSelf(user, userId, 'remove a role from')
+    await this.findActiveUserOrThrow(userId)
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } })
+    if (role === null) {
+      throw new NotFoundException('Role not found')
+    }
+
+    const assignment = await this.prisma.userRole.findUnique({
+      where: { userId_roleId: { userId, roleId } },
+    })
+    if (assignment === null) {
+      throw new NotFoundException('User does not have this role')
+    }
+
+    if (role.name === 'Admin') {
+      const adminHolderCount = await this.prisma.userRole.count({ where: { roleId } })
+      if (adminHolderCount <= 1) {
+        throw new BadRequestException("Cannot remove the platform's last remaining Admin")
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userRole.delete({ where: { userId_roleId: { userId, roleId } } })
+      await this.auditLogService.record(tx, {
+        actorUserId: user.id,
+        action: 'USER_ROLE_REMOVED',
+        entityType: 'User',
+        entityId: userId,
+        metadata: { roleId, roleName: role.name },
+      })
+    })
+
+    return this.findUserById(user, userId)
+  }
+
+  private assertNotSelf(user: AuthenticatedUser, targetUserId: string, action: string): void {
+    if (targetUserId === user.id) {
+      throw new ForbiddenException(`Cannot ${action} yourself — ask another Admin`)
+    }
+  }
+
+  private async findActiveUserOrThrow(id: string): Promise<{ id: string }> {
+    const row = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    })
+    if (row === null) {
+      throw new NotFoundException('User not found')
+    }
+    return row
   }
 
   /** Resolves seeded Permission keys to rows, rejecting any that don't exist. */

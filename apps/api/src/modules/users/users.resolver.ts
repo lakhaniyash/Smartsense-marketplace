@@ -124,4 +124,36 @@ export class UsersResolver {
   ): Promise<RoleOutput> {
     return this.usersService.archiveRole(user, id)
   }
+
+  @Permissions('users:manage')
+  @Mutation(() => UserOutput, {
+    name: 'assignUserRole',
+    description:
+      'Grants a Role to a User. A caller can never assign a role to themselves, and granting ' +
+      'the Admin role requires the caller to already hold it (docs/authorization.md § User ' +
+      'Role Assignment Guardrails).',
+  })
+  assignUserRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('roleId', { type: () => ID }) roleId: string,
+  ): Promise<UserOutput> {
+    return this.usersService.assignUserRole(user, userId, roleId)
+  }
+
+  @Permissions('users:manage')
+  @Mutation(() => UserOutput, {
+    name: 'removeUserRole',
+    description:
+      'Removes a Role from a User. A caller can never remove a role from themselves, and the ' +
+      "platform's last remaining Admin can never have that role removed " +
+      '(docs/authorization.md § User Role Assignment Guardrails).',
+  })
+  removeUserRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('roleId', { type: () => ID }) roleId: string,
+  ): Promise<UserOutput> {
+    return this.usersService.removeUserRole(user, userId, roleId)
+  }
 }
