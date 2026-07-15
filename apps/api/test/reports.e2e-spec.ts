@@ -635,6 +635,15 @@ describe('Reports (e2e)', () => {
         }
       }
     `
+    const CUSTOMERS_REPORT_QUERY = `
+      query CustomersReport($filter: CustomersReportFilterInput) {
+        customersReport(filter: $filter) {
+          totalCustomers
+          statusBreakdown { status count }
+          typeBreakdown { type count }
+        }
+      }
+    `
     const PRODUCT_PERFORMANCE_QUERY = `
       query ProductPerformanceReport($filter: ProductPerformanceFilterInput) {
         productPerformanceReport(filter: $filter) {
@@ -693,6 +702,27 @@ describe('Reports (e2e)', () => {
         .expect(200)
       expect(res.body.errors).toBeUndefined()
       expect(res.body.data.inventoryReport.totalVariants).toBeGreaterThanOrEqual(1)
+    })
+
+    it('customersReport scopes to the own Partner via the orders relation, not a direct column', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownPartnerToken()}`)
+        .send({ query: CUSTOMERS_REPORT_QUERY, variables: {} })
+        .expect(200)
+      expect(res.body.errors).toBeUndefined()
+      // The ownCustomer (INDIVIDUAL/ACTIVE) placed the COMPLETED order to this
+      // Partner in the lifecycle block above; Customer has no partnerId column,
+      // so the Partner sees it only through orders.some.partnerId.
+      expect(res.body.data.customersReport.totalCustomers).toBeGreaterThanOrEqual(1)
+      expect(res.body.data.customersReport.statusBreakdown).toContainEqual({
+        status: 'ACTIVE',
+        count: expect.any(Number) as unknown as number,
+      })
+      expect(res.body.data.customersReport.typeBreakdown).toContainEqual({
+        type: 'INDIVIDUAL',
+        count: expect.any(Number) as unknown as number,
+      })
     })
 
     it('productPerformanceReport ranks the sold variant with an offset-encoded cursor', async () => {
@@ -784,6 +814,24 @@ describe('Reports (e2e)', () => {
         .expect(200)
       expect(res.body.errors).toBeUndefined()
       expect(res.body.data.exportReport as string).toContain('REPORTS-E2E-OWN-SKU')
+    })
+
+    it('renders a CSV for CUSTOMERS flattening status and type breakdowns', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/graphql')
+        .set('Authorization', `Bearer ${ownPartnerToken()}`)
+        .send({
+          query: EXPORT_REPORT_QUERY,
+          variables: { input: { reportType: 'CUSTOMERS', format: 'CSV' } },
+        })
+        .expect(200)
+      expect(res.body.errors).toBeUndefined()
+      const csv = res.body.data.exportReport as string
+      // Both breakdowns are flattened into one dimension/value/count sheet
+      // (ReportsService.exportCustomersReportCsv).
+      expect(csv).toContain('dimension,value,count')
+      expect(csv).toContain('status,ACTIVE')
+      expect(csv).toContain('type,INDIVIDUAL')
     })
 
     it('throws BAD_USER_INPUT for the EXCEL foundation-only placeholder', async () => {
