@@ -27,6 +27,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Static SPA served by nginx (SM-346). Build context is the monorepo root
+  # (npm workspaces); VITE_* args below are the browser-facing origins for the
+  # local full stack — a production build passes its own origins (one image
+  # per environment, see apps/web/Dockerfile). Reaching Keycloak login through
+  # this origin also requires the realm's client redirect URIs to include it.
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_GRAPHQL_URL: http://localhost:3000/graphql
+        VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: smartsense-marketplace
+        VITE_KEYCLOAK_CLIENT_ID: smartsense-web
+        VITE_AUTH_POST_LOGOUT_REDIRECT_URI: http://localhost:8081/login
+    ports:
+      - '8081:80'
+    depends_on:
+      - api
+    restart: unless-stopped
+
   db:
     image: postgres:17-alpine
     environment:

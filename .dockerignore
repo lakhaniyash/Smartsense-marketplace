@@ -1,0 +1,13 @@
+# Keep the (monorepo-root) Docker build context small — deps and build
+# artifacts are produced inside the image, never copied from the host.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+.git
+**/.env
+**/.env.*
+!**/.env.example
+*.log
