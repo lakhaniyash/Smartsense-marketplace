@@ -1,0 +1,14 @@
+query GetRoles {
+  roles {
+    id
+    name
+    description
+    isSystemRole
+    permissions {
+      id
+      key
+      domain
+      description
+    }
+  }
+}

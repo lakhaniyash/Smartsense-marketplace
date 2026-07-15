@@ -1,2 +1,2 @@
 export type { UserFilters } from './types'
-export { UsersPage } from './pages'
+export { UsersPage, UserDetailPage, InviteUserPage, RolesPage } from './pages'

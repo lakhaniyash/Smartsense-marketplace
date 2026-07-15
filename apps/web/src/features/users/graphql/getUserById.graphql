@@ -1,0 +1,25 @@
+query GetUserById($id: ID!) {
+  userById(id: $id) {
+    id
+    email
+    fullName
+    status
+    ownerType
+    partnerId
+    customerId
+    roles {
+      id
+      name
+      description
+      isSystemRole
+      permissions {
+        id
+        key
+        domain
+        description
+      }
+    }
+    createdAt
+    updatedAt
+  }
+}

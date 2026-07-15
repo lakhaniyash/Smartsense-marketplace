@@ -1,0 +1,5 @@
+mutation ArchiveRole($id: ID!) {
+  archiveRole(id: $id) {
+    id
+  }
+}
