@@ -134,6 +134,23 @@ The API reads `process.env` in exactly one place — `apps/api/src/config/config
 
 The complete variable tables (name, meaning, per-environment values) for auth-related configuration live in [authentication.md § Required Environment Variables](./authentication.md#required-environment-variables) — this document does not duplicate them.
 
+### Production Values Checklist (SM-148)
+
+The full variable list lives in the table referenced above; this is the production-specific overlay — the values that must differ from `apps/api/.env.example`'s dev defaults, verified before a deploy. The API's Joi schema (`validation.schema.ts`) fails startup fast on a missing/invalid required key, so an omission is caught at container start, not first request.
+
+| Variable                       | Production value                                             | Why it differs from dev                                                                             |
+| ------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                     | `production`                                                 | Drives fail-closed defaults (introspection off, etc.).                                              |
+| `GRAPHQL_INTROSPECTION`        | `false` (or unset — defaults off when `NODE_ENV=production`) | Never expose the full schema publicly ([graphql.md § 12](./graphql.md#12-security-considerations)). |
+| `GRAPHQL_PLAYGROUND`           | `false`                                                      | No interactive endpoint in production.                                                              |
+| `GRAPHQL_DEBUG`                | `false`                                                      | No stacktraces in error responses (SM-243).                                                         |
+| `CORS_ALLOWED_ORIGINS`         | the web app origin(s), e.g. `https://app.smartsense.example` | Empty (dev) is permissive; production restricts to known callers (SM-269).                          |
+| `DATABASE_URL`                 | real managed-Postgres credentials, from the secret store     | Never the `postgres`/`password` dev placeholder.                                                    |
+| `KEYCLOAK_API_CLIENT_SECRET`   | real confidential-client secret, from the secret store       | Never `smartsense-api-dev-secret-change-me`.                                                        |
+| `KEYCLOAK_ADMIN_CLIENT_SECRET` | real service-account secret, from the secret store           | Never the `-dev-secret-change-me` placeholder (invite / password-reset stay disabled without it).   |
+
+**Rule:** no value checked into a Compose `environment:` block or `.env.example` (all deliberately dev-only placeholders per [`.env` Strategy](#env-strategy)) may appear in a deployed environment — secrets come from the platform's secret store at runtime ([Secrets](#secrets)).
+
 ---
 
 ## Build Process

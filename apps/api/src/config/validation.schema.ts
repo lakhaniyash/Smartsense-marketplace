@@ -13,6 +13,9 @@ export const validationSchema = Joi.object({
     otherwise: Joi.boolean().default(true),
   }),
   GRAPHQL_PLAYGROUND: Joi.boolean().default(false),
+  // Comma-separated browser origin allowlist (SM-269). Optional — empty means
+  // permissive CORS (dev); production sets it to the web origin(s).
+  CORS_ALLOWED_ORIGINS: Joi.string().allow('').default(''),
   KEYCLOAK_URL: Joi.string().uri().required(),
   KEYCLOAK_REALM: Joi.string().required(),
   KEYCLOAK_API_CLIENT_ID: Joi.string().required(),
