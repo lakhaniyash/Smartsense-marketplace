@@ -266,6 +266,15 @@ Prisma has no concept of a true nested transaction (no savepoints across separat
 
 Automatic and implicit: if the callback passed to `$transaction` throws (including a re-thrown, translated Prisma error per [§ Error Handling Strategy](#error-handling-strategy)), Prisma rolls back every write made inside it and propagates the error — there is no manual `ROLLBACK` call to write or forget. This is precisely why business-rule checks that should abort the whole write sequence must throw from inside the transaction callback, not be checked only before it starts (a check performed before the transaction cannot see writes made earlier in the same transaction).
 
+### Mutations that span an external service (Keycloak Admin API)
+
+Sprint 3's `inviteUser` and `sendPasswordResetEmail` (Users module) are the first mutations that touch a system other than Postgres — Keycloak's Admin REST API, via `KeycloakAdminService`. The convention they establish, for any future cross-system mutation:
+
+- **Do the external call _before_ opening the Prisma transaction**, never inside it — an external HTTP call inside `$transaction` holds a DB connection open for a slow, unrelated network round-trip (the [gotcha table](#transactions) already flags this). `inviteUser` provisions the Keycloak identity first, then opens one `$transaction` for the local `User` + `UserRole` + `AuditLog` rows.
+- **Make the external step idempotent on a natural key** so a retry after a partial failure doesn't double-provision — `KeycloakAdminService.createUser` treats a `409` as success by resolving the existing identity by email (the invite's equivalent of the [idempotency-key pattern](#idempotency) Billing uses).
+- **On a mismatch that no transaction can undo, fail loud, not silent.** If the DB transaction fails _after_ the external call already succeeded, there is no distributed-transaction/saga machinery in this codebase to roll the external side back — log the orphaned external id at `error` level for manual reconciliation and rethrow, rather than swallowing the inconsistency. Introducing saga infrastructure for a single flow is explicitly out of scope; the loud log is the accepted trade-off.
+- **No secret ever transits the app.** These mutations delegate to Keycloak's own hosted `execute-actions-email` flow; a password value never enters this application's GraphQL layer, service, or logs (`docs/security.md`). See [authentication.md § Invite provisioning](./authentication.md#invite-provisioning) and [§ Admin-triggered password reset](./authentication.md#admin-triggered-password-reset) for the full flows.
+
 ---
 
 ## Pagination Strategy
@@ -394,7 +403,7 @@ Per [coding-standards.md § 11](./coding-standards.md#11-logging-standards): JWT
 
 ## Idempotency
 
-Not currently required by any implemented mutation (the schema exposes no real mutations yet, per [graphql.md](./graphql.md#scope-of-this-document)'s stated assumption). Idempotency becomes a requirement the moment a mutation has a real-world cost if executed twice by accident — the canonical case in this domain is **Payment creation** ([domain-model.md § Payment](./domain-model.md#payment)): a network retry of `createPayment` must never charge twice.
+Idempotency becomes a requirement the moment a mutation has a real-world cost if executed twice by accident. The canonical case is **Payment creation** ([domain-model.md § Payment](./domain-model.md#payment)): a network retry of `createPayment` must never charge twice — now implemented (`BillingService.recordPayment` keys on a caller-supplied `idempotencyKey`). Sprint 3's `inviteUser` applies the same principle to its external Keycloak step (see [§ Mutations that span an external service](#mutations-that-span-an-external-service-keycloak-admin-api)), keyed on email rather than a client-supplied key.
 
 **Pattern to apply when that mutation is built:** the client supplies a caller-generated idempotency key as part of the mutation's Input (`CreatePaymentInput.idempotencyKey: String!`); the Service checks for an existing `Payment` row with that key before creating a new one, returning the original result if found rather than creating a duplicate. This requires a unique constraint on the idempotency key column — a schema addition, not just application logic, so a race between two near-simultaneous retries can't both pass the "does it exist" check before either has committed.
 
