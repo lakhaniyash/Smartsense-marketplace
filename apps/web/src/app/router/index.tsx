@@ -42,6 +42,13 @@ const CustomerFormPage = lazy(() =>
   import('@features/customers').then((m) => ({ default: m.CustomerFormPage })),
 )
 const UsersPage = lazy(() => import('@features/users').then((m) => ({ default: m.UsersPage })))
+const UserDetailPage = lazy(() =>
+  import('@features/users').then((m) => ({ default: m.UserDetailPage })),
+)
+const InviteUserPage = lazy(() =>
+  import('@features/users').then((m) => ({ default: m.InviteUserPage })),
+)
+const RolesPage = lazy(() => import('@features/users').then((m) => ({ default: m.RolesPage })))
 const BillingPage = lazy(() =>
   import('@features/billing').then((m) => ({ default: m.BillingPage })),
 )
@@ -222,14 +229,39 @@ const router = createBrowserRouter([
               },
             ],
           },
-          // Sprint 3 (User Management, SM-339) — not tied to a
-          // docs/milestones.md milestone. Admin-only global resource
-          // (users:read). List page only for now; the detail and Invite
-          // pages arrive with SM-340, so no :id / /invite child yet — the
-          // list deliberately links nowhere rather than to a dead route.
+          // Sprint 3 (User Management, SM-339/SM-340) — not tied to a
+          // docs/milestones.md milestone. Admin-only global resource. Read
+          // covers the list + detail; the Invite and Roles-admin pages sit
+          // behind users:manage. Static /users/invite and /users/roles
+          // out-rank the dynamic /users/:id by React Router specificity, so
+          // they resolve to their own pages, not the detail page.
           {
             element: <PermissionRoute permission="users:read" />,
-            children: [{ path: ROUTES.USERS.slice(1), element: withSuspense(<UsersPage />) }],
+            children: [
+              { path: ROUTES.USERS.slice(1), element: withSuspense(<UsersPage />) },
+              {
+                path: `${ROUTES.USERS.slice(1)}/:id`,
+                element: withSuspense(<UserDetailPage />),
+                handle: { crumb: [{ label: 'Users', href: ROUTES.USERS }, { label: 'User' }] },
+              },
+            ],
+          },
+          {
+            element: <PermissionRoute permission="users:manage" />,
+            children: [
+              {
+                path: ROUTES.USERS_INVITE.slice(1),
+                element: withSuspense(<InviteUserPage />),
+                handle: {
+                  crumb: [{ label: 'Users', href: ROUTES.USERS }, { label: 'Invite user' }],
+                },
+              },
+              {
+                path: ROUTES.USERS_ROLES.slice(1),
+                element: withSuspense(<RolesPage />),
+                handle: { crumb: [{ label: 'Users', href: ROUTES.USERS }, { label: 'Roles' }] },
+              },
+            ],
           },
           {
             element: <PermissionRoute permission="billing:read" />,

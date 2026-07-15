@@ -1,3 +1,5 @@
+import { Link } from 'react-router'
+import { usePermissions } from '@features/auth'
 import {
   Button,
   EmptyState,
@@ -12,6 +14,7 @@ import {
   TableRow,
   TableSkeleton,
 } from '@shared/components'
+import { ROUTES } from '@shared/constants'
 import { UserFilterBar, UserStatusBadge } from '../components'
 import { useUsers } from '../hooks'
 import { formatUserOwnerType } from '../utils'
@@ -35,9 +38,8 @@ function UserTableHead() {
 // milestone. Route-level composition only: calls the feature's hook, branches
 // the four view states, arranges components (docs/frontend-architecture.md
 // § Feature Module Architecture) — same shape as CustomersPage/OrdersPage.
-// The "Invite User" action and per-row detail links land with the detail/
-// invite pages in SM-340; this page deliberately links nowhere yet rather
-// than exposing a dead route.
+// Row names link to the detail page; the header exposes Invite / Manage-roles
+// actions gated on users:manage (SM-340).
 export function UsersPage() {
   const {
     users,
@@ -51,6 +53,7 @@ export function UsersPage() {
     hasPreviousPage,
     refetch,
   } = useUsers()
+  const { canManageUsers } = usePermissions()
   const hasActiveFilter =
     filters.search !== undefined || filters.status !== undefined || filters.ownerType !== undefined
 
@@ -59,6 +62,24 @@ export function UsersPage() {
       <PageHeader
         title="Users"
         description="People with access to the marketplace — platform staff, partner, and customer accounts."
+        action={
+          canManageUsers && (
+            <div className="flex gap-2">
+              <Link
+                to={ROUTES.USERS_ROLES}
+                className="border-border-default text-fg-default hover:bg-neutral-subtle focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Manage roles
+              </Link>
+              <Link
+                to={ROUTES.USERS_INVITE}
+                className="bg-neutral-emphasis text-fg-on-emphasis hover:bg-neutral-emphasis-hover focus-visible:outline-focus-ring inline-flex h-10 items-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Invite user
+              </Link>
+            </div>
+          )
+        }
       />
       <UserFilterBar
         search={filters.search}
@@ -126,7 +147,12 @@ export function UsersPage() {
                 {users.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell label="Name">
-                      <span className="text-fg-default font-medium">{user.fullName}</span>
+                      <Link
+                        to={`${ROUTES.USERS}/${user.id}`}
+                        className="text-fg-default hover:text-fg-secondary font-medium hover:underline"
+                      >
+                        {user.fullName}
+                      </Link>
                     </TableCell>
                     <TableCell label="Email">{user.email}</TableCell>
                     <TableCell label="Status">

@@ -1,0 +1,10 @@
+mutation RemoveUserRole($userId: ID!, $roleId: ID!) {
+  removeUserRole(userId: $userId, roleId: $roleId) {
+    id
+    roles {
+      id
+      name
+      isSystemRole
+    }
+  }
+}

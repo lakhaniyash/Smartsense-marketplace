@@ -1,0 +1,10 @@
+mutation AssignUserRole($userId: ID!, $roleId: ID!) {
+  assignUserRole(userId: $userId, roleId: $roleId) {
+    id
+    roles {
+      id
+      name
+      isSystemRole
+    }
+  }
+}

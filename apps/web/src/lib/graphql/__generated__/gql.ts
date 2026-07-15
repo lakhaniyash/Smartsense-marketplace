@@ -68,7 +68,19 @@ type Documents = {
     "query GetReportsDashboard($filter: ReportsDashboardFilterInput) {\n  reportsDashboard(filter: $filter) {\n    grossRevenue\n    ordersRevenue\n    totalOrders\n    lowStockCount\n    revenueTrend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": typeof types.GetReportsDashboardDocument,
     "query GetRevenueReport($filter: RevenueReportFilterInput) {\n  revenueReport(filter: $filter) {\n    invoiceCount\n    totalCommission\n    totalGrossRevenue\n    totalNetPayout\n    trend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": typeof types.GetRevenueReportDocument,
     "mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}": typeof types.MarkBillingReportPaidOutDocument,
+    "mutation ArchiveRole($id: ID!) {\n  archiveRole(id: $id) {\n    id\n  }\n}": typeof types.ArchiveRoleDocument,
+    "mutation AssignUserRole($userId: ID!, $roleId: ID!) {\n  assignUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}": typeof types.AssignUserRoleDocument,
+    "mutation CreateRole($input: CreateRoleInput!) {\n  createRole(input: $input) {\n    id\n  }\n}": typeof types.CreateRoleDocument,
+    "query GetRoles {\n  roles {\n    id\n    name\n    description\n    isSystemRole\n    permissions {\n      id\n      key\n      domain\n      description\n    }\n  }\n}": typeof types.GetRolesDocument,
+    "query GetUserAuditLog($userId: ID!) {\n  userAuditLog(userId: $userId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": typeof types.GetUserAuditLogDocument,
+    "query GetUserById($id: ID!) {\n  userById(id: $id) {\n    id\n    email\n    fullName\n    status\n    ownerType\n    partnerId\n    customerId\n    roles {\n      id\n      name\n      description\n      isSystemRole\n      permissions {\n        id\n        key\n        domain\n        description\n      }\n    }\n    createdAt\n    updatedAt\n  }\n}": typeof types.GetUserByIdDocument,
     "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": typeof types.GetUsersDocument,
+    "mutation InviteUser($input: InviteUserInput!) {\n  inviteUser(input: $input) {\n    id\n  }\n}": typeof types.InviteUserDocument,
+    "mutation ReactivateUser($id: ID!) {\n  reactivateUser(id: $id) {\n    id\n    status\n  }\n}": typeof types.ReactivateUserDocument,
+    "mutation RemoveUserRole($userId: ID!, $roleId: ID!) {\n  removeUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}": typeof types.RemoveUserRoleDocument,
+    "mutation SendPasswordResetEmail($id: ID!) {\n  sendPasswordResetEmail(id: $id)\n}": typeof types.SendPasswordResetEmailDocument,
+    "mutation SuspendUser($id: ID!) {\n  suspendUser(id: $id) {\n    id\n    status\n  }\n}": typeof types.SuspendUserDocument,
+    "mutation UpdateRolePermissions($input: UpdateRolePermissionsInput!) {\n  updateRolePermissions(input: $input) {\n    id\n  }\n}": typeof types.UpdateRolePermissionsDocument,
 };
 const documents: Documents = {
     "query Me {\n  me {\n    id\n    email\n    fullName\n    roles\n    permissions\n  }\n}": types.MeDocument,
@@ -125,7 +137,19 @@ const documents: Documents = {
     "query GetReportsDashboard($filter: ReportsDashboardFilterInput) {\n  reportsDashboard(filter: $filter) {\n    grossRevenue\n    ordersRevenue\n    totalOrders\n    lowStockCount\n    revenueTrend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": types.GetReportsDashboardDocument,
     "query GetRevenueReport($filter: RevenueReportFilterInput) {\n  revenueReport(filter: $filter) {\n    invoiceCount\n    totalCommission\n    totalGrossRevenue\n    totalNetPayout\n    trend {\n      bucketStart\n      bucketEnd\n      grossRevenue\n      invoiceCount\n    }\n  }\n}": types.GetRevenueReportDocument,
     "mutation MarkBillingReportPaidOut($id: ID!) {\n  markBillingReportPaidOut(id: $id) {\n    id\n    status\n    updatedAt\n  }\n}": types.MarkBillingReportPaidOutDocument,
+    "mutation ArchiveRole($id: ID!) {\n  archiveRole(id: $id) {\n    id\n  }\n}": types.ArchiveRoleDocument,
+    "mutation AssignUserRole($userId: ID!, $roleId: ID!) {\n  assignUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}": types.AssignUserRoleDocument,
+    "mutation CreateRole($input: CreateRoleInput!) {\n  createRole(input: $input) {\n    id\n  }\n}": types.CreateRoleDocument,
+    "query GetRoles {\n  roles {\n    id\n    name\n    description\n    isSystemRole\n    permissions {\n      id\n      key\n      domain\n      description\n    }\n  }\n}": types.GetRolesDocument,
+    "query GetUserAuditLog($userId: ID!) {\n  userAuditLog(userId: $userId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}": types.GetUserAuditLogDocument,
+    "query GetUserById($id: ID!) {\n  userById(id: $id) {\n    id\n    email\n    fullName\n    status\n    ownerType\n    partnerId\n    customerId\n    roles {\n      id\n      name\n      description\n      isSystemRole\n      permissions {\n        id\n        key\n        domain\n        description\n      }\n    }\n    createdAt\n    updatedAt\n  }\n}": types.GetUserByIdDocument,
     "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}": types.GetUsersDocument,
+    "mutation InviteUser($input: InviteUserInput!) {\n  inviteUser(input: $input) {\n    id\n  }\n}": types.InviteUserDocument,
+    "mutation ReactivateUser($id: ID!) {\n  reactivateUser(id: $id) {\n    id\n    status\n  }\n}": types.ReactivateUserDocument,
+    "mutation RemoveUserRole($userId: ID!, $roleId: ID!) {\n  removeUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}": types.RemoveUserRoleDocument,
+    "mutation SendPasswordResetEmail($id: ID!) {\n  sendPasswordResetEmail(id: $id)\n}": types.SendPasswordResetEmailDocument,
+    "mutation SuspendUser($id: ID!) {\n  suspendUser(id: $id) {\n    id\n    status\n  }\n}": types.SuspendUserDocument,
+    "mutation UpdateRolePermissions($input: UpdateRolePermissionsInput!) {\n  updateRolePermissions(input: $input) {\n    id\n  }\n}": types.UpdateRolePermissionsDocument,
 };
 
 /**
@@ -361,7 +385,55 @@ export function gql(source: "mutation MarkBillingReportPaidOut($id: ID!) {\n  ma
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function gql(source: "mutation ArchiveRole($id: ID!) {\n  archiveRole(id: $id) {\n    id\n  }\n}"): (typeof documents)["mutation ArchiveRole($id: ID!) {\n  archiveRole(id: $id) {\n    id\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation AssignUserRole($userId: ID!, $roleId: ID!) {\n  assignUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}"): (typeof documents)["mutation AssignUserRole($userId: ID!, $roleId: ID!) {\n  assignUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation CreateRole($input: CreateRoleInput!) {\n  createRole(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation CreateRole($input: CreateRoleInput!) {\n  createRole(input: $input) {\n    id\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetRoles {\n  roles {\n    id\n    name\n    description\n    isSystemRole\n    permissions {\n      id\n      key\n      domain\n      description\n    }\n  }\n}"): (typeof documents)["query GetRoles {\n  roles {\n    id\n    name\n    description\n    isSystemRole\n    permissions {\n      id\n      key\n      domain\n      description\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetUserAuditLog($userId: ID!) {\n  userAuditLog(userId: $userId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}"): (typeof documents)["query GetUserAuditLog($userId: ID!) {\n  userAuditLog(userId: $userId) {\n    id\n    action\n    entityType\n    entityId\n    metadata\n    occurredAt\n    actorId\n    actorName\n    actorEmail\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "query GetUserById($id: ID!) {\n  userById(id: $id) {\n    id\n    email\n    fullName\n    status\n    ownerType\n    partnerId\n    customerId\n    roles {\n      id\n      name\n      description\n      isSystemRole\n      permissions {\n        id\n        key\n        domain\n        description\n      }\n    }\n    createdAt\n    updatedAt\n  }\n}"): (typeof documents)["query GetUserById($id: ID!) {\n  userById(id: $id) {\n    id\n    email\n    fullName\n    status\n    ownerType\n    partnerId\n    customerId\n    roles {\n      id\n      name\n      description\n      isSystemRole\n      permissions {\n        id\n        key\n        domain\n        description\n      }\n    }\n    createdAt\n    updatedAt\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function gql(source: "query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"): (typeof documents)["query GetUsers($first: Int, $after: String, $filter: UserFilterInput, $sort: UserSortInput) {\n  users(first: $first, after: $after, filter: $filter, sort: $sort) {\n    edges {\n      cursor\n      node {\n        id\n        fullName\n        email\n        status\n        ownerType\n        createdAt\n      }\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation InviteUser($input: InviteUserInput!) {\n  inviteUser(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation InviteUser($input: InviteUserInput!) {\n  inviteUser(input: $input) {\n    id\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation ReactivateUser($id: ID!) {\n  reactivateUser(id: $id) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation ReactivateUser($id: ID!) {\n  reactivateUser(id: $id) {\n    id\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation RemoveUserRole($userId: ID!, $roleId: ID!) {\n  removeUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}"): (typeof documents)["mutation RemoveUserRole($userId: ID!, $roleId: ID!) {\n  removeUserRole(userId: $userId, roleId: $roleId) {\n    id\n    roles {\n      id\n      name\n      isSystemRole\n    }\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation SendPasswordResetEmail($id: ID!) {\n  sendPasswordResetEmail(id: $id)\n}"): (typeof documents)["mutation SendPasswordResetEmail($id: ID!) {\n  sendPasswordResetEmail(id: $id)\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation SuspendUser($id: ID!) {\n  suspendUser(id: $id) {\n    id\n    status\n  }\n}"): (typeof documents)["mutation SuspendUser($id: ID!) {\n  suspendUser(id: $id) {\n    id\n    status\n  }\n}"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "mutation UpdateRolePermissions($input: UpdateRolePermissionsInput!) {\n  updateRolePermissions(input: $input) {\n    id\n  }\n}"): (typeof documents)["mutation UpdateRolePermissions($input: UpdateRolePermissionsInput!) {\n  updateRolePermissions(input: $input) {\n    id\n  }\n}"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};
