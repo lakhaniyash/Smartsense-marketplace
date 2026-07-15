@@ -232,7 +232,15 @@ Realm contents, clients, roles, verification steps: [keycloak-setup.md](./keyclo
 
 ### Current State
 
-`.github/workflows/ci.yml` implements **CI only**: install → Prisma generate → lint → typecheck → build, on pushes/PRs to `main` and `development`. There is no test stage yet (gap documented in [testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)), no image build, and no deployment automation.
+`.github/workflows/ci.yml` implements **CI**: install → Prisma generate → lint → typecheck → unit tests → migrate/seed → backend integration tests (real Postgres + mocked JWKS) → build, on pushes/PRs to `main` and `development`. Playwright is deliberately not wired in (needs a live Keycloak/API/web stack — [testing.md § CI Testing Pipeline](./testing.md#ci-testing-pipeline)).
+
+`.github/workflows/cd.yml` implements **CD** (SM-266), triggered by a semver tag (`v*.*.*`) or manual dispatch — promotion, not every merge:
+
+- **Build & push (SM-299)** — the `api` and `web` images are built once from the monorepo root (SM-263/SM-346) and pushed to **GHCR** (`ghcr.io/lakhaniyash/smartsense-marketplace/{api,web}`), tagged with the release version and the commit SHA, using `GITHUB_TOKEN` (no extra registry secret).
+- **Migrate-then-deploy (SM-300)** — over SSH to the VPS: `docker compose pull`, then `prisma migrate deploy` run in a throwaway `node` container on the app network (keeps the runtime image lean and never migrates from inside a serving container), then `docker compose up -d`.
+- **Smoke test (SM-301)** — fails the deploy unless `/health` (which includes the DB dependency check, SM-267) goes healthy.
+
+The deploy job is a **documented stub**: it requires `VPS_HOST` / `VPS_USER` / `VPS_SSH_KEY` secrets and a deploy directory on the host (compose file + runtime `.env` + `database/`), and is not exercised in CI (no VPS is provisioned — SM-265). Web `VITE_*` production origins are supplied as repo/environment **Variables**.
 
 ### Target Pipeline
 
