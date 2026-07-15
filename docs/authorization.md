@@ -226,6 +226,17 @@ already hold the Admin Role. Guardrails 1 and 2 are structurally inapplicable �
 always a brand-new identity (never the caller, so no self-edit), and an invite only ever _adds_ an
 Admin, never removes the last one.
 
+**Admin User Management vs. self-service Settings — the M17 boundary.** The Sprint 3 User
+Management epic (Jira Epic SM-331 — a Sprint initiative, not a [milestones.md](./milestones.md)
+roadmap milestone, same convention as SM-320 for Customer Management) is an Admin surface for
+managing **other** users: viewing any user, assigning/removing their roles, changing their status,
+inviting them, and resetting their password — all gated by `users:manage`. Its User-detail Profile
+tab is deliberately **admin-view-only** (no edit form). Editing one's **own** profile and
+preferences is a separate capability owned exclusively by **M17 Settings** ([milestones.md
+§ M17](./milestones.md#m17--settings), Story SM-256), gated by ownership (every user edits only
+their own — the Settings row above). The two never overlap: `users:manage` never edits the
+caller's own profile, and M17 self-service never touches another user's account.
+
 **Notifications deliberately has no `notifications:*` permission key** (M16) — this is not an
 oversight to fix later. Every `notifications`/`unreadNotificationCount`/`markNotificationRead`/
 `markAllNotificationsRead` operation is authenticated by `GqlAuthGuard` like everything else, but
