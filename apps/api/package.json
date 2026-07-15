@@ -45,6 +45,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "graphql": "^16.9.0",
+    "helmet": "^8.3.0",
     "joi": "^17.13.3",
     "jwks-rsa": "^3.2.2",
     "passport": "^0.7.0",

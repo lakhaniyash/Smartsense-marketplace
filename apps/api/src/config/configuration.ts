@@ -9,6 +9,10 @@ export interface AppConfig {
     introspection: boolean
     playground: boolean
   }
+  cors: {
+    /** Allowed browser origins. Empty = permissive (dev default). */
+    allowedOrigins: string[]
+  }
   keycloak: {
     url: string
     realm: string
@@ -46,6 +50,15 @@ export default (): AppConfig => {
           ? process.env['NODE_ENV'] !== 'production'
           : process.env['GRAPHQL_INTROSPECTION'] === 'true',
       playground: process.env['GRAPHQL_PLAYGROUND'] === 'true',
+    },
+    cors: {
+      // Comma-separated allowlist. Unset/empty → permissive (dev). Set it in
+      // production to the web origin(s) so the API only reflects CORS for
+      // known callers (docs/authentication.md § trust boundaries).
+      allowedOrigins: (process.env['CORS_ALLOWED_ORIGINS'] ?? '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin !== ''),
     },
     keycloak: {
       url: keycloakUrl,
