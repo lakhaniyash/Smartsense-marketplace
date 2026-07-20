@@ -28,8 +28,12 @@ test.describe('Catalog', () => {
     // what must never happen is the Error state.
     await expect(page.getByText("Couldn't load products")).not.toBeVisible()
 
-    // SM-167: create product.
-    await page.getByRole('link', { name: 'New Product' }).click()
+    // SM-167: create product. `.first()`: on a fresh/empty catalog (no
+    // active filters), the "No products yet" empty state renders its own
+    // "New Product" CTA alongside the page header's — the header's is
+    // first in DOM order and always present, so `.first()` is deterministic
+    // regardless of catalog state, not an arbitrary disambiguation.
+    await page.getByRole('link', { name: 'New Product' }).first().click()
     await expect(page).toHaveURL(/\/catalog\/new$/)
 
     await page.getByLabel('Title').fill('Playwright E2E Product')
