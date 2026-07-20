@@ -12,6 +12,9 @@ build/
 .env.local
 .env.*.local
 
+# Local database backup dumps (scripts/db-backup.sh) — local artifacts only
+backups/
+
 # Turborepo
 .turbo/
 
