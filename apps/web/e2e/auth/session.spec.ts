@@ -25,7 +25,11 @@ test.describe('Session lifecycle', () => {
     await page.goto('/login')
     await expect(page).toHaveURL(/\/dashboard$/)
 
-    await page.getByRole('button', { name: 'Log out' }).click()
+    // "Log out" lives inside the sidebar's account menu (UserMenu) — it
+    // isn't in the DOM until the trigger (accessible name "Account menu for
+    // <email>") opens it.
+    await page.getByRole('button', { name: `Account menu for ${PARTNER_EMAIL}` }).click()
+    await page.getByRole('menuitem', { name: 'Log out' }).click()
     await expect(page).toHaveURL(/\/login$/)
 
     await page.goto('/dashboard')

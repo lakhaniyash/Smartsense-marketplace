@@ -21,7 +21,7 @@ test.describe('Catalog', () => {
     await expect(page).toHaveURL(/\/catalog$/)
 
     await expect(page.getByRole('heading', { name: 'Catalog', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Search')).toBeVisible()
+    await expect(page.getByLabel('Search', { exact: true })).toBeVisible()
     await expect(page.getByLabel('Category')).toBeVisible()
     await expect(page.getByLabel('Status')).toBeVisible()
     // Either a table or the empty state is a correct rendered outcome —
@@ -51,7 +51,7 @@ test.describe('Catalog', () => {
       .getByRole('navigation', { name: 'Breadcrumb' })
       .getByRole('link', { name: 'Catalog' })
       .click()
-    await page.getByLabel('Search').fill(uniqueSku)
+    await page.getByLabel('Search', { exact: true }).fill(uniqueSku)
     const matchingRow = page.getByRole('row', { name: new RegExp(uniqueSku) })
     await expect(matchingRow).toBeVisible()
 

@@ -34,8 +34,14 @@ test.describe('Reports', () => {
     await new KeycloakLoginPage(page).loginAs(PARTNER_EMAIL, PARTNER_PASSWORD)
     await expect(page).toHaveURL(/\/reports$/)
 
-    // Reports Dashboard: KPI cards + nav grid to every report route.
-    await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible()
+    // Reports Dashboard: KPI cards + nav grid to every report route. A
+    // generous timeout on the first assertion after each `page.goto` below —
+    // a full browser navigation, unlike an in-app link click — re-triggers
+    // Keycloak's silent-SSO bootstrap (iframe round trip + a `me` query)
+    // before the SPA can render anything past its own loading state.
+    await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible({
+      timeout: 15000,
+    })
     await expect(page.getByText('Gross revenue')).toBeVisible()
     await expect(page.getByText('Total orders')).toBeVisible()
     await expect(page.getByRole('link', { name: /Revenue/ })).toBeVisible()
@@ -58,12 +64,16 @@ test.describe('Reports', () => {
 
     // Orders report.
     await page.goto('/reports/orders')
-    await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible({
+      timeout: 15000,
+    })
     await expect(page.getByText('Average order value')).toBeVisible()
 
     // Inventory report — no date-range control (point-in-time snapshot).
     await page.goto('/reports/inventory')
-    await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Inventory', exact: true })).toBeVisible({
+      timeout: 15000,
+    })
     await expect(page.getByText('Total variants')).toBeVisible()
     await expect(page.getByLabel('Date range')).not.toBeVisible()
     downloadPromise = page.waitForEvent('download')
@@ -76,20 +86,22 @@ test.describe('Reports', () => {
     await page.goto('/reports/product-performance')
     await expect(
       page.getByRole('heading', { name: 'Product Performance', exact: true }),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15000 })
     await expect(page.getByRole('combobox', { name: 'Sort by' })).toBeVisible()
 
     // Notification activity report.
     await page.goto('/reports/notification-activity')
     await expect(
       page.getByRole('heading', { name: 'Notification Activity', exact: true }),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15000 })
     await expect(page.getByText('Total notifications')).toBeVisible()
 
     // Customers report (SM-330) — point-in-time snapshot, no date-range
     // control, same as Inventory above.
     await page.goto('/reports/customers')
-    await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible({
+      timeout: 15000,
+    })
     await expect(page.getByText('Total customers')).toBeVisible()
     await expect(page.getByLabel('Date range')).not.toBeVisible()
     downloadPromise = page.waitForEvent('download')
@@ -100,7 +112,9 @@ test.describe('Reports', () => {
 
     // Billing reports: generate -> finalize -> mark paid out, end to end.
     await page.goto('/reports/billing-reports')
-    await expect(page.getByRole('heading', { name: 'Billing Reports', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Billing Reports', exact: true })).toBeVisible(
+      { timeout: 15000 },
+    )
     await page.getByRole('button', { name: 'Generate report' }).click()
     await expect(page.getByRole('heading', { name: 'Generate billing report' })).toBeVisible()
     // Partner ID field must not render for a Partner caller — their own
@@ -170,7 +184,9 @@ test.describe('Reports', () => {
       'Admin@12345',
     )
     await expect(page).toHaveURL(/\/reports$/)
-    await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible({
+      timeout: 15000,
+    })
     await expect(page.getByText('Gross revenue')).toBeVisible()
 
     await page.goto('/reports/billing-reports')
