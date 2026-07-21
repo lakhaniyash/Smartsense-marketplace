@@ -370,6 +370,50 @@ describe('BillingService', () => {
       expect(prisma.payment.create).not.toHaveBeenCalled()
     })
 
+    it("throws NOT_FOUND (not FORBIDDEN) when a Partner records a payment against another Partner's invoice", async () => {
+      prisma.payment.findUnique.mockResolvedValueOnce(null)
+      prisma.invoice.findUnique.mockResolvedValueOnce(
+        invoiceFixture({ partnerId: 'other-partner' }),
+      )
+
+      await expect(service.recordPayment(user({ partnerId: 'partner-1' }), input)).rejects.toThrow(
+        NotFoundException,
+      )
+      expect(prisma.payment.create).not.toHaveBeenCalled()
+    })
+
+    it('lets the owning Partner record a payment against their own invoice', async () => {
+      prisma.payment.findUnique.mockResolvedValueOnce(null)
+      prisma.invoice.findUnique.mockResolvedValueOnce(
+        invoiceFixture({ partnerId: 'partner-1', amountDue: new Prisma.Decimal(100) }),
+      )
+      prisma.payment.create.mockResolvedValueOnce(paymentFixture())
+      prisma.payment.findMany.mockResolvedValueOnce([
+        paymentFixture({ amount: new Prisma.Decimal(50) }),
+      ])
+
+      const result = await service.recordPayment(user({ partnerId: 'partner-1' }), input)
+
+      expect(result.id).toBe('payment-1')
+      expect(prisma.payment.create).toHaveBeenCalledTimes(1)
+    })
+
+    it("lets an Admin record a payment against any Partner's invoice", async () => {
+      prisma.payment.findUnique.mockResolvedValueOnce(null)
+      prisma.invoice.findUnique.mockResolvedValueOnce(
+        invoiceFixture({ partnerId: 'any-partner', amountDue: new Prisma.Decimal(100) }),
+      )
+      prisma.payment.create.mockResolvedValueOnce(paymentFixture())
+      prisma.payment.findMany.mockResolvedValueOnce([
+        paymentFixture({ amount: new Prisma.Decimal(50) }),
+      ])
+
+      const result = await service.recordPayment(user({ partnerId: null }), input)
+
+      expect(result.id).toBe('payment-1')
+      expect(prisma.payment.create).toHaveBeenCalledTimes(1)
+    })
+
     it('translates an externalTransactionId collision (P2002) to a ConflictException', async () => {
       prisma.payment.findUnique.mockResolvedValueOnce(null)
       prisma.invoice.findUnique.mockResolvedValueOnce(invoiceFixture())

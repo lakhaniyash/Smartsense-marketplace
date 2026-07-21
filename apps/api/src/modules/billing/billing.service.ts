@@ -213,7 +213,13 @@ export class BillingService {
         }
 
         const invoice = await tx.invoice.findUnique({ where: { id: input.invoiceId } })
-        if (invoice === null) throw new NotFoundException('Invoice not found')
+        // Same ownership-miss-reads-as-NOT_FOUND check as findInvoiceById —
+        // every other by-id Invoice operation already goes through
+        // findInvoiceById first, but this transaction needs the tx-scoped
+        // read, not a second, separately-scoped query via this.prisma.
+        if (invoice === null || (user.partnerId !== null && invoice.partnerId !== user.partnerId)) {
+          throw new NotFoundException('Invoice not found')
+        }
 
         let created
         try {
