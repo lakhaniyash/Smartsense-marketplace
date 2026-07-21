@@ -13,6 +13,14 @@ export const validationSchema = Joi.object({
     otherwise: Joi.boolean().default(true),
   }),
   GRAPHQL_PLAYGROUND: Joi.boolean().default(false),
+  // Query-shape hardening (v1.0 Release Readiness Audit finding F-C4): an
+  // unlimited-shape query API is a self-service denial-of-service endpoint
+  // the moment it's reachable outside the team. Defaults calibrated against
+  // this schema's actual deepest real operation (depth 4, apps/web's
+  // getOrderById.graphql) and heaviest real field count (33 fields,
+  // getOrderById.graphql) — both with several times' headroom, not guessed.
+  GRAPHQL_MAX_QUERY_DEPTH: Joi.number().integer().min(1).default(10),
+  GRAPHQL_MAX_QUERY_COMPLEXITY: Joi.number().integer().min(1).default(1000),
   // Comma-separated browser origin allowlist (SM-269). Optional — empty means
   // permissive CORS (dev); production sets it to the web origin(s).
   CORS_ALLOWED_ORIGINS: Joi.string().allow('').default(''),

@@ -8,6 +8,8 @@ export interface AppConfig {
     debug: boolean
     introspection: boolean
     playground: boolean
+    maxQueryDepth: number
+    maxQueryComplexity: number
   }
   cors: {
     /** Allowed browser origins. Empty = permissive (dev default). */
@@ -54,6 +56,8 @@ export default (): AppConfig => {
           ? process.env['NODE_ENV'] !== 'production'
           : process.env['GRAPHQL_INTROSPECTION'] === 'true',
       playground: process.env['GRAPHQL_PLAYGROUND'] === 'true',
+      maxQueryDepth: parseInt(process.env['GRAPHQL_MAX_QUERY_DEPTH'] ?? '10', 10),
+      maxQueryComplexity: parseInt(process.env['GRAPHQL_MAX_QUERY_COMPLEXITY'] ?? '1000', 10),
     },
     cors: {
       // Comma-separated allowlist. Unset/empty → permissive (dev). Set it in
