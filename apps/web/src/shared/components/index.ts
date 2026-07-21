@@ -1,5 +1,4 @@
 export { AppLoadingState } from './AppLoadingState'
-export { ComingSoonPage } from './ComingSoonPage'
 export { ErrorPage } from './ErrorPage'
 
 // Shared UI vocabulary (docs/milestones.md M10 — Shared Component Library).
@@ -13,7 +12,7 @@ export { Alert } from './ui/Alert'
 export type { AlertProps, AlertVariant } from './ui/Alert'
 export { Avatar } from './ui/Avatar'
 export type { AvatarProps, AvatarSize } from './ui/Avatar'
-export { Badge } from './ui/Badge'
+export { Badge, createStatusBadge } from './ui/Badge'
 export type { BadgeProps, BadgeVariant } from './ui/Badge'
 export { Breadcrumb } from './ui/Breadcrumb'
 export type { BreadcrumbItem, BreadcrumbProps } from './ui/Breadcrumb'

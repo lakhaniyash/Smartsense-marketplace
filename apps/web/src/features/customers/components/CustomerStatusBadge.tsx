@@ -1,5 +1,5 @@
 import { CustomerStatus } from '@lib/graphql/__generated__/graphql'
-import { Badge, type BadgeVariant } from '@shared/components'
+import { type BadgeVariant, createStatusBadge } from '@shared/components'
 
 const STATUS_VARIANT: Record<CustomerStatus, BadgeVariant> = {
   [CustomerStatus.Active]: 'success',
@@ -15,6 +15,4 @@ export interface CustomerStatusBadgeProps {
   status: CustomerStatus
 }
 
-export function CustomerStatusBadge({ status }: CustomerStatusBadgeProps) {
-  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
-}
+export const CustomerStatusBadge = createStatusBadge(STATUS_VARIANT, STATUS_LABEL)

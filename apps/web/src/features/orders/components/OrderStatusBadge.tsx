@@ -1,5 +1,5 @@
 import { OrderStatus } from '@lib/graphql/__generated__/graphql'
-import { Badge, type BadgeVariant } from '@shared/components'
+import { type BadgeVariant, createStatusBadge } from '@shared/components'
 
 // Covers every OrderStatus value, not just the four M13 drives — the schema
 // exposes the full docs/domain-model.md § Order Lifecycle enum today even
@@ -34,6 +34,4 @@ export interface OrderStatusBadgeProps {
   status: OrderStatus
 }
 
-export function OrderStatusBadge({ status }: OrderStatusBadgeProps) {
-  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
-}
+export const OrderStatusBadge = createStatusBadge(STATUS_VARIANT, STATUS_LABEL)
