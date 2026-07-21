@@ -60,6 +60,11 @@ function renderWithTheme(ui: ReactNode) {
   return render(<ThemeProvider>{ui}</ThemeProvider>)
 }
 
+// These tests prove RENDERING works today - they do not prove Chart.tsx's
+// controller-registration list stays complete, since importing
+// react-chartjs-2 at all (as this file does) incidentally registers every
+// controller regardless of what Chart.tsx itself registers. That's
+// Chart.controllers.spec.ts's job, in the same directory.
 describe('Chart', () => {
   it('renders a canvas under an accessible role="img" wrapper - a real Chart.js/React 19 render, not an assumption', () => {
     renderWithTheme(

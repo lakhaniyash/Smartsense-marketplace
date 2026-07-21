@@ -28,6 +28,14 @@ import { CHART_PALETTE, type ChartColorRole, type ChartPalette } from './Chart.c
 // (Chart.js's tree-shakeable API treats them as separate registrables) -
 // elements alone render nothing and throw "<type> is not a registered
 // controller" the moment react-chartjs-2 tries to instantiate one.
+//
+// This exact list going stale is regression-tested by
+// Chart.controllers.spec.ts, NOT by this file's own Chart.spec.tsx render
+// tests - importing 'react-chartjs-2' at all incidentally registers every
+// controller as a side effect of its own unrelated named exports, which
+// masks a missing entry here under Vitest (see that spec file's own
+// comment for the full mechanism, and CI's Playwright suite for how this
+// exact gap once reached production undetected).
 ChartJS.register(
   CategoryScale,
   LinearScale,
