@@ -1,10 +1,13 @@
 import {
   ArcElement,
+  BarController,
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  DoughnutController,
   Legend,
   LinearScale,
+  LineController,
   LineElement,
   PointElement,
   Tooltip,
@@ -21,12 +24,19 @@ import { CHART_PALETTE, type ChartColorRole, type ChartPalette } from './Chart.c
 // one registration call - and only the controllers/elements this project
 // actually uses (never `chart.js/auto`, which pulls in every chart type
 // Chart.js ships and bloats the bundle for chart types nothing here renders).
+// Each chart type needs BOTH its element AND its controller registered
+// (Chart.js's tree-shakeable API treats them as separate registrables) -
+// elements alone render nothing and throw "<type> is not a registered
+// controller" the moment react-chartjs-2 tries to instantiate one.
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  BarController,
   BarElement,
+  LineController,
   LineElement,
   PointElement,
+  DoughnutController,
   ArcElement,
   Tooltip,
   Legend,
