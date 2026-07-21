@@ -12,7 +12,14 @@ services:
       GRAPHQL_INTROSPECTION: 'true'
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
+      # See infrastructure/docker/docker-compose.yml's identical comment:
+      # KEYCLOAK_URL is container-reachable; KEYCLOAK_ISSUER matches the
+      # browser-facing hostname tokens are actually issued against, and
+      # KEYCLOAK_JWKS_URI must then be pinned explicitly too (its default is
+      # derived from the issuer, which would otherwise misdirect JWKS fetch).
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8080
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/smartsense-marketplace/protocol/openid-connect/certs
       KEYCLOAK_REALM: smartsense-marketplace
       KEYCLOAK_API_CLIENT_ID: smartsense-api
       KEYCLOAK_API_CLIENT_SECRET: smartsense-api-dev-secret-change-me

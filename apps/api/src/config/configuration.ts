@@ -30,7 +30,11 @@ export interface AppConfig {
 export default (): AppConfig => {
   const keycloakUrl = process.env['KEYCLOAK_URL'] ?? ''
   const keycloakRealm = process.env['KEYCLOAK_REALM'] ?? ''
-  const issuer = `${keycloakUrl}/realms/${keycloakRealm}`
+  // Defaults to keycloakUrl (unchanged behavior when the API and the
+  // browser share a hostname) — see KEYCLOAK_ISSUER's comment in
+  // validation.schema.ts for when and why to set it separately.
+  const issuerBaseUrl = process.env['KEYCLOAK_ISSUER'] ?? keycloakUrl
+  const issuer = `${issuerBaseUrl}/realms/${keycloakRealm}`
 
   return {
     port: parseInt(process.env['PORT'] ?? '3000', 10),

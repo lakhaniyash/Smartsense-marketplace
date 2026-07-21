@@ -21,15 +21,19 @@ test.describe('Catalog', () => {
     await expect(page).toHaveURL(/\/catalog$/)
 
     await expect(page.getByRole('heading', { name: 'Catalog', exact: true })).toBeVisible()
-    await expect(page.getByLabel('Search')).toBeVisible()
+    await expect(page.getByLabel('Search', { exact: true })).toBeVisible()
     await expect(page.getByLabel('Category')).toBeVisible()
     await expect(page.getByLabel('Status')).toBeVisible()
     // Either a table or the empty state is a correct rendered outcome —
     // what must never happen is the Error state.
     await expect(page.getByText("Couldn't load products")).not.toBeVisible()
 
-    // SM-167: create product.
-    await page.getByRole('link', { name: 'New Product' }).click()
+    // SM-167: create product. `.first()`: on a fresh/empty catalog (no
+    // active filters), the "No products yet" empty state renders its own
+    // "New Product" CTA alongside the page header's — the header's is
+    // first in DOM order and always present, so `.first()` is deterministic
+    // regardless of catalog state, not an arbitrary disambiguation.
+    await page.getByRole('link', { name: 'New Product' }).first().click()
     await expect(page).toHaveURL(/\/catalog\/new$/)
 
     await page.getByLabel('Title').fill('Playwright E2E Product')
@@ -51,7 +55,7 @@ test.describe('Catalog', () => {
       .getByRole('navigation', { name: 'Breadcrumb' })
       .getByRole('link', { name: 'Catalog' })
       .click()
-    await page.getByLabel('Search').fill(uniqueSku)
+    await page.getByLabel('Search', { exact: true }).fill(uniqueSku)
     const matchingRow = page.getByRole('row', { name: new RegExp(uniqueSku) })
     await expect(matchingRow).toBeVisible()
 

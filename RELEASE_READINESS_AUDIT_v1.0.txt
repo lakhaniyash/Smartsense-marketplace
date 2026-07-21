@@ -1,0 +1,274 @@
+================================================================================
+SmartSense Marketplace - v1.0 Release Readiness Audit
+================================================================================
+Auditor : Engineering (release gate)
+Date    : 2026-07-16
+Branch  : test/sm-330-customers-report-e2e (= development + 1 test commit, clean)
+Scope   : Production release, read-only. No code modified, no tickets created.
+================================================================================
+
+
+0. SPRINT / BRANCH CHECK
+--------------------------------------------------------------------------------
+The repo does NOT track "Sprints" - it uses milestones M1-M20 (docs/milestones.md).
+Mapping the request: the "core module" work referred to as Sprint 2/3 (Catalog,
+Orders, Billing, Customers, Users, Reports, Dashboard) is ALL implemented and
+merged into `development`. Current branch is one test-only commit ahead of
+`development`; working tree clean. "Latest development" is fully caught up.
+
+
+1. MODULE REVIEW - ALL PRESENT AND BUILT
+--------------------------------------------------------------------------------
+Module                 Backend (resolver->service->spec)  Frontend        Verdict
+Authentication         auth module, guards, JWKS, RBAC     login/session   Complete
+Catalog (prod/var/inv) yes                                 yes             Complete
+Orders                 lifecycle + status history          yes             Complete
+Customer Management     yes                                yes             Complete
+User Management        Keycloak admin invite/reset         yes             Complete
+Billing & Reports      invoices/payments + reports         yes             Complete (perf risk H1/H2)
+Dashboard              yes                                 yes             Complete
+Shared UI              -                                   DS + tests      Complete
+GraphQL                code-first schema                   codegen, 67 ops Complete
+Keycloak Integration   realm export, guards, admin client  yes             Complete
+
+
+2. VERIFICATION RESULTS (everything actually run)
+--------------------------------------------------------------------------------
+Check                  Result            Evidence
+Lint                   PASS              turbo run lint (all workspaces)
+Typecheck              PASS              turbo run typecheck (6 tasks)
+Unit tests             PASS - 555        API Jest 323 (24 suites) + Web Vitest 232 (65 files)
+Integration tests      PASS - 148        API Jest+Supertest, real Postgres + mocked JWKS (9 suites)
+Production build        PASS (fresh)     web + api built; bundle emitted
+Docker - API image     BUILDS            960 MB (see M4)
+Docker - web image     BUILDS            94 MB (nginx static)
+docker-compose config  VALID             infra + api compose both validate
+Playwright E2E (M18)   NOT VERIFIED      12 specs exist; NOT run in CI, needs full live stack
+
+Total automated coverage exercised: 703 tests green.
+The one unverified suite (Playwright) is the release-gate concern in B1/H4.
+
+
+3. FINDINGS BY SEVERITY
+--------------------------------------------------------------------------------
+
+### BLOCKING RELEASE ###
+
+B1 - v1.0 release gates M18/M19/M20 are not satisfied.
+  Why    : docs/roadmap.md:103 defines v1.0 done as "End-to-end tested,
+           production environment live." Today: Playwright E2E is NOT run in CI
+           (.github/workflows/ci.yml:84 scopes E2E to --workspace=@smartsense/api
+           only), NO performance validation has been run (M19), and the CD deploy
+           job is an explicit stub (.github/workflows/cd.yml:90 - "not exercised
+           in CI, no VPS is provisioned").
+  Impact : ci.yml, cd.yml, apps/web/e2e/*
+  Effort : M-L
+  Fix    : add an E2E CI job that boots Postgres+Keycloak+API+web and runs
+           Playwright; provision the production host and execute one real
+           migrate-then-deploy through cd.yml before declaring launch.
+
+B2 - The source-of-truth milestone tracker reports false status.
+  Why    : docs/milestones.md:89-97 marks M12 Catalog, M13 Orders, M14 Billing as
+           "In progress" and M18/M19/M20 as "Not started" - yet all three modules
+           are shipped and merged, and substantial M20 work (Dockerfiles, cd.yml,
+           nginx CSP, helmet, CORS, health checks) exists in git. Violates the
+           project's own "docs later is a rejected state" rule (CLAUDE.md).
+  Impact : a release decision cannot be trusted while the tracker is wrong.
+  Effort : S
+  Fix    : reconcile milestone statuses to reality in the release-closing change.
+
+
+### HIGH ###
+
+H1 - Reports compute unbounded in-memory aggregations on every read.
+  Why    : Revenue (reports.service.ts:302), product-performance (:576/:841),
+           inventory low-stock (:459/:797), orders (:376) fetch/group whole
+           unbounded tables into Node for an Admin caller with no date scope.
+           Fine on seed data, breaches the p95<300ms budget as history grows.
+  Effort : L
+  Fix    : push pagination/sort into SQL; $queryRaw + LIMIT for the cross-column
+           low-stock filter; require a bounded date range; then consider caching.
+
+H2 - Systematic missing indexes on the default sort key.
+  Why    : Every list sorts createdAt DESC, id with cursor pagination, but no
+           table indexes createdAt; Invoice.issuedAt (sort + revenue-report
+           filter) is also unindexed (database/prisma/schema.prisma). Full
+           scan+sort per page on orders/invoices at volume.
+  Effort : S
+  Fix    : add @@index([createdAt]) (or scoped composites) on Order, Invoice,
+           Customer, User, Product + @@index([issuedAt]) on Invoice; validate
+           with EXPLAIN ANALYZE.
+
+H3 - No GraphQL query depth/complexity limits.
+  Why    : deep queries have no cost ceiling - a DoS/abuse surface for a public
+           production endpoint.
+  Impact : apps/api/src/app.module.ts GraphQL config
+  Effort : S-M
+  Fix    : add depth + complexity plugins to the Apollo config.
+
+H4 - E2E coverage gaps in the browser suite.
+  Why    : no billing/invoices Playwright spec (billing is money - highest
+           stakes), and the suite never runs in CI (mechanism behind B1).
+  Effort : M
+  Fix    : add a billing E2E journey; gate merges on the E2E job.
+
+
+### MEDIUM ###
+
+M1 - No optimistic updates or manual cache writes anywhere.
+  Why    : all 29 mutations use refetchQueries; 0 optimisticResponse, 0
+           cache.modify/evict, 0 awaitRefetchQueries. UX shows a round-trip delay
+           after every write, and without awaitRefetchQueries a mutation can
+           resolve before its list refetch lands.
+  Effort : M (incremental)
+  Fix    : add optimistic responses / cache updates on high-frequency mutations
+           (status changes, create/delete).
+
+M2 - CSV exports are unbounded.
+  Where  : billing.service.ts:304, customers.service.ts:287, reports :797/:841
+  Fix    : chunk/stream or cap with a documented limit.
+
+M3 - Case-insensitive search is unindexed ILIKE.
+  Where  : customers.service.ts:562, users.service.ts buildWhere - full scan per
+           keystroke.
+  Fix    : pg_trgm GIN index via hand-written migration, or accept while tables
+           are small (measure first).
+
+M4 - API Docker image is 960 MB.
+  Why    : multi-stage and --omit=dev are correct, but the prod stage installs
+           ALL workspace prod deps (incl. apps/web) and the container runs as
+           root with no Dockerfile HEALTHCHECK.
+  Impact : apps/api/Dockerfile:34-41
+  Fix    : install only the API's prod deps; add a non-root USER; add HEALTHCHECK
+           (compose already has one).
+
+M5 - 441 KB catch-all vendor chunk (141 KB gz).
+  Why    : good react/apollo/keycloak/chart splits exist, but the residual vendor
+           chunk is large.
+  Fix    : run the bundle visualizer, split remaining large deps; confirm entry
+           < 200 KB gz.
+
+M6 - Accessibility depth.
+  Why    : 119 aria-* and centralized htmlFor in shared inputs are good, but
+           role= (11) and alt= (1) are thin and custom widgets need a
+           keyboard/focus pass.
+  Fix    : targeted a11y audit on modals, menus, tables.
+
+
+### LOW ###
+
+L1 - Two files >250 lines: InvoiceDetailPage.tsx (265, real split candidate),
+     app/router/index.tsx (361, config not render).
+L2 - Run a codegen-based unused-operation sweep (no unused ops found by
+     heuristic, but not exhaustively proven).
+L3 - notifications.resolver.ts relies on recipient-scoping without an explicit
+     @Permissions; confirm the service scopes every op to currentUser.
+L4 - Prisma deprecation: package.json#prisma config block is deprecated in
+     Prisma 7; migrate to prisma.config.ts.
+
+
+4. WHAT IS DONE EXCEPTIONALLY WELL
+--------------------------------------------------------------------------------
+- Discipline: 0 TODO/FIXME/HACK, console.* only in the sanctioned logger,
+  effectively 0 real `any`, 0 .skip/.only, 0 dangerouslySetInnerHTML, no default
+  exports issues, no Float for money.
+- Auth posture: protected-by-default; every @Public() is a trivial *Status
+  liveness probe (zero data exposure); every data op behind @Permissions; no
+  role==='Admin' checks; tokens in-memory (no localStorage); helmet +
+  configurable CORS; introspection/playground fail-closed in production
+  (configuration.ts:43-50).
+- Backend architecture: clean resolver->service->Prisma (no Prisma in
+  resolvers), no forwardRef, @Global only on infra modules, 34 $transaction
+  sites, 33 soft-delete filters.
+- Performance structure: zero @ResolveField (no GraphQL N+1 by construction),
+  uniform cursor pagination on every list, route-level React.lazy splitting,
+  deliberate sort indexes with rationale comments.
+- Testing: 703 green across unit + integration; integration runs against real
+  Postgres with fail-closed permission assertions.
+- CI/CD design: CI gates lint/type/unit/integration/build with a real Postgres
+  service; CD builds+pushes to GHCR and designs migrate-before-deploy + /health
+  smoke correctly.
+- Docs: genuinely excellent depth and cross-linking (schema rationale comments
+  are outstanding) - the problem is status drift, not quality.
+
+
+5. SCORECARD
+--------------------------------------------------------------------------------
+Dimension               Score  Rationale
+Architecture             92    Clean layering both ends; textbook module boundaries
+Code Quality             90    Exceptional hygiene; 2 large files, minor dupes
+Testing                  76    Great unit/integration; E2E unverified & not in CI
+Documentation            70    High quality but the milestone tracker is wrong
+Security                 86    Strong; needs GraphQL depth limits + non-root image
+Performance              72    Sound structure; reports/indexes at-scale risk
+Maintainability          91    Consistent patterns, small components, strong docs
+Production Readiness     62    Deploy is a stub, no prod env, E2E/perf gates open
+--------------------------------------------------------------------------------
+OVERALL              ~ 80/100  Strong Release Candidate - not yet Go
+
+
+6. RELEASE CHECKLIST
+--------------------------------------------------------------------------------
+COMPLETE (OK):
+  - all core modules built
+  - lint/type/unit/integration green (703)
+  - builds + Docker images + compose valid
+  - auth/RBAC posture
+  - backend layering
+  - N+1-free GraphQL
+  - pagination
+  - secrets hygiene
+
+NEEDS IMPROVEMENT (before/near launch):
+  - report query shapes (H1)
+  - createdAt/issuedAt indexes (H2)
+  - GraphQL depth limits (H3)
+  - optimistic/cache updates (M1)
+  - export bounding (M2)
+  - API image size + non-root (M4)
+  - bundle trim (M5)
+  - a11y pass (M6)
+
+BLOCKING:
+  - Playwright E2E verified green IN CI (B1/H4)
+  - one real production deploy executed via cd.yml against a provisioned host (B1)
+  - milestone doc reconciled to reality (B2)
+
+
+7. FINAL VERDICT
+--------------------------------------------------------------------------------
+Q: Would I personally approve releasing SmartSense Marketplace v1.0 to production?
+
+A: Not today - but it is close, and this is a "conditional GO," not a "no."
+
+The engineering is genuinely high-quality: the codebase is disciplined, the
+architecture is clean on both ends, security is fail-closed, and 703 automated
+tests pass. Those are the hard things, and they're done well.
+
+What blocks me is release-gate verification, not fundamental defects:
+  1. The v1.0 gates the project itself defined (E2E tested, production
+     environment live) are open - Playwright never runs in CI, no deploy has
+     ever been executed against a real host, and no performance validation
+     exists.
+  2. The at-scale performance risk in Reports + missing indexes (H1/H2) is the
+     kind of thing that passes every demo and then falls over on the first busy
+     month - it must be addressed before real transaction volume.
+  3. The source-of-truth tracker is wrong (B2), which by itself means no one can
+     honestly sign a release off the documentation today.
+
+Path to GO (est. ~1-2 focused weeks):
+  - wire the E2E job into CI and prove it green
+  - add the createdAt/issuedAt indexes and bound the report/export queries
+  - add GraphQL depth/complexity limits
+  - provision the host and run one real cd.yml deploy with /health smoke passing
+  - reconcile milestones.md
+Clear those and I would approve v1.0 with confidence; the Medium/Low items can
+follow as fast-follows.
+
+--------------------------------------------------------------------------------
+Notes: this audit ran read-only; no code or docs were changed. Eight of nine
+deep-dive review agents were interrupted by a session usage limit - their
+dimensions were completed directly, so the findings above are verified results
+(the Performance findings incorporate the one agent report that finished,
+re-checked against the code).
+================================================================================

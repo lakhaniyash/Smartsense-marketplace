@@ -111,7 +111,7 @@ test.describe('Orders', () => {
     // Order itself is never deleted (ledger semantics, docs/domain-model.md
     // § Order) — it stays, same as any real cancelled order would.
     await page.goto('/catalog')
-    await page.getByLabel('Search').fill(sku)
+    await page.getByLabel('Search', { exact: true }).fill(sku)
     await page.getByRole('link', { name: title }).click()
     await page.getByRole('button', { name: 'Delete' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()

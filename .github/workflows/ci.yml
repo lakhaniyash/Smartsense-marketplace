@@ -85,3 +85,131 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Playwright E2E against the real full stack (api + web + db + keycloak),
+  # orchestrated with Docker Compose rather than GitHub Actions `services:` —
+  # `services:` containers start in parallel with no equivalent to Compose's
+  # `depends_on: condition: service_healthy` chain, which is exactly the
+  # ordering the stack needs (keycloak waits on keycloak-db; api waits on
+  # both db and keycloak). `needs: ci` fail-fasts: never pay for booting four
+  # containers and two image builds if lint/unit/integration already failed.
+  playwright:
+    name: Playwright E2E
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The Docker image builds below generate their OWN Prisma client
+      # inside the image — that does nothing for this step's later
+      # migrate/seed commands, which run on the runner's host filesystem
+      # against host node_modules, per the identical step in the `ci` job.
+      - name: Generate Prisma Client
+        run: npm run prisma:generate --workspace=@smartsense/api
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Pre-build with the GHA layer cache (same mechanism cd.yml already
+      # uses) so `docker compose up` below hits cache instead of a cold build.
+      - name: Build API image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          load: true
+          tags: smartsense-marketplace-api:local
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build web image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          load: true
+          tags: smartsense-marketplace-web:local
+          build-args: |
+            VITE_GRAPHQL_URL=http://localhost:3000/graphql
+            VITE_KEYCLOAK_URL=http://localhost:8080
+            VITE_KEYCLOAK_REALM=smartsense-marketplace
+            VITE_KEYCLOAK_CLIENT_ID=smartsense-web
+            VITE_AUTH_POST_LOGOUT_REDIRECT_URI=http://localhost:8081/login
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Boot full stack (db, keycloak-db, keycloak, api, web)
+        run: docker compose -p smartsense -f infrastructure/docker/docker-compose.yml up -d --wait --wait-timeout 180
+
+      - name: Wait for API, web, and the imported Keycloak realm to be ready
+        # The keycloak container healthcheck only proves the HTTP port is
+        # listening, not that `--import-realm` finished writing the
+        # smartsense-marketplace realm — those are different milestones with
+        # a real gap between them. Polling the realm's own well-known
+        # endpoint (404s until the realm exists) is the precise signal.
+        run: |
+          timeout 60 bash -c 'until curl -fsS http://localhost:3000/health; do sleep 2; done'
+          timeout 60 bash -c 'until curl -fsS http://localhost:8081/ >/dev/null; do sleep 2; done'
+          timeout 30 bash -c 'until curl -fsS http://localhost:8080/realms/smartsense-marketplace/.well-known/openid-configuration | grep -q issuer; do sleep 2; done'
+
+      - name: Apply database migrations
+        run: npm run prisma:migrate:deploy --workspace=@smartsense/api
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/smartsense_marketplace
+
+      - name: Seed reference data + test users
+        run: npm run prisma:seed --workspace=@smartsense/api
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/smartsense_marketplace
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: apps/web
+
+      - name: Run Playwright E2E
+        # Invoked directly, not via `npm run test:e2e --workspace=...` /
+        # Turbo — the app under test is the Compose-served build above, not
+        # a build Turbo would otherwise try to (re)produce.
+        run: npx playwright test
+        working-directory: apps/web
+        env:
+          PW_BASE_URL: http://localhost:8081
+          CI: true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -p smartsense -f infrastructure/docker/docker-compose.yml logs --no-color > compose-logs.txt || true
+
+      - name: Upload compose logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: compose-logs.txt
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -p smartsense -f infrastructure/docker/docker-compose.yml down -v

@@ -1,5 +1,11 @@
 services:
   api:
+    # `image:` alongside `build:` lets the same file serve two modes: local/CI
+    # `compose build` tags the local build as this default name; the local
+    # production simulation's `--pull` mode exports API_IMAGE to a published
+    # GHCR tag first, so `compose pull` fetches that exact tag instead of
+    # building — see scripts/local-prod-sim.sh.
+    image: ${API_IMAGE:-smartsense-marketplace-api:local}
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
@@ -14,7 +20,19 @@ services:
       # unconditionally re-enable it and defeat that fail-closed default.
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
+      # KEYCLOAK_URL is container-reachable (Admin API), but issued tokens
+      # carry `iss` based on the browser-facing hostname the user actually
+      # logged in through — KEYCLOAK_ISSUER overrides just the issuer check
+      # to match it. Without this, every authenticated request fails closed
+      # with UNAUTHENTICATED on an issuer mismatch. KEYCLOAK_JWKS_URI must
+      # then be pinned explicitly too: its default is derived from the
+      # issuer, which — once KEYCLOAK_ISSUER is browser-facing — would
+      # otherwise point JWKS fetch at `localhost:8080` from inside this
+      # container, where nothing is listening (that's the API container
+      # itself, not Keycloak).
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER: http://localhost:8080
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/smartsense-marketplace/protocol/openid-connect/certs
       KEYCLOAK_REALM: smartsense-marketplace
       KEYCLOAK_API_CLIENT_ID: smartsense-api
       KEYCLOAK_API_CLIENT_SECRET: smartsense-api-dev-secret-change-me
@@ -25,14 +43,32 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+    # Gates the container on /health (verifies the DB dependency, SM-267) —
+    # same node:http one-liner as apps/api/Dockerfile's own HEALTHCHECK and
+    # the apps/api/docker-compose.yml twin (neither curl nor wget exist in
+    # node:22-alpine). Required for `compose up --wait` (local-prod-sim.sh,
+    # CI) to know the API is actually ready, not just started.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "require('node:http').get('http://localhost:3000/health',
+          (r) => process.exit(r.statusCode === 200 ? 0 : 1))
+          .on('error', () => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
   # Static SPA served by nginx (SM-346). Build context is the monorepo root
   # (npm workspaces); VITE_* args below are the browser-facing origins for the
   # local full stack — a production build passes its own origins (one image
   # per environment, see apps/web/Dockerfile). Reaching Keycloak login through
-  # this origin also requires the realm's client redirect URIs to include it.
+  # this origin also requires the realm's client redirect URIs to include it
+  # (infrastructure/keycloak/realm-export/ already allowlists this origin).
   web:
+    image: ${WEB_IMAGE:-smartsense-marketplace-web:local}
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile

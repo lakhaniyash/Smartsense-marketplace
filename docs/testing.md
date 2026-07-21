@@ -58,10 +58,10 @@ The pyramid is read bottom-up by volume and speed: most tests are unit tests (fa
 
 | Layer                       | Tool                                | Verifies                                                                                           | Current status                                                                    |
 | --------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Unit Tests**              | Jest (backend); none yet (frontend) | A single function/class/hook in isolation, all dependencies mocked                                 | Implemented on backend (`apps/api/src/**/*.spec.ts`); not yet started on frontend |
-| **Component Tests**         | React Testing Library (planned)     | A single React component's rendered output and interaction behavior, in isolation from the network | Not yet implemented — see [Frontend Testing](#frontend-testing)                   |
+| **Unit Tests**              | Jest (backend); Vitest (frontend)   | A single function/class/hook in isolation, all dependencies mocked                                 | Implemented on both (`apps/api/src/**/*.spec.ts`; `apps/web/src/**/*.spec.tsx`) |
+| **Component Tests**         | Vitest + React Testing Library      | A single React component's rendered output and interaction behavior, in isolation from the network | Implemented — see [Frontend Testing](#frontend-testing)                   |
 | **Integration / API Tests** | Jest + Supertest (backend)          | Multiple real units composed together — resolver → guard → service → real Prisma/Postgres          | Implemented (`apps/api/test/*.e2e-spec.ts`)                                       |
-| **End-to-End Tests**        | Playwright                          | A full user journey through the real, running frontend and backend, in a real browser              | Configured, no specs written yet ([End-to-End Testing](#end-to-end-testing))      |
+| **End-to-End Tests**        | Playwright                          | A full user journey through the real, running frontend and backend, in a real browser              | Implemented, runs in CI ([End-to-End Testing](#end-to-end-testing))      |
 
 ---
 
@@ -272,17 +272,21 @@ Full mechanics owned by [authentication.md](./authentication.md) — this sectio
 
 ### Playwright Strategy
 
-Playwright is configured (`apps/web/playwright.config.ts`: Chromium + Firefox projects, retries on CI, HTML + list reporters, auto-starts the dev server) but **no test specs exist yet** — `apps/web/e2e/` currently contains only a placeholder. This section defines the target suite structure for when specs are written, organized by the product modules already defined in [requirements.md § Modules](./requirements.md#modules):
+Playwright is configured (`apps/web/playwright.config.ts`: Chromium + Firefox projects, retries on CI, HTML + list reporters) and runs in CI against the real Docker Compose stack ([CI Testing Pipeline](#ci-testing-pipeline)). 11 spec files exist today, organized by product module under `apps/web/e2e/`:
 
 ```
 apps/web/e2e/
-├── auth/            # login, logout, session expiry, protected-route redirects
+├── auth/            # protected-route redirects, session, forbidden page
 ├── dashboard/       # overview loads, key stats render
-├── catalog/         # product CRUD, search/filter, category navigation
+├── catalog/         # product CRUD + variants, search/filter, category navigation
+├── customers/       # customer list/detail
 ├── orders/          # order list, order detail, status transitions
-├── billing/         # invoice list, invoice detail, payment status
-└── reports/         # report generation/download, once the Billing module supports it
+├── users/           # user list/detail, roles, invite
+├── notifications/   # notification list/read state
+└── reports/         # report generation/download
 ```
+
+**Known gap:** there is no dedicated `billing/` spec yet — invoice/payment flows are the highest-stakes correctness surface in the product and are currently proven only by backend integration tests ([`apps/api/test/billing.e2e-spec.ts`](../apps/api/test/billing.e2e-spec.ts)), not a browser-driven journey. Tracked as the next spec to add, not fixed as part of the CI wiring above.
 
 Each spec file follows the [coding-standards.md § Naming Conventions](./coding-standards.md#8-naming-conventions) test-file pattern (`<subject>.spec.ts`) and, per [architecture.md § Testing Strategy](./architecture.md#testing-strategy), uses the Page Object Model to keep selectors and page-navigation logic out of the test assertions themselves.
 
@@ -332,8 +336,8 @@ Regardless of module, every end-to-end suite includes at least one scenario per:
 | Environment        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Local**          | A developer runs `npm run test`/`test:e2e` against the Dockerized `db`/`keycloak` services from `infrastructure/docker/docker-compose.yml` or `apps/api/docker-compose.yml` ([keycloak-setup.md § Docker Architecture](./keycloak-setup.md#docker-architecture)) — or, for backend integration tests, the mocked-JWKS approach above, which needs no live Keycloak at all.                                                                                              |
-| **CI**             | GitHub Actions (`.github/workflows/ci.yml`) runs install → Prisma client generation → lint → typecheck → **unit tests** (`npm run test`, both workspaces) → **migrate deploy + seed** → **backend integration tests** (`npm run test:e2e --workspace=@smartsense/api`, against a real `postgres:17-alpine` service container, mocked JWKS as above) → build. Playwright is not yet wired in — see [CI Testing Pipeline](#ci-testing-pipeline) for why and what remains. |
-| **Future Staging** | Not yet provisioned — [deployment.md](./deployment.md) is itself still a placeholder document at time of writing. Once a staging environment exists, it is the target for end-to-end smoke tests run against a real deployed instance (as opposed to CI's ephemeral, locally-orchestrated services), verifying the deployed build in an environment closer to production.                                                                                               |
+| **CI**             | GitHub Actions (`.github/workflows/ci.yml`), two jobs. `ci`: install → Prisma client generation → lint → typecheck → **unit tests** (`npm run test`, both workspaces) → **migrate deploy + seed** → **backend integration tests** (`npm run test:e2e --workspace=@smartsense/api`, against a real `postgres:17-alpine` service container, mocked JWKS as above) → build. `playwright` (`needs: ci`): boots the full stack (db, keycloak-db, keycloak, api, web) via Docker Compose and runs the Playwright suite against it — see [CI Testing Pipeline](#ci-testing-pipeline) for how. |
+| **Future Staging** | Not yet provisioned — requires a real remote host ("Requires Production Infrastructure" per [deployment.md § Purpose](./deployment.md#purpose)). Once it exists, it is the target for end-to-end smoke tests run against a real deployed instance, as opposed to CI's ephemeral, Compose-orchestrated stack.                                                                                               |
 
 ---
 
@@ -374,17 +378,17 @@ flowchart TD
 
     style E fill:#d7f5d7,color:#111
     style F fill:#d7f5d7,color:#111
-    style G fill:#ffe0e0,color:#111
+    style G fill:#d7f5d7,color:#111
 ```
 
-### Current State vs. Target
+### Current State
 
-`.github/workflows/ci.yml` implements **Install → Generate Prisma Client → Lint → Typecheck → Unit Tests → Apply Migrations → Seed → Integration Tests → Build**, matching the target pipeline through the Integration Tests stage. Two deliberate scoping decisions:
+`.github/workflows/ci.yml` implements the full target pipeline above, as two jobs:
 
-- The job's Postgres is a plain `postgres:17-alpine` service container, not the full `docker-compose.yml` stack — Keycloak is never started, because the integration suite already replaces it with a self-signed, throwaway JWKS server per [Authentication mocking](#test-data-strategy) and never contacts a real Keycloak.
-- The Integration Tests step runs `npm run test:e2e --workspace=@smartsense/api` explicitly, not the root `npm run test:e2e` — the root command also fans out to `apps/web`'s Playwright suite, which still has no specs and would need a live Keycloak + API + frontend stack this job doesn't provision. That stage remains the last unclosed gap in this pipeline, tracked as its own item rather than folded into this fix.
+- **`ci`**: Install → Generate Prisma Client → Lint → Typecheck → Unit Tests → Apply Migrations → Seed → Integration Tests → Build. Its Postgres is a plain `postgres:17-alpine` service container, not the full `docker-compose.yml` stack — Keycloak is never started here, because the integration suite already replaces it with a self-signed, throwaway JWKS server per [Authentication mocking](#test-data-strategy) and never contacts a real Keycloak. The Integration Tests step runs `npm run test:e2e --workspace=@smartsense/api` explicitly, not the root `npm run test:e2e` (which would also fan out to `apps/web`'s Playwright suite — that runs in the separate job below instead).
+- **`playwright`** (`needs: ci`, so a lint/unit/integration failure never pays for booting the full stack): builds the `api`/`web` images with the GHA layer cache, boots the full stack (db, keycloak-db, keycloak, api, web) via **Docker Compose** — not GitHub Actions `services:`, which has no equivalent to Compose's `depends_on: condition: service_healthy` chain that this stack's startup ordering needs — waits for container health *and* for the Keycloak realm's own `.well-known/openid-configuration` endpoint (the container healthcheck alone only proves the HTTP port is listening, not that `--import-realm` has finished importing the realm), migrates and seeds against the Compose-managed database, then runs `apps/web`'s 12 Playwright specs against the Compose-served web app (port 8081) via `PW_BASE_URL` ([apps/web/playwright.config.ts](../apps/web/playwright.config.ts)). On failure it uploads the Playwright HTML report and `docker compose logs`; it always tears the stack down (`down -v`) for hermeticity.
 
-`turbo.json`'s `test` task now declares `outputs: []` (neither `jest` nor `vitest run` emits a `coverage/**` directory without an explicit `--coverage` flag, so the prior declaration didn't match reality) and `test:e2e` is `cache: false` — its correctness depends on live Postgres state that Turbo's source-hash-based caching can't account for, and a stale cache hit on a CI gate would silently skip a real test run.
+`turbo.json`'s `test` task declares `outputs: []` (neither `jest` nor `vitest run` emits a `coverage/**` directory without an explicit `--coverage` flag) and `test:e2e` is `cache: false` — its correctness depends on live Postgres state that Turbo's source-hash-based caching can't account for, and a stale cache hit on a CI gate would silently skip a real test run. The `playwright` job invokes `npx playwright test` directly rather than through Turbo, for the same reason plus avoiding a redundant local build of the app already served by the Compose images under test.
 
 ---
 
