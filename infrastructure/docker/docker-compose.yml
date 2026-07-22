@@ -20,6 +20,12 @@ services:
       # unconditionally re-enable it and defeat that fail-closed default.
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
+      # Required the moment NODE_ENV=production (validation.schema.ts fails
+      # boot otherwise, by design — v1.0 Release Readiness Audit finding
+      # F-M1). The web app's browser-facing origin when served by this
+      # Compose stack's own `web` service, matching the realm export's
+      # allowlisted redirect/web origin for this same port.
+      CORS_ALLOWED_ORIGINS: http://localhost:8081
       # KEYCLOAK_URL is container-reachable (Admin API), but issued tokens
       # carry `iss` based on the browser-facing hostname the user actually
       # logged in through — KEYCLOAK_ISSUER overrides just the issuer check

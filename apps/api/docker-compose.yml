@@ -12,6 +12,12 @@ services:
       GRAPHQL_INTROSPECTION: 'true'
       GRAPHQL_DEBUG: 'false'
       GRAPHQL_PLAYGROUND: 'false'
+      # Required the moment NODE_ENV=production (validation.schema.ts fails
+      # boot otherwise, by design — v1.0 Release Readiness Audit finding
+      # F-M1). This variant has no `web` service of its own — the frontend
+      # runs separately via `npm run dev` (port 5173) against this
+      # API+Keycloak backend.
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
       # See infrastructure/docker/docker-compose.yml's identical comment:
       # KEYCLOAK_URL is container-reachable; KEYCLOAK_ISSUER matches the
       # browser-facing hostname tokens are actually issued against, and
