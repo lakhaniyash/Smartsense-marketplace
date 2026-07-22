@@ -9,6 +9,7 @@ import {
   ProductPerformanceIcon,
   RevenueIcon,
 } from '@shared/icons'
+import { resolveDateRangePreset } from '@shared/utils'
 
 export interface ReportNavItem {
   key: string
@@ -96,4 +97,21 @@ export function toDateRangeInput(filters: {
     from: new Date(`${filters.from}T00:00:00.000`).toISOString(),
     to: new Date(`${filters.to}T23:59:59.999`).toISOString(),
   }
+}
+
+// Every date-ranged report hook falls back to a trailing 30-day window when
+// the URL carries no explicit `from`/`to` (rather than leaving both
+// `undefined`) — an Admin caller with no partner filter and no date range
+// would otherwise hit reports.service.ts's own `requireBoundedDateRangeForAdmin`
+// guard (F-C2) on first, unfiltered visit to any of these pages. Matches
+// common dashboard UX (a bounded default window) as well as the guard's
+// requirement — both, not either, are the point.
+export function resolveReportDateRangeParams(searchParams: URLSearchParams): {
+  from: string
+  to: string
+} {
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
+  if (from !== null && to !== null) return { from, to }
+  return resolveDateRangePreset('last30Days')
 }
