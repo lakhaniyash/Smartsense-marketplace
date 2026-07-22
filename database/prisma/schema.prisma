@@ -245,6 +245,13 @@ model User {
   // its own — User Management is Admin-flat, not ownership-scoped) — v1.0
   // Release Readiness Audit finding F-C3.
   @@index([deletedAt, createdAt])
+  // Trigram GIN indexes backing UsersService.buildWhere's case-insensitive
+  // search: `email`/`fullName` ILIKE '%term%' (leading-wildcard) can never
+  // use a plain B-tree, so an Admin search was a full scan per keystroke.
+  // Requires the pg_trgm extension, created by the same migration (v1.0
+  // Release Readiness Audit finding F-H5).
+  @@index([email(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([fullName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("users")
 }
 
@@ -304,6 +311,13 @@ model Customer {
   // filter on orders, which a B-tree index on this table can't serve
   // anyway) — v1.0 Release Readiness Audit finding F-C3.
   @@index([deletedAt, createdAt])
+  // Trigram GIN indexes backing CustomersService.buildWhere's
+  // case-insensitive search: `displayName`/`billingEmail` ILIKE '%term%'
+  // (leading-wildcard) can never use a plain B-tree, so an Admin search was
+  // a full scan per keystroke. Requires the pg_trgm extension, created by
+  // the same migration (v1.0 Release Readiness Audit finding F-H5).
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([billingEmail(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("customers")
 }
 
