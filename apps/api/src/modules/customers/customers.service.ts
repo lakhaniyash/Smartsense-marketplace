@@ -35,6 +35,13 @@ import { CustomerArchivedEvent } from './events/customer-archived.event'
 
 const DEFAULT_PAGE_SIZE = 20
 
+// Hard row cap for the synchronous, in-memory CSV export (F-H4). An export
+// that would exceed this is rejected with an explicit "narrow your filter"
+// error rather than silently truncated — v1 has no streamed/queued export
+// mechanism. 10k rows is a safe ceiling for building a CSV string in one
+// request while stopping an Admin-unscoped full-table pull from OOMing.
+const CSV_EXPORT_MAX_ROWS = 10_000
+
 const CUSTOMER_INCLUDE = {
   addresses: {
     where: { isActive: true },
@@ -278,7 +285,13 @@ export class CustomersService {
     }))
   }
 
-  /** Same scoping as findCustomers, but fetches every matching row (no pagination). */
+  /**
+   * Same scoping as findCustomers, but returns every matching row (no cursor
+   * pagination) capped at CSV_EXPORT_MAX_ROWS. Fetches one past the cap so an
+   * over-cap export is rejected outright rather than silently truncated
+   * (F-H4). Partner-scoped callers stay naturally bounded by their permitted
+   * customers; the cap is the safety net for an Admin-unscoped export.
+   */
   async exportCustomersCsv(
     user: AuthenticatedUser,
     filter?: CustomerFilterInput | undefined,
@@ -287,7 +300,14 @@ export class CustomersService {
     const customers = await this.prisma.customer.findMany({
       where,
       orderBy: this.buildOrderBy(undefined),
+      take: CSV_EXPORT_MAX_ROWS + 1,
     })
+    if (customers.length > CSV_EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `This export exceeds the ${CSV_EXPORT_MAX_ROWS.toLocaleString('en-US')}-row limit. ` +
+          'Narrow your filter (by partner scope, status, and/or search) and try again.',
+      )
+    }
 
     const header = ['displayName', 'type', 'status', 'billingEmail', 'createdAt']
     const rows = customers.map((customer) => [

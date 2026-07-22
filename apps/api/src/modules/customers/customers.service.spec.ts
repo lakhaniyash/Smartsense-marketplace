@@ -496,7 +496,7 @@ describe('CustomersService', () => {
       )
     })
 
-    it('builds a CSV header + one row per customer', async () => {
+    it('builds a CSV header + one row per customer under the cap', async () => {
       prisma.customer.findMany.mockResolvedValueOnce([
         {
           displayName: 'Acme Corp',
@@ -514,6 +514,24 @@ describe('CustomersService', () => {
       expect(lines[1]).toBe(
         'Acme Corp,ORGANIZATION,ACTIVE,yash.lakhani+acme@smartsensesolutions.com,2026-01-01T00:00:00.000Z',
       )
+      // Fetches one past the cap so an over-cap result can be detected (F-H4).
+      expect(prisma.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10_001 }),
+      )
+    })
+
+    it('rejects an over-cap export instead of truncating (F-H4)', async () => {
+      prisma.customer.findMany.mockResolvedValueOnce(
+        Array.from({ length: 10_001 }, () => ({
+          displayName: 'Acme Corp',
+          type: CustomerType.ORGANIZATION,
+          status: CustomerStatus.ACTIVE,
+          billingEmail: 'yash.lakhani+acme@smartsensesolutions.com',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        })),
+      )
+
+      await expect(service.exportCustomersCsv(user())).rejects.toThrow(BadRequestException)
     })
   })
 

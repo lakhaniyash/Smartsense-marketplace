@@ -59,6 +59,37 @@ import { ReportsDashboardOutput } from './dto/reports-dashboard.output'
 
 const DEFAULT_PAGE_SIZE = 20
 
+// Safety net for the low-stock query only. Its `quantityOnHand <
+// reorderThreshold` predicate is a cross-column comparison Prisma cannot
+// express in a `where` clause (see fetchLowStockRows' $queryRaw), so without a
+// LIMIT even a Partner-scoped call would stream that Partner's entire
+// inventory into Node memory before filtering. 500 is far above any realistic
+// count of simultaneously-low SKUs for a single report view, yet hard-bounds
+// the worst case (F-C2). Also caps lowStockCount — an intentional tradeoff, a
+// "500+" signal is as actionable as an exact four-digit count.
+const MAX_LOW_STOCK_ROWS = 500
+
+// Hard row cap for the synchronous, in-memory CSV exports (F-H4). An export
+// that would exceed this is rejected with an explicit "narrow your filter"
+// error rather than silently truncated — v1 deliberately has no streamed or
+// queued export mechanism. 10k rows is a comfortable ceiling for building a
+// CSV string in memory in one request while still stopping an Admin-unscoped
+// full-table pull from becoming an OOM/latency event.
+const CSV_EXPORT_MAX_ROWS = 10_000
+
+// Flat row shape returned by the low-stock $queryRaw. Postgres `int4` columns
+// (quantity*/reorderThreshold) come back as JS numbers; the WHERE clause
+// guarantees reorderThreshold is non-null.
+interface LowStockRow {
+  productVariantId: string
+  sku: string
+  productTitle: string
+  partnerId: string
+  quantityOnHand: number
+  quantityReserved: number
+  reorderThreshold: number
+}
+
 // Invoice statuses counted toward "revenue" everywhere in this module —
 // same set the plan's BillingReport aggregation formula uses, reused for
 // RevenueReport/ReportsDashboard so the two never silently diverge.
@@ -289,6 +320,7 @@ export class ReportsService {
     const partnerId = this.resolvePartnerScope(user, filter?.partnerId ?? undefined)
     const granularity = filter?.granularity ?? RevenueBucketGranularity.MONTH
     const dateRange = filter?.dateRange ?? undefined
+    this.requireBoundedDateRangeForAdmin(partnerId, dateRange)
 
     const where: Prisma.InvoiceWhereInput = {
       status: { in: REVENUE_ELIGIBLE_INVOICE_STATUSES },
@@ -429,7 +461,7 @@ export class ReportsService {
         where: { productVariant: variantWhere },
         _sum: { quantityReserved: true },
       }),
-      this.getLowStockItems(variantWhere, { first: args.first, after: args.after }),
+      this.getLowStockItems(partnerId, { first: args.first, after: args.after }),
     ])
 
     return {
@@ -442,29 +474,20 @@ export class ReportsService {
   }
 
   /**
-   * `quantityOnHand < reorderThreshold` is a cross-column comparison Prisma
-   * cannot express in a `where` clause without raw SQL — so every Inventory
-   * row with a reorderThreshold set is fetched once and filtered/paginated
-   * in application memory (accepted for v1: bounded by a Partner's own
-   * catalog size, same class of tradeoff as Billing's unpaginated CSV
-   * export). The cursor is still a real productVariantId, not an offset —
-   * unlike ProductPerformance, there is no groupBy involved here.
+   * Fetches the low-stock Inventory rows (`quantityOnHand < reorderThreshold`)
+   * for the caller's scope, then paginates them in application memory — the
+   * cursor is a real productVariantId, not an offset (unlike ProductPerformance,
+   * there is no groupBy involved here). The underlying query is `LIMIT`-bounded
+   * (see fetchLowStockRows), so both the page and lowStockCount are capped at
+   * MAX_LOW_STOCK_ROWS.
    */
   private async getLowStockItems(
-    variantWhere: Prisma.ProductVariantWhereInput,
+    partnerId: string | undefined,
     args: { first?: number | undefined; after?: string | undefined },
   ): Promise<{ connection: InventoryReportItemConnectionOutput; lowStockCount: number }> {
     const first = args.first ?? DEFAULT_PAGE_SIZE
 
-    const rows = await this.prisma.inventory.findMany({
-      where: { productVariant: variantWhere, reorderThreshold: { not: null } },
-      include: { productVariant: { include: { product: true } } },
-      orderBy: { productVariantId: 'asc' },
-    })
-
-    const lowStock = rows.filter(
-      (row) => row.reorderThreshold !== null && row.quantityOnHand < row.reorderThreshold,
-    )
+    const lowStock = await this.fetchLowStockRows(partnerId, MAX_LOW_STOCK_ROWS)
     const lowStockCount = lowStock.length
 
     const afterIndex =
@@ -481,9 +504,9 @@ export class ReportsService {
       cursor: this.encodeCursor(row.productVariantId),
       node: {
         productVariantId: row.productVariantId,
-        sku: row.productVariant.sku,
-        productTitle: row.productVariant.product.title,
-        partnerId: row.productVariant.partnerId,
+        sku: row.sku,
+        productTitle: row.productTitle,
+        partnerId: row.partnerId,
         quantityOnHand: row.quantityOnHand,
         quantityReserved: row.quantityReserved,
         reorderThreshold: row.reorderThreshold,
@@ -502,6 +525,47 @@ export class ReportsService {
       },
       lowStockCount,
     }
+  }
+
+  /**
+   * Low-stock is `quantityOnHand < reorderThreshold` — a cross-column
+   * comparison Prisma cannot express in a `where` clause. This is the one
+   * runtime query in the module that drops to `$queryRaw`, the same "raw SQL
+   * only where the ORM genuinely can't express it" instinct as the
+   * BillingReport GiST exclusion constraint hand-written in the migrations.
+   * The SQL is a parameterized tagged template (never string-concatenated),
+   * and always `LIMIT`-bounded so an Admin-unscoped call can't pull every
+   * Partner's inventory into memory (F-C2). Mirrors the previous
+   * `productVariant`-relation filter exactly: only pv.deleted_at IS NULL
+   * (Product soft-deletes were never filtered here) plus the optional
+   * partner scope.
+   */
+  private async fetchLowStockRows(
+    partnerId: string | undefined,
+    limit: number,
+  ): Promise<LowStockRow[]> {
+    const partnerFilter =
+      partnerId !== undefined ? Prisma.sql`AND pv.partner_id = ${partnerId}::uuid` : Prisma.empty
+
+    return this.prisma.$queryRaw<LowStockRow[]>(Prisma.sql`
+      SELECT
+        i.product_variant_id AS "productVariantId",
+        pv.sku AS "sku",
+        p.title AS "productTitle",
+        pv.partner_id AS "partnerId",
+        i.quantity_on_hand AS "quantityOnHand",
+        i.quantity_reserved AS "quantityReserved",
+        i.reorder_threshold AS "reorderThreshold"
+      FROM inventory i
+      JOIN product_variants pv ON pv.id = i.product_variant_id
+      JOIN products p ON p.id = pv.product_id
+      WHERE i.reorder_threshold IS NOT NULL
+        AND i.quantity_on_hand < i.reorder_threshold
+        AND pv.deleted_at IS NULL
+        ${partnerFilter}
+      ORDER BY i.product_variant_id ASC
+      LIMIT ${limit}
+    `)
   }
 
   // ---------------------------------------------------------------------
@@ -554,6 +618,7 @@ export class ReportsService {
   ): Promise<ProductPerformanceConnectionOutput> {
     const partnerId = this.resolvePartnerScope(user, args.filter?.partnerId ?? undefined)
     const dateRange = args.filter?.dateRange ?? undefined
+    this.requireBoundedDateRangeForAdmin(partnerId, dateRange)
     const first = args.first ?? DEFAULT_PAGE_SIZE
     const startOffset = args.after !== undefined ? this.decodeOffsetCursor(args.after) + 1 : 0
 
@@ -729,7 +794,9 @@ export class ReportsService {
     const reports = await this.prisma.billingReport.findMany({
       where,
       orderBy: this.buildBillingReportOrderBy(undefined),
+      take: CSV_EXPORT_MAX_ROWS + 1,
     })
+    this.assertExportRowCountWithinCap(reports.length)
     return buildCsv(
       [
         'partnerId',
@@ -790,18 +857,10 @@ export class ReportsService {
     input: ExportReportInput,
   ): Promise<string> {
     const partnerId = this.resolvePartnerScope(user, input.partnerId)
-    const variantWhere: Prisma.ProductVariantWhereInput = {
-      deletedAt: null,
-      ...(partnerId !== undefined && { partnerId }),
-    }
-    const rows = await this.prisma.inventory.findMany({
-      where: { productVariant: variantWhere, reorderThreshold: { not: null } },
-      include: { productVariant: { include: { product: true } } },
-      orderBy: { productVariantId: 'asc' },
-    })
-    const lowStock = rows.filter(
-      (row) => row.reorderThreshold !== null && row.quantityOnHand < row.reorderThreshold,
-    )
+    // Fetch one past the cap so an over-cap export is rejected outright rather
+    // than silently truncated (F-H4). Same $queryRaw path as the read report.
+    const lowStock = await this.fetchLowStockRows(partnerId, CSV_EXPORT_MAX_ROWS + 1)
+    this.assertExportRowCountWithinCap(lowStock.length)
     return buildCsv(
       [
         'productVariantId',
@@ -814,12 +873,12 @@ export class ReportsService {
       ],
       lowStock.map((row) => [
         row.productVariantId,
-        row.productVariant.sku,
-        row.productVariant.product.title,
-        row.productVariant.partnerId,
+        row.sku,
+        row.productTitle,
+        row.partnerId,
         String(row.quantityOnHand),
         String(row.quantityReserved),
-        String(row.reorderThreshold ?? ''),
+        String(row.reorderThreshold),
       ]),
     )
   }
@@ -843,7 +902,9 @@ export class ReportsService {
       where,
       _sum: { quantity: true, lineTotal: true },
       orderBy: [{ _sum: { lineTotal: 'desc' } }],
+      take: CSV_EXPORT_MAX_ROWS + 1,
     })
+    this.assertExportRowCountWithinCap(groups.length)
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: groups.map((group) => group.productVariantId) } },
       include: { product: true },
@@ -926,6 +987,41 @@ export class ReportsService {
   /** Same as buildPartnerDateFilter, for filter DTOs with no dateRange field (e.g. Inventory). */
   private buildPartnerFilter<T extends { partnerId?: string }>(partnerId: string | undefined): T {
     return { ...(partnerId !== undefined && { partnerId }) } as T
+  }
+
+  /**
+   * An Admin-unscoped historical report (no Partner floor and no date range)
+   * would scan and aggregate the entire marketplace's ledger into Node memory
+   * (F-C2). Require a bounded date range whenever an Admin caller has not
+   * narrowed to a single Partner. Partner-scoped callers are naturally bounded
+   * by their own tenant size (`partnerId` is always defined for them here) and
+   * are deliberately never subject to this — passing `partnerId === undefined`
+   * is only ever reachable by an Admin who supplied no partner filter.
+   */
+  private requireBoundedDateRangeForAdmin(
+    partnerId: string | undefined,
+    dateRange: DateRangeInput | undefined,
+  ): void {
+    if (partnerId === undefined && dateRange === undefined) {
+      throw new BadRequestException(
+        'A date range is required for this report when it is not scoped to a single partner.',
+      )
+    }
+  }
+
+  /**
+   * Enforces the synchronous CSV export ceiling (F-H4). Callers fetch one row
+   * past the cap (`take: CSV_EXPORT_MAX_ROWS + 1`) and pass the resulting
+   * length here, so an over-cap export is rejected with an explicit,
+   * filter-narrowing error rather than being silently truncated.
+   */
+  private assertExportRowCountWithinCap(rowCount: number): void {
+    if (rowCount > CSV_EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `This export exceeds the ${CSV_EXPORT_MAX_ROWS.toLocaleString('en-US')}-row limit. ` +
+          'Narrow your filter (by partner and/or date range) and try again.',
+      )
+    }
   }
 
   /**

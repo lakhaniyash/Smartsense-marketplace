@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common'
 import { InvoiceStatus, PaymentMethod, PaymentStatus, Prisma, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { OrderCompletedEvent } from '../orders/events/order-completed.event'
@@ -425,6 +425,33 @@ describe('BillingService', () => {
       )
 
       await expect(service.recordPayment(user(), input)).rejects.toThrow(ConflictException)
+    })
+  })
+
+  // F-H4: the synchronous invoice CSV export must reject an over-cap result
+  // rather than silently truncating (or streaming) an unbounded pull.
+  describe('exportInvoicesCsv — row cap', () => {
+    it('exports every matching row under the cap', async () => {
+      prisma.invoice.findMany.mockResolvedValueOnce([invoiceFixture({ invoiceNumber: 'INV-0001' })])
+
+      const csv = await service.exportInvoicesCsv(user({ partnerId: 'partner-1' }))
+
+      expect(csv).toContain('INV-0001')
+      // Fetches one past the cap so an over-cap result can be detected, never
+      // truncated.
+      expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10_001 }),
+      )
+    })
+
+    it('rejects an over-cap export instead of truncating', async () => {
+      prisma.invoice.findMany.mockResolvedValueOnce(
+        Array.from({ length: 10_001 }, () => invoiceFixture()),
+      )
+
+      await expect(service.exportInvoicesCsv(user({ partnerId: null }))).rejects.toThrow(
+        BadRequestException,
+      )
     })
   })
 })

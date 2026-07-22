@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto'
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { InvoiceStatus, type Payment, PaymentStatus, Prisma } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
@@ -20,6 +25,13 @@ import { PaymentOutput } from './dto/payment.output'
 import { generateInvoicePdf, type InvoiceForPdf } from './utils/invoice-pdf.generator'
 
 const DEFAULT_PAGE_SIZE = 20
+
+// Hard row cap for the synchronous, in-memory CSV export (F-H4). An export
+// that would exceed this is rejected with an explicit "narrow your filter"
+// error rather than silently truncated — v1 has no streamed/queued export
+// mechanism. 10k rows is a safe ceiling for building a CSV string in one
+// request while stopping an Admin-unscoped full-table pull from OOMing.
+const CSV_EXPORT_MAX_ROWS = 10_000
 
 export const INVOICE_INCLUDE = { payments: true } satisfies Prisma.InvoiceInclude
 
@@ -301,7 +313,13 @@ export class BillingService {
     return this.mapPaymentToOutput(payment)
   }
 
-  /** Same scoping as findInvoices, but fetches every matching row (no pagination). */
+  /**
+   * Same scoping as findInvoices, but returns every matching row (no cursor
+   * pagination) capped at CSV_EXPORT_MAX_ROWS. Fetches one past the cap so an
+   * over-cap export is rejected outright rather than silently truncated
+   * (F-H4). Partner-scoped callers stay naturally bounded by their own tenant
+   * size; the cap is the safety net for an Admin-unscoped export.
+   */
   async exportInvoicesCsv(
     user: AuthenticatedUser,
     filter?: InvoiceFilterInput | undefined,
@@ -310,7 +328,14 @@ export class BillingService {
     const invoices = await this.prisma.invoice.findMany({
       where,
       orderBy: this.buildOrderBy(undefined),
+      take: CSV_EXPORT_MAX_ROWS + 1,
     })
+    if (invoices.length > CSV_EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `This export exceeds the ${CSV_EXPORT_MAX_ROWS.toLocaleString('en-US')}-row limit. ` +
+          'Narrow your filter (by partner, status, and/or date range) and try again.',
+      )
+    }
 
     const header = [
       'invoiceNumber',
