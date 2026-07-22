@@ -298,13 +298,13 @@ modules/<name>/
 
 Larger modules add subfolders as needed, following the pattern established by `modules/auth`:
 
-| Subfolder     | Purpose                                                                        |
-| ------------- | ------------------------------------------------------------------------------ |
-| `decorators/` | Custom parameter/method decorators (`@CurrentUser()`, `@Roles()`, `@Public()`) |
-| `dto/`        | GraphQL input/output types (`class-validator`/`class-transformer` decorated)   |
-| `guards/`     | `CanActivate` guards (`GqlAuthGuard`, `RolesGuard`, `PermissionGuard`)         |
-| `strategies/` | Passport strategies (`JwtStrategy`)                                            |
-| `types/`      | Module-internal TypeScript types (e.g. `AuthContext`)                          |
+| Subfolder     | Purpose                                                                              |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `decorators/` | Custom parameter/method decorators (`@CurrentUser()`, `@Permissions()`, `@Public()`) |
+| `dto/`        | GraphQL input/output types (`class-validator`/`class-transformer` decorated)         |
+| `guards/`     | `CanActivate` guards (`GqlAuthGuard`, `PermissionGuard`)                             |
+| `strategies/` | Passport strategies (`JwtStrategy`)                                                  |
+| `types/`      | Module-internal TypeScript types (e.g. `AuthContext`)                                |
 
 Details of the auth module's JWT validation, guard chain, and RBAC design are documented in [authentication.md](./authentication.md#backend-auth-module-responsibilities) — this document only describes where the files live, not what they do.
 

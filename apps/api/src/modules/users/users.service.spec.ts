@@ -557,16 +557,33 @@ describe('UsersService', () => {
       ).rejects.toThrow(BadRequestException)
     })
 
-    it('rejects granting the Admin role when the caller is not an Admin, before provisioning', async () => {
+    it('rejects inviting with the Admin role when the caller lacks roles:grant:admin, before provisioning', async () => {
       prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-admin', name: 'Admin' }])
 
       await expect(
-        service.inviteUser(user({ roles: ['Partner'] }), {
+        service.inviteUser(user({ permissions: ['users:read'] }), {
           ...baseInvite,
           roleIds: ['role-admin'],
         }),
       ).rejects.toThrow(ForbiddenException)
       expect(keycloakAdminService.createUser).not.toHaveBeenCalled()
+    })
+
+    it('lets a caller holding roles:grant:admin invite a new user with the Admin role', async () => {
+      prisma.role.findMany.mockResolvedValueOnce([{ id: 'role-admin', name: 'Admin' }])
+      prisma.user.findUnique.mockResolvedValueOnce(null)
+      keycloakAdminService.createUser.mockResolvedValueOnce('kc-new-admin-1')
+      prisma.user.create.mockResolvedValueOnce({ id: 'user-new-admin-1' })
+      prisma.user.findFirst.mockResolvedValueOnce(userRowFixture({ id: 'user-new-admin-1' }))
+      keycloakAdminService.sendExecuteActionsEmail.mockResolvedValueOnce(undefined)
+
+      const result = await service.inviteUser(
+        user({ permissions: ['users:read', 'roles:grant:admin'] }),
+        { ...baseInvite, roleIds: ['role-admin'] },
+      )
+
+      expect(keycloakAdminService.createUser).toHaveBeenCalled()
+      expect(result.id).toBe('user-new-admin-1')
     })
 
     it('rejects a re-invite for an email that already has a local user, before Keycloak', async () => {
@@ -717,7 +734,7 @@ describe('UsersService', () => {
       )
     })
 
-    it('rejects granting the Admin role when the caller is not themselves an Admin', async () => {
+    it('rejects granting the Admin role when the caller lacks roles:grant:admin', async () => {
       prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
       prisma.role.findFirst.mockResolvedValueOnce({
         id: 'role-admin',
@@ -727,7 +744,9 @@ describe('UsersService', () => {
 
       await expect(
         service.assignUserRole(
-          user({ id: 'partner-user-1', roles: ['Partner'] }),
+          // Holds users:manage-equivalent access but NOT the escalation key —
+          // the Admin role-name is deliberately absent from the decision now.
+          user({ id: 'other-admin-1', permissions: ['users:read'] }),
           'user-1',
           'role-admin',
         ),
@@ -735,7 +754,7 @@ describe('UsersService', () => {
       expect(prisma.userRole.create).not.toHaveBeenCalled()
     })
 
-    it('lets an Admin caller grant the Admin role to someone else', async () => {
+    it('lets a caller holding roles:grant:admin grant the Admin role to someone else', async () => {
       prisma.user.findFirst.mockResolvedValueOnce({ id: 'user-1' })
       prisma.role.findFirst.mockResolvedValueOnce({
         id: 'role-admin',
@@ -746,7 +765,7 @@ describe('UsersService', () => {
       prisma.user.findFirst.mockResolvedValueOnce(userRowFixture())
 
       await service.assignUserRole(
-        user({ id: 'admin-1', roles: ['Admin'] }),
+        user({ id: 'admin-1', permissions: ['users:read', 'roles:grant:admin'] }),
         'user-1',
         'role-admin',
       )
