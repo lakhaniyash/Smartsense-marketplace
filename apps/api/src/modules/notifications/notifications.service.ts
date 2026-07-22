@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { type Notification, NotificationStatus, Prisma, UserStatus } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import {
   NotificationConnectionOutput,
   NotificationEdgeOutput,
@@ -56,7 +57,7 @@ export class NotificationsService {
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
     })
@@ -65,7 +66,7 @@ export class NotificationsService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: NotificationEdgeOutput[] = page.map((notification) => ({
-      cursor: this.encodeCursor(notification.id),
+      cursor: encodeCursor(notification.id),
       node: this.mapToOutput(notification),
     }))
 
@@ -192,13 +193,5 @@ export class NotificationsService {
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

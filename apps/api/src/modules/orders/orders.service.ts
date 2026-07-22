@@ -12,6 +12,7 @@ import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { InventoryReleasedEvent } from '../catalog/events/inventory-released.event'
 import { InventoryReservedEvent } from '../catalog/events/inventory-reserved.event'
 import { InventoryService } from '../catalog/inventory.service'
@@ -144,7 +145,7 @@ export class OrdersService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: ORDER_INCLUDE,
@@ -154,7 +155,7 @@ export class OrdersService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: OrderEdgeOutput[] = page.map((order) => ({
-      cursor: this.encodeCursor(order.id),
+      cursor: encodeCursor(order.id),
       node: this.mapOrderToOutput(order),
     }))
 
@@ -558,13 +559,5 @@ export class OrdersService {
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

@@ -14,6 +14,7 @@ import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
 import { KeycloakAdminService } from '../../common/services/keycloak-admin.service'
 import { LoggingService } from '../../common/services/logging.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { CreateRoleInput } from './dto/create-role.input'
 import { InviteUserInput } from './dto/invite-user.input'
 import { RoleOutput } from './dto/role.output'
@@ -99,7 +100,7 @@ export class UsersService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: USER_INCLUDE,
@@ -109,7 +110,7 @@ export class UsersService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: UserEdgeOutput[] = page.map((row) => ({
-      cursor: this.encodeCursor(row.id),
+      cursor: encodeCursor(row.id),
       node: this.mapUserToOutput(row),
     }))
 
@@ -839,13 +840,5 @@ export class UsersService {
         domain: rolePermission.permission.domain,
       })),
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

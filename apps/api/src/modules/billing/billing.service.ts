@@ -11,6 +11,7 @@ import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { buildCsv } from '../../common/utils/csv.util'
 import { type OrderCompletedEvent } from '../orders/events/order-completed.event'
 import { CreatePaymentInput } from './dto/create-payment.input'
@@ -127,7 +128,7 @@ export class BillingService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: INVOICE_INCLUDE,
@@ -137,7 +138,7 @@ export class BillingService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: InvoiceEdgeOutput[] = page.map((invoice) => ({
-      cursor: this.encodeCursor(invoice.id),
+      cursor: encodeCursor(invoice.id),
       node: this.mapInvoiceToOutput(invoice),
     }))
 
@@ -461,13 +462,5 @@ export class BillingService {
       processedAt: payment.processedAt,
       createdAt: payment.createdAt,
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

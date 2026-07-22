@@ -19,6 +19,7 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { type DateRangeInput } from '../../common/graphql/date-range.input'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { buildCsv } from '../../common/utils/csv.util'
 import {
   BillingReportConnectionOutput,
@@ -144,7 +145,7 @@ export class ReportsService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
     })
@@ -153,7 +154,7 @@ export class ReportsService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: BillingReportEdgeOutput[] = page.map((report) => ({
-      cursor: this.encodeCursor(report.id),
+      cursor: encodeCursor(report.id),
       node: this.mapBillingReportToOutput(report),
     }))
 
@@ -492,16 +493,15 @@ export class ReportsService {
 
     const afterIndex =
       args.after !== undefined
-        ? lowStock.findIndex(
-            (row) => row.productVariantId === this.decodeCursor(args.after as string),
-          ) + 1
+        ? lowStock.findIndex((row) => row.productVariantId === decodeCursor(args.after as string)) +
+          1
         : 0
     const page = lowStock.slice(afterIndex, afterIndex + first)
     const hasNextPage = afterIndex + first < lowStock.length
     const hasPreviousPage = afterIndex > 0
 
     const edges: InventoryReportItemEdgeOutput[] = page.map((row) => ({
-      cursor: this.encodeCursor(row.productVariantId),
+      cursor: encodeCursor(row.productVariantId),
       node: {
         productVariantId: row.productVariantId,
         sku: row.sku,
@@ -648,6 +648,12 @@ export class ReportsService {
     const hasNextPage = startOffset + first < sortedGroups.length
     const page = sortedGroups.slice(startOffset, startOffset + first)
 
+    // Deliberately no `deletedAt: null` here, unlike every other query in
+    // this file — these ids come from OrderItem.groupBy above, i.e. real
+    // historical sales. A discontinued/deleted variant's past revenue is
+    // still real revenue; hiding it would understate this report's totals
+    // for exactly the products a Partner most needs to see performance on
+    // (v1.0 Release Readiness Audit finding F-M13).
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: page.map((group) => group.productVariantId) } },
       include: { product: true },
@@ -905,6 +911,9 @@ export class ReportsService {
       take: CSV_EXPORT_MAX_ROWS + 1,
     })
     this.assertExportRowCountWithinCap(groups.length)
+    // Same deliberate omission of `deletedAt: null` as the read path above —
+    // historical revenue for a since-discontinued variant is still real
+    // revenue (F-M13).
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: groups.map((group) => group.productVariantId) } },
       include: { product: true },
@@ -1204,14 +1213,6 @@ export class ReportsService {
     const end = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 1))
     end.setUTCMilliseconds(end.getUTCMilliseconds() - 1)
     return { start, end }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 
   // Offset-encoded cursor for ProductPerformance only — see

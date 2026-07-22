@@ -18,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogEntryOutput } from '../../common/graphql/audit-log-entry.output'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { buildCsv } from '../../common/utils/csv.util'
 import { AddCustomerAddressInput } from './dto/add-customer-address.input'
 import { CustomerAddressOutput } from './dto/customer-address.output'
@@ -88,7 +89,7 @@ export class CustomersService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: CUSTOMER_INCLUDE,
@@ -98,7 +99,7 @@ export class CustomersService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: CustomerEdgeOutput[] = page.map((customer) => ({
-      cursor: this.encodeCursor(customer.id),
+      cursor: encodeCursor(customer.id),
       // billingSummary is intentionally null on every list row — see
       // CustomerBillingSummaryOutput's description.
       node: this.mapCustomerToOutput(customer),
@@ -637,13 +638,5 @@ export class CustomersService {
       country: address.country,
       isDefault: address.isDefault,
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }
