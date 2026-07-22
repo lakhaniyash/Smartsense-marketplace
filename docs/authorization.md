@@ -34,7 +34,7 @@ This document covers **authorization**: the RBAC/permission model, role definiti
 ### Authorization Philosophy
 
 - **Deny by default.** Every operation is authenticated unless `@Public()`; every permission check treats "not in the resolved set" as denied; there is no implicit allow anywhere ([authentication.md § Permission Strategy](./authentication.md#permission-strategy), rule 4).
-- **Capabilities, not identities.** Code asks "can this user `catalog:write`," never "is this user an Admin" — role names appear in exactly two places: the Keycloak↔Postgres mapping join and the `@Roles()` decorator for the rare genuinely role-shaped rule. Everything else is permission keys.
+- **Capabilities, not identities.** Code asks "can this user `catalog:write`," never "is this user an Admin" — authorization decisions are made against permission keys, never role names. Role names appear only where a role is data, not a capability: the Keycloak↔Postgres mapping join, and a few service-layer guardrails that identify a specific system Role as the _noun_ being acted on (e.g. protecting the Admin Role from removal-of-the-last-Admin) — never as a check on the _caller's_ identity. There is no `@Roles()` decorator (removed in the v1.0 audit remediation — it had zero call sites); every resolver authorizes via `@Permissions()`.
 - **The backend is the enforcement point; the frontend is a mirror.** Frontend checks exist purely to spare users dead-end UI — every decision is re-made server-side from scratch ([authentication.md § Authorization Flow](./authentication.md#authorization-flow-putting-it-together)).
 - **Permissions gate the verb; ownership gates the noun.** `orders:read` says a user may read orders _in general_; whether they may read _this_ order is a separate, composed ownership check ([Ownership Rules](#ownership-rules)).
 
@@ -47,7 +47,7 @@ This document covers **authorization**: the RBAC/permission model, role definiti
 | _Who are you?_     | Authentication | Keycloak + `JwtStrategy`/`GqlAuthGuard` — fully documented in [authentication.md](./authentication.md) |
 | _What may you do?_ | Authorization  | This document — roles, permissions, ownership, and their enforcement                                   |
 
-The boundary in code: authentication ends the moment a validated `AuthenticatedUser` (identity + resolved `roles` + resolved `permissions`) is attached to the request. Everything that reads that object to make an allow/deny decision — `RolesGuard`, `PermissionGuard`, service-layer ownership checks, frontend `canX()` helpers — is authorization and is governed here. The two fail differently by design: an authentication failure is `UNAUTHENTICATED` (get a valid identity, then retry); an authorization failure is `FORBIDDEN` (a valid identity that is simply not allowed) — the SPA reacts differently to each ([authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication)).
+The boundary in code: authentication ends the moment a validated `AuthenticatedUser` (identity + resolved `roles` + resolved `permissions`) is attached to the request. Everything that reads that object to make an allow/deny decision — `PermissionGuard`, service-layer ownership checks, frontend `canX()` helpers — is authorization and is governed here. The two fail differently by design: an authentication failure is `UNAUTHENTICATED` (get a valid identity, then retry); an authorization failure is `FORBIDDEN` (a valid identity that is simply not allowed) — the SPA reacts differently to each ([authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication)).
 
 ---
 
@@ -107,21 +107,22 @@ M13 (Orders) is the first real instance of this: `orders:create` (place/cancel o
 
 ### The Seeded Catalog
 
-| Permission key     | Grants                                                          | Admin | Partner | Customer |
-| ------------------ | --------------------------------------------------------------- | :---: | :-----: | :------: |
-| `dashboard:view`   | Dashboard analytics and summaries                               |  ✅   |   ✅    |    ✅    |
-| `catalog:read`     | View products, variants, categories                             |  ✅   |   ✅    |    ✅    |
-| `catalog:write`    | Create/edit products, variants, inventory                       |  ✅   |   ✅    |    —     |
-| `orders:read`      | View orders and order history                                   |  ✅   |   ✅    |    ✅    |
-| `orders:create`    | Place a new order; cancel an own order before fulfillment (M13) |  ✅   |   ✅    |    ✅    |
-| `orders:write`     | Update order status, manage fulfillment                         |  ✅   |   ✅    |    —     |
-| `billing:read`     | View invoices, payments, billing reports                        |  ✅   |   ✅    |    —     |
-| `billing:manage`   | Administrative billing operations                               |  ✅   |    —    |    —     |
-| `users:read`       | View platform users                                             |  ✅   |    —    |    —     |
-| `users:manage`     | Manage users and role assignments                               |  ✅   |    —    |    —     |
-| `customers:read`   | View customer accounts and their order/billing history          |  ✅   |   ✅    |    —     |
-| `customers:write`  | Edit and suspend/reactivate customer accounts within scope      |  ✅   |   ✅    |    —     |
-| `customers:manage` | Create new customer accounts (Admin-only)                       |  ✅   |    —    |    —     |
+| Permission key      | Grants                                                          | Admin | Partner | Customer |
+| ------------------- | --------------------------------------------------------------- | :---: | :-----: | :------: |
+| `dashboard:view`    | Dashboard analytics and summaries                               |  ✅   |   ✅    |    ✅    |
+| `catalog:read`      | View products, variants, categories                             |  ✅   |   ✅    |    ✅    |
+| `catalog:write`     | Create/edit products, variants, inventory                       |  ✅   |   ✅    |    —     |
+| `orders:read`       | View orders and order history                                   |  ✅   |   ✅    |    ✅    |
+| `orders:create`     | Place a new order; cancel an own order before fulfillment (M13) |  ✅   |   ✅    |    ✅    |
+| `orders:write`      | Update order status, manage fulfillment                         |  ✅   |   ✅    |    —     |
+| `billing:read`      | View invoices, payments, billing reports                        |  ✅   |   ✅    |    —     |
+| `billing:manage`    | Administrative billing operations                               |  ✅   |    —    |    —     |
+| `users:read`        | View platform users                                             |  ✅   |    —    |    —     |
+| `users:manage`      | Manage users and role assignments                               |  ✅   |    —    |    —     |
+| `roles:grant:admin` | Grant the Admin role to another user (escalation guardrail)     |  ✅   |    —    |    —     |
+| `customers:read`    | View customer accounts and their order/billing history          |  ✅   |   ✅    |    —     |
+| `customers:write`   | Edit and suspend/reactivate customer accounts within scope      |  ✅   |   ✅    |    —     |
+| `customers:manage`  | Create new customer accounts (Admin-only)                       |  ✅   |    —    |    —     |
 
 Grants are exactly as seeded (`database/prisma/seed.ts`); a ✅ never implies ownership bypass — Partner and Customer grants are always additionally ownership-scoped ([Ownership Rules](#ownership-rules)).
 
@@ -201,11 +202,14 @@ three additional guardrails no permission key can express:
 2. **Last-Admin-standing protection.** Removing the Admin Role from a User is rejected if that
    User is the platform's only remaining Admin (`UserRole` rows for the Admin Role number exactly
    one). This has no ownership-style exception — it applies regardless of who the caller is.
-3. **Admin-grant restriction.** Granting the Admin Role to a User requires the caller to already
-   hold the Admin Role themselves. `users:manage` is Admin-only in the seeded catalog today, so
-   this is defense-in-depth, not a live restriction yet — it protects against a future non-Admin
-   Role ever being granted `users:manage`, at which point this guard (not the permission key)
-   is what still stops that Role's holders from minting new Admins.
+3. **Admin-grant restriction.** Granting the Admin Role to a User requires the caller to hold the
+   dedicated `roles:grant:admin` permission key — a capability check, never a `caller-is-an-Admin`
+   role-name comparison (that identity anti-pattern is banned; see [Authorization Philosophy](#authorization-philosophy)).
+   `roles:grant:admin` is seeded to the Admin role only, so this is defense-in-depth, not a live
+   restriction yet — it protects against a future non-Admin Role ever being granted `users:manage`,
+   at which point this key (which that Role would still lack) is what stops its holders from minting
+   new Admins. The check reads the caller's already-resolved permission set (`UsersService`), the
+   same set the guards evaluate.
 
 None of these are ownership checks in the [Ownership Rules](#ownership-rules) sense (there is no
 Partner/Customer floor here — `users:manage` is unrestricted for whoever holds it); they are
@@ -222,7 +226,7 @@ restriction) doesn't apply here — suspending/reactivating never changes which 
 **Applied to invites in SM-337.** `inviteUser` (which provisions a new Keycloak identity plus a
 local `INVITED` `User` row with its initial roles — see [authentication.md § Invite provisioning](./authentication.md#invite-provisioning))
 reuses guardrail 3: including the Admin Role in a new invitee's `roleIds` requires the caller to
-already hold the Admin Role. Guardrails 1 and 2 are structurally inapplicable — the invitee is
+hold `roles:grant:admin`. Guardrails 1 and 2 are structurally inapplicable — the invitee is
 always a brand-new identity (never the caller, so no self-edit), and an invite only ever _adds_ an
 Admin, never removes the last one.
 
@@ -270,8 +274,8 @@ The mechanics live in `apps/api/src/modules/auth/` and are registered/ordered as
 
 | Component                  | Authorization role                                                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Guards**                 | `GqlAuthGuard` (authentication, opt-out) → `RolesGuard` (checks `@Roles()` metadata) → `PermissionGuard` (checks `@Permissions()` metadata) — globally registered in that order; both authorization guards are no-ops on handlers without their decorator.                                                                                                                                                                        |
-| **Decorators**             | `@Public()` — opt out of authentication entirely (rare, justified per use). `@Roles('Admin', ...)` — OR semantics: any listed role passes. `@Permissions('catalog:write', ...)` — AND semantics: every listed key required. `@CurrentUser()` — injects the resolved `AuthenticatedUser` for ownership checks.                                                                                                                     |
+| **Guards**                 | `GqlAuthGuard` (authentication, opt-out) → `PermissionGuard` (checks `@Permissions()` metadata) — globally registered in that order; `PermissionGuard` is a no-op on handlers without its decorator.                                                                                                                                                                                                                              |
+| **Decorators**             | `@Public()` — opt out of authentication entirely (rare, justified per use). `@Permissions('catalog:write', ...)` — AND semantics: every listed key required. `@CurrentUser()` — injects the resolved `AuthenticatedUser` for ownership checks.                                                                                                                                                                                    |
 | **Authorization services** | `PermissionService` — the single place `Permission`/`RolePermission` are queried for authorization: `getPermissionKeysForUser()` (resolution) and `can()`/`canAll()` (evaluation). No other code queries those tables for access decisions.                                                                                                                                                                                       |
 | **Permission evaluation**  | Resolution happens **once per request during authentication** (`AuthService.validateAndProvisionUser` computes `roles` + `permissions` from Postgres and attaches them to `req.user`); guards then evaluate **in memory** against that resolved set. Fresh-per-request, never cached across requests, never trusted from JWT claims ([authentication.md § Permission Strategy](./authentication.md#permission-strategy), rule 2). |
 | **Ownership validation**   | Not a guard concern — a **service-layer business rule** ([api-conventions.md § Business Logic Rules](./api-conventions.md#business-logic-rules)): the service compares the record's owner FK against the caller's organization and throws `NotFoundException`/`ForbiddenException` on mismatch (see [Ownership Rules](#ownership-rules) for which). Guards decide the verb; services decide the noun.                             |
@@ -280,7 +284,7 @@ Choosing the right tool, in order of preference:
 
 1. `@Permissions('resource:action')` — the default for every protected operation.
 2. Service-layer ownership check — always composed with (1) for Partner/Customer-reachable data.
-3. `@Roles(...)` — only for genuinely role-shaped rules with no capability framing (rare; prefer adding a permission key).
+3. Service-layer guardrail on a specific system Role as data (rare — e.g. the Admin-grant/last-Admin protections in `UsersService`); a genuinely role-shaped rule with no capability framing adds a dedicated permission key (as `roles:grant:admin` did), never a role-name identity check.
 4. `@Public()` — exceptional, with a comment justifying why the operation is public.
 
 ---
@@ -357,7 +361,7 @@ sequenceDiagram
     AS->>PS: getPermissionKeysForUser(userId)
     PS-->>AS: ["dashboard:view", "catalog:read", "catalog:write", ...]
     AS-->>JWT: AuthenticatedUser { roles, permissions } → req.user
-    JWT->>PG: guard chain continues (RolesGuard no-op — no @Roles)
+    JWT->>PG: guard chain continues (PermissionGuard next)
     PG->>PG: @Permissions('catalog:write') vs req.user.permissions (in memory)
     alt missing capability
         PG-->>U: FORBIDDEN — "Requires permission(s): catalog:write"
@@ -396,7 +400,7 @@ Developer checklist for any new operation, page, or field:
 - [ ] The operation declares `@Permissions()` with an existing key from the [catalog](#the-seeded-catalog) — or this document and the seed/migration gain the new key in the same PR.
 - [ ] Partner/Customer-reachable data has a service-layer ownership check composed with the permission check — never one substituting for the other.
 - [ ] List queries scope ownership in the `where` clause; single-record ownership misses return `NOT_FOUND`.
-- [ ] No `role === 'Admin'`-style checks anywhere — capability helpers on the frontend, `@Permissions()`/`@Roles()` metadata on the backend.
+- [ ] No `role === 'Admin'`-style caller checks anywhere — capability helpers on the frontend, `@Permissions()` metadata on the backend.
 - [ ] `@Public()` appears only with a comment justifying it, and never on anything touching user-scoped data.
 - [ ] Frontend nav/rendering uses `canX()` helpers keyed to the same permission strings the backend checks.
 - [ ] Authorization paths have tests: permission-denied, ownership-denied, and success, per [testing.md § Authentication Testing](./testing.md#authentication-testing).

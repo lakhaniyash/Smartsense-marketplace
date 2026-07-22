@@ -13,9 +13,26 @@ export const validationSchema = Joi.object({
     otherwise: Joi.boolean().default(true),
   }),
   GRAPHQL_PLAYGROUND: Joi.boolean().default(false),
-  // Comma-separated browser origin allowlist (SM-269). Optional — empty means
-  // permissive CORS (dev); production sets it to the web origin(s).
-  CORS_ALLOWED_ORIGINS: Joi.string().allow('').default(''),
+  // Query-shape hardening (v1.0 Release Readiness Audit finding F-C4): an
+  // unlimited-shape query API is a self-service denial-of-service endpoint
+  // the moment it's reachable outside the team. Defaults calibrated against
+  // this schema's actual deepest real operation (depth 4, apps/web's
+  // getOrderById.graphql) and heaviest real field count (33 fields,
+  // getOrderById.graphql) — both with several times' headroom, not guessed.
+  GRAPHQL_MAX_QUERY_DEPTH: Joi.number().integer().min(1).default(10),
+  GRAPHQL_MAX_QUERY_COMPLEXITY: Joi.number().integer().min(1).default(1000),
+  // Comma-separated browser origin allowlist (SM-269). Fail closed in
+  // production, mirroring GRAPHQL_INTROSPECTION above: an unset var there
+  // falls back to a permissive, any-origin CORS policy (main.ts), which is a
+  // safe convenience only for local dev — production must be forced to name
+  // its origin(s) rather than silently start wide open (v1.0 Release
+  // Readiness Audit finding F-M1). Non-production keeps the permissive
+  // opt-in default so local dev and CI are unchanged.
+  CORS_ALLOWED_ORIGINS: Joi.string().when('NODE_ENV', {
+    is: 'production',
+    then: Joi.string().min(1).required(),
+    otherwise: Joi.string().allow('').default(''),
+  }),
   // Container-reachable base URL — used for JWKS fetch and the Keycloak
   // Admin API (KeycloakAdminService), both called from inside the API
   // process. In a topology where the API reaches Keycloak by a different

@@ -209,7 +209,7 @@ One module per bounded domain context under `apps/api/src/modules/<name>/`, foll
 
 - Depend on abstractions where more than one implementation is plausible (rare in this codebase today); depend directly on the concrete NestJS-managed class otherwise — do not add an interface + token indirection speculatively (YAGNI, [§ 2](#2-general-principles)).
 - Global, cross-module providers (`LoggingService`) are registered once via `@Global()` on `CommonModule` and injected wherever needed — never re-instantiated locally.
-- Guards registered globally (`APP_GUARD`) are ordered deliberately when order matters — see `AuthModule`'s comment documenting that `GqlAuthGuard` must run before `RolesGuard`/`PermissionGuard` so `req.user` is populated first. Preserve and update that ordering comment if the guard chain ever changes.
+- Guards registered globally (`APP_GUARD`) are ordered deliberately when order matters — see `AuthModule`'s comment documenting that `GqlAuthGuard` must run before `PermissionGuard` so `req.user` is populated first. Preserve and update that ordering comment if the guard chain ever changes.
 
 ### DTOs
 
@@ -230,9 +230,9 @@ Individual DTOs add field-level `class-validator` decorators (`@IsString()`, `@I
 
 ### Guards
 
-- A guard has one responsibility: authenticate, or authorize against one specific rule. `GqlAuthGuard` authenticates; `RolesGuard` and `PermissionGuard` each authorize against one metadata key (`ROLES_KEY`, permissions) set via a matching decorator (`@Roles()`, `@Permissions()`).
+- A guard has one responsibility: authenticate, or authorize against one specific rule. `GqlAuthGuard` authenticates; `PermissionGuard` authorizes against one metadata key (`PERMISSIONS_KEY`) set via a matching decorator (`@Permissions()`).
 - Authentication is **opt-out, not opt-in**: a new resolver is protected by default; mark it `@Public()` explicitly when it should not be (see the rationale comment on the `Public` decorator, and [authentication.md § GraphQL Authentication](./authentication.md)). Never build a new guard or resolver that defaults to unauthenticated.
-- A guard reads request state (`req.user`) that a prior guard populated — never re-derive it — and documents that ordering dependency in a comment where non-obvious, as `RolesGuard` and `AuthModule` already do.
+- A guard reads request state (`req.user`) that a prior guard populated — never re-derive it — and documents that ordering dependency in a comment where non-obvious, as `PermissionGuard` and `AuthModule` already do.
 
 ### Exception Handling
 
@@ -382,7 +382,7 @@ Exports are **named exports**, per [CLAUDE.md](../CLAUDE.md) — no default expo
 
 Default to **no comment** — a well-named function, variable, and type should make the "what" self-evident. A comment is required only when it captures something the code cannot express on its own:
 
-- A non-obvious invariant or ordering dependency (e.g. the `AuthModule` comment explaining that `GqlAuthGuard` must be registered before `RolesGuard`/`PermissionGuard`).
+- A non-obvious invariant or ordering dependency (e.g. the `AuthModule` comment explaining that `GqlAuthGuard` must be registered before `PermissionGuard`).
 - The reason for an otherwise-surprising choice (e.g. the `LoggingService` comment explaining why it extends `ConsoleLogger` instead of wrapping `new Logger()` — to prevent infinite recursion once registered as the app's custom logger).
 - A deliberate deviation from a rule stated in this document, and why (e.g. `Address` using `isActive` instead of `deletedAt` where every other soft-deletable model uses `deletedAt` — documented in [database-schema.md](./database-schema.md#soft-delete-strategy)).
 - A security or business-rule constraint that isn't visible from the code alone (e.g. the `Public()` decorator's comment stating that authentication is opt-out, not opt-in).

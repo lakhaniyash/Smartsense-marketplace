@@ -6,7 +6,7 @@ import {
   SortDirection,
 } from '@lib/graphql/__generated__/graphql'
 import { DEFAULT_PAGE_SIZE } from '@shared/constants'
-import { toDateRangeInput } from '../constants'
+import { resolveReportDateRangeParams, toDateRangeInput } from '../constants'
 
 function readEnumParam<T extends string>(
   searchParams: URLSearchParams,
@@ -27,8 +27,7 @@ function readEnumParam<T extends string>(
 export function useProductPerformanceReport() {
   const [searchParams, setSearchParams] = useSearchParams()
   const partnerId = searchParams.get('partnerId') ?? undefined
-  const from = searchParams.get('from') ?? undefined
-  const to = searchParams.get('to') ?? undefined
+  const { from, to } = resolveReportDateRangeParams(searchParams)
   const dateRange = toDateRangeInput({ from, to })
   const sortField = readEnumParam(
     searchParams,

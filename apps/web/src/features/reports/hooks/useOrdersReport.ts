@@ -1,15 +1,14 @@
 import { useQuery } from '@apollo/client'
 import { useSearchParams } from 'react-router'
 import { GetOrdersReportDocument } from '@lib/graphql/__generated__/graphql'
-import { toDateRangeInput } from '../constants'
+import { resolveReportDateRangeParams, toDateRangeInput } from '../constants'
 
 // Single-aggregate + date-range hook shape (M15 plan § Frontend
 // Architecture) — URL-backed `partnerId`/`from`/`to`, one `useQuery`.
 export function useOrdersReport() {
   const [searchParams, setSearchParams] = useSearchParams()
   const partnerId = searchParams.get('partnerId') ?? undefined
-  const from = searchParams.get('from') ?? undefined
-  const to = searchParams.get('to') ?? undefined
+  const { from, to } = resolveReportDateRangeParams(searchParams)
   const dateRange = toDateRangeInput({ from, to })
 
   const { data, loading, error, refetch } = useQuery(GetOrdersReportDocument, {

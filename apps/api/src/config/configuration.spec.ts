@@ -1,4 +1,5 @@
 import configuration from './configuration'
+import { validationSchema } from './validation.schema'
 
 describe('configuration — graphql.introspection', () => {
   const ORIGINAL_ENV = { ...process.env }
@@ -48,7 +49,9 @@ describe('configuration — keycloak.issuer', () => {
     process.env['KEYCLOAK_REALM'] = 'smartsense-marketplace'
     delete process.env['KEYCLOAK_ISSUER']
 
-    expect(configuration().keycloak.issuer).toBe('http://keycloak:8080/realms/smartsense-marketplace')
+    expect(configuration().keycloak.issuer).toBe(
+      'http://keycloak:8080/realms/smartsense-marketplace',
+    )
   })
 
   it('uses KEYCLOAK_ISSUER for the issuer when set, independent of KEYCLOAK_URL', () => {
@@ -74,5 +77,50 @@ describe('configuration — keycloak.issuer', () => {
     expect(configuration().keycloak.jwksUri).toBe(
       'http://localhost:8080/realms/smartsense-marketplace/protocol/openid-connect/certs',
     )
+  })
+})
+
+describe('validationSchema — CORS_ALLOWED_ORIGINS fail-closed in production', () => {
+  // Minimal set of the always-required vars, so the only thing under test is
+  // the CORS_ALLOWED_ORIGINS × NODE_ENV branch (F-M1).
+  const baseEnv = {
+    DATABASE_URL: 'postgresql://postgres:password@localhost:5432/smartsense_marketplace',
+    KEYCLOAK_URL: 'http://localhost:8080',
+    KEYCLOAK_REALM: 'smartsense-marketplace',
+    KEYCLOAK_API_CLIENT_ID: 'smartsense-api',
+  }
+
+  it('rejects a production boot when CORS_ALLOWED_ORIGINS is unset', () => {
+    const { error } = validationSchema.validate({ ...baseEnv, NODE_ENV: 'production' })
+
+    expect(error).toBeDefined()
+    expect(error?.message).toContain('CORS_ALLOWED_ORIGINS')
+  })
+
+  it('rejects a production boot when CORS_ALLOWED_ORIGINS is present but empty', () => {
+    const { error } = validationSchema.validate({
+      ...baseEnv,
+      NODE_ENV: 'production',
+      CORS_ALLOWED_ORIGINS: '',
+    })
+
+    expect(error).toBeDefined()
+    expect(error?.message).toContain('CORS_ALLOWED_ORIGINS')
+  })
+
+  it('accepts a production boot when CORS_ALLOWED_ORIGINS is set', () => {
+    const { error } = validationSchema.validate({
+      ...baseEnv,
+      NODE_ENV: 'production',
+      CORS_ALLOWED_ORIGINS: 'https://app.smartsense.example',
+    })
+
+    expect(error).toBeUndefined()
+  })
+
+  it('accepts development with no CORS_ALLOWED_ORIGINS (unchanged dev behavior)', () => {
+    const { error } = validationSchema.validate({ ...baseEnv, NODE_ENV: 'development' })
+
+    expect(error).toBeUndefined()
   })
 })

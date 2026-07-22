@@ -46,7 +46,7 @@ Client
   ↓
 GraphQL Resolver       (declares the operation, delegates immediately)
   ↓
-Guard                  (GqlAuthGuard → RolesGuard → PermissionGuard)
+Guard                  (GqlAuthGuard → PermissionGuard)
   ↓
 Validation             (AppValidationPipe against the Input DTO)
   ↓
@@ -75,7 +75,7 @@ sequenceDiagram
     participant F as GlobalExceptionFilter
 
     C->>R: GraphQL request (query/mutation + variables)
-    R->>G: Guard chain (GqlAuthGuard → RolesGuard → PermissionGuard)
+    R->>G: Guard chain (GqlAuthGuard → PermissionGuard)
     alt Unauthenticated or unauthorized
         G-->>F: throws (Unauthorized/Forbidden)
         F-->>C: GraphQL error (UNAUTHENTICATED / FORBIDDEN)
@@ -116,7 +116,7 @@ This is the API-implementation expansion of the same flow [graphql.md § Archite
 | **Service**             | All business logic for its module, orchestration across the module's own Prisma calls, transaction boundaries, calls into other modules' _exported_ services                                         | Direct knowledge of the GraphQL context (`ExecutionContext`, `@Args` decorators), HTTP/GraphQL response shaping                                             |
 | **Repository / Prisma** | Data access only — queries, `include`/`select` shaping, `$transaction` execution (see the note above on where this currently lives)                                                                  | Business rules, authorization decisions, DTO-to-domain mapping beyond what Prisma itself returns                                                            |
 | **Prisma (client)**     | Generated, typed query methods (`prisma.order.findMany`, etc.), schema-declared constraints ([database-schema.md](./database-schema.md#design-conventions))                                          | Anything hand-modified — it is generated from `schema.prisma`, never edited directly ([coding-standards.md § Migrations](./coding-standards.md#migrations)) |
-| **Guards**              | Authentication/authorization decisions only — `GqlAuthGuard`, `RolesGuard`, `PermissionGuard` ([authentication.md](./authentication.md#graphql-authentication))                                      | Business rules, data fetching beyond what's needed to authorize (e.g. do not fetch and return domain data from a guard)                                     |
+| **Guards**              | Authentication/authorization decisions only — `GqlAuthGuard`, `PermissionGuard` ([authentication.md](./authentication.md#graphql-authentication))                                                    | Business rules, data fetching beyond what's needed to authorize (e.g. do not fetch and return domain data from a guard)                                     |
 | **Pipes**               | Input transformation and validation — `AppValidationPipe`, applied globally ([coding-standards.md § Validation](./coding-standards.md#validation))                                                   | Business validation that depends on database state (e.g. "does this SKU already exist for this Partner") — that belongs in the Service                      |
 | **Interceptors**        | Cross-cutting request/response concerns that wrap the handler: timing/logging, response transformation, cache-key computation                                                                        | Authorization decisions (that's a Guard's job) or business logic (that's a Service's job)                                                                   |
 | **Filters**             | Exception-to-response translation — `GlobalExceptionFilter`, the single place a thrown exception becomes a shaped GraphQL/HTTP error ([graphql.md § Error Handling](./graphql.md#11-error-handling)) | Business logic, retry logic, or anything beyond formatting and logging the error that already occurred                                                      |
@@ -205,7 +205,7 @@ Handled automatically by `AppValidationPipe` before the Service is ever invoked 
 
 ### Authorization Errors
 
-Thrown by a Guard (`ForbiddenException` from `RolesGuard`/`PermissionGuard`, an unauthorized rejection from `GqlAuthGuard`) before a resolver method — let alone a Service — ever executes. A Service should not re-check authorization a Guard already enforced; it may add **ownership scoping** on top (e.g. "this Order belongs to the caller's Partner"), which is a business rule, not a role/permission check, per [authentication.md § Security Best Practices Checklist](./authentication.md#security-best-practices-checklist) ("Ownership scoping enforced alongside, not instead of, permission checks").
+Thrown by a Guard (`ForbiddenException` from `PermissionGuard`, an unauthorized rejection from `GqlAuthGuard`) before a resolver method — let alone a Service — ever executes. A Service should not re-check authorization a Guard already enforced; it may add **ownership scoping** on top (e.g. "this Order belongs to the caller's Partner"), which is a business rule, not a role/permission check, per [authentication.md § Security Best Practices Checklist](./authentication.md#security-best-practices-checklist) ("Ownership scoping enforced alongside, not instead of, permission checks").
 
 ### Unexpected Errors
 
@@ -482,7 +482,7 @@ Checklist for adding or changing an API operation:
 - [ ] Multi-write sequences that must be atomic are wrapped in `$transaction`, using the interactive form if any write depends on a prior one ([§ Transactions](#transactions)).
 - [ ] Known Prisma error codes relevant to the operation (`P2002`, `P2025`, `P2003`) are caught and translated to a typed exception; anything else propagates unchanged.
 - [ ] New Prisma queries against a soft-deletable model explicitly filter `deletedAt: null`.
-- [ ] Authorization is enforced via Guards/decorators (`@Public()`, `@Roles()`, `@Permissions()`), not re-implemented inline.
+- [ ] Authorization is enforced via Guards/decorators (`@Public()`, `@Permissions()`), not re-implemented inline.
 - [ ] No secret, token, or full request payload is logged.
 - [ ] The GraphQL schema change is additive (no removed/renamed field) unless a deprecation cycle has already completed ([graphql.md § 14](./graphql.md#14-versioning--deprecation)).
 - [ ] Naming follows [coding-standards.md § 8](./coding-standards.md#8-naming-conventions), [graphql.md § 4](./graphql.md#4-schema-design-principles), and [§ Naming Conventions](#naming-conventions) above.

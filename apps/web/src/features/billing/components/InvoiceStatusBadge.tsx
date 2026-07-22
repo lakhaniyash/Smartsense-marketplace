@@ -1,5 +1,5 @@
 import { InvoiceStatus } from '@lib/graphql/__generated__/graphql'
-import { Badge, type BadgeVariant } from '@shared/components'
+import { type BadgeVariant, createStatusBadge } from '@shared/components'
 
 // Covers every InvoiceStatus value the schema exposes
 // (docs/domain-model.md § Invoice Lifecycle).
@@ -23,6 +23,4 @@ export interface InvoiceStatusBadgeProps {
   status: InvoiceStatus
 }
 
-export function InvoiceStatusBadge({ status }: InvoiceStatusBadgeProps) {
-  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
-}
+export const InvoiceStatusBadge = createStatusBadge(STATUS_VARIANT, STATUS_LABEL)

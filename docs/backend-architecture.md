@@ -51,7 +51,7 @@ flowchart TD
             ORDERS["OrdersModule"]
             BILLING["BillingModule"]
         end
-        GLOBALS["App-level providers:<br/>APP_FILTER → GlobalExceptionFilter<br/>APP_PIPE → AppValidationPipe<br/>APP_GUARD ×3 (from AuthModule):<br/>GqlAuthGuard → RolesGuard → PermissionGuard"]
+        GLOBALS["App-level providers:<br/>APP_FILTER → GlobalExceptionFilter<br/>APP_PIPE → AppValidationPipe<br/>APP_GUARD ×2 (from AuthModule):<br/>GqlAuthGuard → PermissionGuard"]
     end
 
     DOMAIN -- "inject" --> PRISMA
@@ -88,7 +88,7 @@ The full annotated sequence diagram is owned by [api-conventions.md § Request L
 ```
 Client
   → Middleware            (none registered; CORS via app.enableCors())
-  → Guards                (GqlAuthGuard → RolesGuard → PermissionGuard — registration order)
+  → Guards                (GqlAuthGuard → PermissionGuard — registration order)
   → Interceptors (pre)    (none registered — see Interceptors)
   → Pipes                 (AppValidationPipe against the Input DTO)
   → Resolver              (delegates immediately)
@@ -129,7 +129,7 @@ Behavior owned by [graphql.md § 11 Error Handling](./graphql.md#11-error-handli
 
 ## Guards
 
-Semantics owned by [authorization.md § Backend Authorization](./authorization.md#backend-authorization); chain rationale by [authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication). The structural mechanics: `APP_GUARD` providers execute **in registration order**, which is why `AuthModule` lists `GqlAuthGuard` before `RolesGuard` before `PermissionGuard` and documents that ordering in a comment — `req.user` must exist before anything reads it. Reordering those three lines is a security-relevant change, not a cleanup.
+Semantics owned by [authorization.md § Backend Authorization](./authorization.md#backend-authorization); chain rationale by [authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication). The structural mechanics: `APP_GUARD` providers execute **in registration order**, which is why `AuthModule` lists `GqlAuthGuard` before `PermissionGuard` and documents that ordering in a comment — `req.user` must exist before anything reads it. Reordering those two lines is a security-relevant change, not a cleanup.
 
 ## Interceptors
 

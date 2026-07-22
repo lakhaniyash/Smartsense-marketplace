@@ -90,7 +90,7 @@ sequenceDiagram
     participant Client as Apollo Client (cache)
     participant Link as HTTP Link
     participant Server as Apollo Server (NestJS)
-    participant Guard as GqlAuthGuard / RolesGuard / PermissionGuard
+    participant Guard as GqlAuthGuard / PermissionGuard
     participant Resolver as Resolver
     participant Service as Service (Prisma)
 
@@ -537,7 +537,7 @@ With `errorPolicy: 'all'` (§ 9) on the client, a partial-success response (`dat
 - **Complexity limits.** Not currently enforced. Recommended alongside depth limiting once list fields with arguments (pagination, § 5) exist — a complexity-scoring rule (e.g. `graphql-query-complexity`) prevents a query that's shallow but requests many expensive, high-fan-out list fields from being cheap to send and expensive to execute.
 - **Introspection policy.** Driven by `GRAPHQL_INTROSPECTION` (`apps/api/.env.example`, currently `true`). Introspection must be disabled (`GRAPHQL_INTROSPECTION=false`) in production per the same reasoning as `GRAPHQL_PLAYGROUND=false` in `infrastructure/docker/docker-compose.yml`'s production-facing configuration — a public, introspectable schema hands an attacker a complete map of the API surface for free.
 - **Rate limiting.** Not currently implemented at the GraphQL layer. This belongs to a dedicated security/infrastructure document once one exists (referenced here as `docs/security.md`, not yet written) — out of scope for this document beyond flagging it as a gap alongside depth/complexity limits.
-- **Authorization responsibilities.** Fully owned by [authentication.md](./authentication.md) — `GqlAuthGuard`, `RolesGuard`, and `PermissionGuard`, registered globally and opt-out via `@Public()` (see [authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication)). This document's only responsibility is ensuring new schema design (new queries/mutations/fields) is built with the assumption that authentication is default-on, per [coding-standards.md § Guards](./coding-standards.md#guards).
+- **Authorization responsibilities.** Fully owned by [authentication.md](./authentication.md) — `GqlAuthGuard` and `PermissionGuard`, registered globally and opt-out via `@Public()` (see [authentication.md § GraphQL Authentication](./authentication.md#graphql-authentication)). This document's only responsibility is ensuring new schema design (new queries/mutations/fields) is built with the assumption that authentication is default-on, per [coding-standards.md § Guards](./coding-standards.md#guards).
 
 ---
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@apollo/client'
 import { Link } from 'react-router'
-import { useAuth, usePermissions } from '@features/auth'
+import { useCurrentUser, usePermissions } from '@features/auth'
 import {
   BillingReportStatus,
   GenerateBillingReportDocument,
@@ -78,10 +78,10 @@ export function BillingReportsPage() {
     refetch,
   } = useBillingReports()
   const { canViewReports } = usePermissions()
-  const { identity } = useAuth()
+  const { user } = useCurrentUser()
   const { toast } = useToast()
   const [isGenerating, setIsGenerating] = useState(false)
-  const isAdmin = identity?.roles.includes('Admin') ?? false
+  const isAdmin = user?.roles.includes('Admin') ?? false
 
   const [generateBillingReport, { loading: isSubmitting }] = useMutation(
     GenerateBillingReportDocument,

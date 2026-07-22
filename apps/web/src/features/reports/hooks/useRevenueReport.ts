@@ -4,7 +4,7 @@ import {
   GetRevenueReportDocument,
   RevenueBucketGranularity,
 } from '@lib/graphql/__generated__/graphql'
-import { toDateRangeInput } from '../constants'
+import { resolveReportDateRangeParams, toDateRangeInput } from '../constants'
 
 function readGranularity(searchParams: URLSearchParams): RevenueBucketGranularity {
   const raw = searchParams.get('granularity')
@@ -20,8 +20,7 @@ function readGranularity(searchParams: URLSearchParams): RevenueBucketGranularit
 export function useRevenueReport() {
   const [searchParams, setSearchParams] = useSearchParams()
   const partnerId = searchParams.get('partnerId') ?? undefined
-  const from = searchParams.get('from') ?? undefined
-  const to = searchParams.get('to') ?? undefined
+  const { from, to } = resolveReportDateRangeParams(searchParams)
   const granularity = readGranularity(searchParams)
   const dateRange = toDateRangeInput({ from, to })
 

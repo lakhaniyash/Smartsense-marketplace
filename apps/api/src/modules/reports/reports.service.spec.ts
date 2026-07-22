@@ -14,6 +14,8 @@ import {
   UserStatus,
 } from '@prisma/client'
 import { type AuthenticatedUser } from '../auth/types/auth-context.type'
+import { ReportExportFormat } from './dto/report-export-format.enum'
+import { ReportExportType } from './dto/report-export-type.enum'
 import { ReportsService } from './reports.service'
 
 function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
@@ -74,6 +76,7 @@ describe('ReportsService', () => {
     notification: { count: jest.Mock; groupBy: jest.Mock }
     customer: { groupBy: jest.Mock }
     $transaction: jest.Mock
+    $queryRaw: jest.Mock
   }
   let auditLogService: { record: jest.Mock }
 
@@ -94,6 +97,7 @@ describe('ReportsService', () => {
       notification: { count: jest.fn(), groupBy: jest.fn() },
       customer: { groupBy: jest.fn() },
       $transaction: jest.fn(),
+      $queryRaw: jest.fn(),
     }
     prisma.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(prisma))
     auditLogService = { record: jest.fn() }
@@ -480,32 +484,22 @@ describe('ReportsService', () => {
   })
 
   describe('inventoryReport — low-stock filtering', () => {
-    it('only counts Inventory rows where quantityOnHand < reorderThreshold', async () => {
+    it('maps the low-stock rows the $queryRaw cross-column filter returns', async () => {
       prisma.productVariant.count.mockResolvedValueOnce(3)
       prisma.inventory.aggregate.mockResolvedValueOnce({ _sum: { quantityOnHand: 50 } })
       prisma.inventory.aggregate.mockResolvedValueOnce({ _sum: { quantityReserved: 10 } })
-      prisma.inventory.findMany.mockResolvedValueOnce([
+      // The `quantityOnHand < reorderThreshold` comparison now happens in SQL,
+      // so the mock returns only the already-filtered low-stock row in the
+      // flat shape fetchLowStockRows' raw query produces.
+      prisma.$queryRaw.mockResolvedValueOnce([
         {
           productVariantId: 'variant-low',
+          sku: 'SKU-LOW',
+          productTitle: 'Low Stock Item',
+          partnerId: 'partner-1',
           quantityOnHand: 2,
           quantityReserved: 0,
           reorderThreshold: 5,
-          productVariant: {
-            sku: 'SKU-LOW',
-            partnerId: 'partner-1',
-            product: { title: 'Low Stock Item' },
-          },
-        },
-        {
-          productVariantId: 'variant-ok',
-          quantityOnHand: 20,
-          quantityReserved: 0,
-          reorderThreshold: 5,
-          productVariant: {
-            sku: 'SKU-OK',
-            partnerId: 'partner-1',
-            product: { title: 'Well Stocked Item' },
-          },
         },
       ])
 
@@ -514,6 +508,7 @@ describe('ReportsService', () => {
       expect(result.lowStockCount).toBe(1)
       expect(result.lowStockItems.edges).toHaveLength(1)
       expect(result.lowStockItems.edges[0]?.node.sku).toBe('SKU-LOW')
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -551,6 +546,137 @@ describe('ReportsService', () => {
       expect(unreadCallArgs.where).toEqual(
         expect.objectContaining({ status: NotificationStatus.UNREAD }),
       )
+    })
+  })
+
+  // F-C2: Admin-unscoped historical reports (no partner floor, no date range)
+  // would aggregate the whole marketplace ledger in Node memory. A bounded
+  // date range is required for Admin-unscoped callers; Partner-scoped callers
+  // are naturally bounded and must stay unaffected.
+  describe('Admin-unscoped date-range bounding (F-C2)', () => {
+    const dateRange = {
+      from: new Date('2026-01-01T00:00:00.000Z'),
+      to: new Date('2026-01-31T23:59:59.999Z'),
+    }
+
+    it('rejects an Admin-unscoped revenueReport with no date range', async () => {
+      await expect(service.getRevenueReport(user({ partnerId: null }), undefined)).rejects.toThrow(
+        BadRequestException,
+      )
+      expect(prisma.invoice.findMany).not.toHaveBeenCalled()
+    })
+
+    it('allows an Admin-unscoped revenueReport when a date range is supplied', async () => {
+      prisma.invoice.findMany.mockResolvedValueOnce([])
+      prisma.partner.findMany.mockResolvedValueOnce([])
+
+      const result = await service.getRevenueReport(user({ partnerId: null }), { dateRange })
+
+      expect(result.invoiceCount).toBe(0)
+      expect(prisma.invoice.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('allows a Partner-scoped revenueReport with no date range (regression guard)', async () => {
+      prisma.invoice.findMany.mockResolvedValueOnce([])
+      prisma.partner.findMany.mockResolvedValueOnce([])
+
+      const result = await service.getRevenueReport(user({ partnerId: 'partner-1' }), undefined)
+
+      expect(result.invoiceCount).toBe(0)
+      expect(prisma.invoice.findMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects an Admin-unscoped productPerformanceReport with no date range', async () => {
+      await expect(
+        service.getProductPerformanceReport(user({ partnerId: null }), {}),
+      ).rejects.toThrow(BadRequestException)
+      expect(prisma.orderItem.groupBy).not.toHaveBeenCalled()
+    })
+
+    it('allows a Partner-scoped productPerformanceReport with no date range (regression guard)', async () => {
+      prisma.orderItem.groupBy.mockResolvedValueOnce([])
+      prisma.productVariant.findMany.mockResolvedValueOnce([])
+
+      const result = await service.getProductPerformanceReport(user({ partnerId: 'partner-1' }), {})
+
+      expect(result.edges).toHaveLength(0)
+      expect(prisma.orderItem.groupBy).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // F-H4: the synchronous CSV exports must reject an over-cap result with an
+  // explicit error rather than silently truncating or streaming.
+  describe('CSV export row cap (F-H4)', () => {
+    const csvInput = (reportType: ReportExportType) => ({
+      reportType,
+      format: ReportExportFormat.CSV,
+    })
+
+    it('exports an inventory CSV under the cap', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([
+        {
+          productVariantId: 'variant-low',
+          sku: 'SKU-LOW',
+          productTitle: 'Low Stock Item',
+          partnerId: 'partner-1',
+          quantityOnHand: 1,
+          quantityReserved: 0,
+          reorderThreshold: 5,
+        },
+      ])
+
+      const csv = await service.exportReport(
+        user({ partnerId: null }),
+        csvInput(ReportExportType.INVENTORY),
+      )
+
+      expect(csv).toContain('SKU-LOW')
+    })
+
+    it('rejects an over-cap inventory CSV export instead of truncating', async () => {
+      // fetchLowStockRows fetches CSV_EXPORT_MAX_ROWS + 1 (10_001); one past
+      // the 10_000 cap is the rejection trigger.
+      prisma.$queryRaw.mockResolvedValueOnce(
+        Array.from({ length: 10_001 }, (_unused, index) => ({
+          productVariantId: `variant-${index}`,
+          sku: `SKU-${index}`,
+          productTitle: 'Item',
+          partnerId: 'partner-1',
+          quantityOnHand: 0,
+          quantityReserved: 0,
+          reorderThreshold: 5,
+        })),
+      )
+
+      await expect(
+        service.exportReport(user({ partnerId: null }), csvInput(ReportExportType.INVENTORY)),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects an over-cap billing-reports CSV export instead of truncating', async () => {
+      prisma.billingReport.findMany.mockResolvedValueOnce(
+        Array.from({ length: 10_001 }, () => billingReportFixture()),
+      )
+
+      await expect(
+        service.exportReport(user({ partnerId: null }), csvInput(ReportExportType.BILLING_REPORTS)),
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('rejects an over-cap product-performance CSV export instead of truncating', async () => {
+      prisma.orderItem.groupBy.mockResolvedValueOnce(
+        Array.from({ length: 10_001 }, (_unused, index) => ({
+          productVariantId: `variant-${index}`,
+          _sum: { quantity: 1, lineTotal: new Prisma.Decimal(1) },
+        })),
+      )
+
+      await expect(
+        service.exportReport(
+          user({ partnerId: 'partner-1' }),
+          csvInput(ReportExportType.PRODUCT_PERFORMANCE),
+        ),
+      ).rejects.toThrow(BadRequestException)
     })
   })
 })

@@ -47,6 +47,17 @@ const PERMISSIONS = [
     domain: 'users',
     description: 'Invite, suspend, and manage platform users and roles',
   },
+  // Privilege-escalation guardrail on top of the coarse `users:manage` verb:
+  // granting the Admin role to another user requires this capability, not a
+  // `caller-is-an-Admin` role-name check (docs/authorization.md § User Role
+  // Assignment Guardrails, guardrail 3; enforced in UsersService). Admin-only
+  // in the seeded catalog, so it is defense-in-depth today and the live gate
+  // the moment `users:manage` is ever extended to a non-Admin role.
+  {
+    key: 'roles:grant:admin',
+    domain: 'users',
+    description: 'Grant the Admin role to another user',
+  },
   // Single key covers both viewing and generating every report type
   // (billing reports, revenue, orders, inventory, product performance,
   // notification activity) and the reports dashboard — docs/authorization.md

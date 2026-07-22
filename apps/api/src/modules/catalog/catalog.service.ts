@@ -9,6 +9,7 @@ import { type AuthenticatedUser } from '../auth/types/auth-context.type'
 import { PrismaService } from '../../prisma/prisma.service'
 import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { CategoryOutput } from './dto/category.output'
 import { CreateProductInput } from './dto/create-product.input'
 import { ProductConnectionOutput, ProductEdgeOutput } from './dto/product-connection.output'
@@ -81,7 +82,7 @@ export class CatalogService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: PRODUCT_INCLUDE,
@@ -91,7 +92,7 @@ export class CatalogService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: ProductEdgeOutput[] = page.map((product) => ({
-      cursor: this.encodeCursor(product.id),
+      cursor: encodeCursor(product.id),
       node: this.mapProductToOutput(product),
     }))
 
@@ -339,13 +340,5 @@ export class CatalogService {
       createdAt: product.createdAt,
       publishedAt: product.publishedAt,
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

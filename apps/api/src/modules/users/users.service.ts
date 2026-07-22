@@ -14,6 +14,7 @@ import { SortDirection } from '../../common/graphql/sort-direction.enum'
 import { AuditLogService } from '../../common/services/audit-log.service'
 import { KeycloakAdminService } from '../../common/services/keycloak-admin.service'
 import { LoggingService } from '../../common/services/logging.service'
+import { decodeCursor, encodeCursor } from '../../common/utils/cursor.util'
 import { CreateRoleInput } from './dto/create-role.input'
 import { InviteUserInput } from './dto/invite-user.input'
 import { RoleOutput } from './dto/role.output'
@@ -32,6 +33,17 @@ import { UserSuspendedEvent } from './events/user-suspended.event'
 const INVITE_REQUIRED_ACTIONS = ['UPDATE_PASSWORD', 'VERIFY_EMAIL'] as const
 
 const DEFAULT_PAGE_SIZE = 20
+
+/**
+ * Capability that gates granting the Admin Role to another User — the
+ * privilege-escalation guardrail in docs/authorization.md § User Role
+ * Assignment Guardrails (guardrail 3). Modelled as a permission key rather
+ * than a `caller-is-an-Admin` role-name check, per CLAUDE.md's
+ * capability-not-identity rule; seeded Admin-only (database/prisma/seed.ts),
+ * so it is defense-in-depth today and the live gate the moment `users:manage`
+ * is ever granted to a non-Admin Role.
+ */
+const GRANT_ADMIN_ROLE_PERMISSION = 'roles:grant:admin'
 
 const USER_INCLUDE = {
   userRoles: {
@@ -88,7 +100,7 @@ export class UsersService {
       orderBy,
       take: first + 1,
       ...(after !== undefined && {
-        cursor: { id: this.decodeCursor(after) },
+        cursor: { id: decodeCursor(after) },
         skip: 1,
       }),
       include: USER_INCLUDE,
@@ -98,7 +110,7 @@ export class UsersService {
     const page = hasNextPage ? rows.slice(0, first) : rows
 
     const edges: UserEdgeOutput[] = page.map((row) => ({
-      cursor: this.encodeCursor(row.id),
+      cursor: encodeCursor(row.id),
       node: this.mapUserToOutput(row),
     }))
 
@@ -257,9 +269,10 @@ export class UsersService {
    * Grants a Role to a User. Guarded (docs/authorization.md § User Role
    * Assignment Guardrails):
    *  1. No self-edit — a caller can never change their own Role grants.
-   *  2. Granting the Admin Role requires the caller to already hold it
-   *     (defense-in-depth: `users:manage` is Admin-only today, but this
-   *     protects against a future non-Admin role ever being granted it).
+   *  2. Granting the Admin Role requires the caller to hold the
+   *     `roles:grant:admin` permission (defense-in-depth: seeded Admin-only
+   *     today, but this protects against a future non-Admin role ever being
+   *     granted `users:manage`).
    * Idempotent-rejecting, not idempotent-succeeding: re-granting an
    * already-held Role is a caller error, same as CustomersService's
    * "already suspended" guard.
@@ -273,8 +286,10 @@ export class UsersService {
     await this.findActiveUserOrThrow(userId)
     const role = await this.findActiveRoleOrThrow(roleId)
 
-    if (role.name === 'Admin' && !user.roles.includes('Admin')) {
-      throw new ForbiddenException('Only an existing Admin can grant the Admin role')
+    if (role.name === 'Admin' && !user.permissions.includes(GRANT_ADMIN_ROLE_PERMISSION)) {
+      throw new ForbiddenException(
+        'Only a caller holding roles:grant:admin can grant the Admin role',
+      )
     }
 
     const alreadyAssigned = await this.prisma.userRole.findUnique({
@@ -452,8 +467,8 @@ export class UsersService {
    *
    * Guarded like every other User Management mutation: `users:manage` at the
    * resolver, plus SM-334's Admin-grant restriction here (granting the Admin
-   * role requires the caller to already hold it). No self-edit guard is
-   * needed — the invitee is always a new identity, never the caller.
+   * role requires the caller to hold `roles:grant:admin`). No self-edit guard
+   * is needed — the invitee is always a new identity, never the caller.
    */
   async inviteUser(user: AuthenticatedUser, input: InviteUserInput): Promise<UserOutput> {
     const email = input.email.trim()
@@ -657,7 +672,7 @@ export class UsersService {
    * Resolves the requested role ids to active Roles, rejecting any unknown or
    * archived id, and reuses SM-334's Admin-grant restriction (docs/
    * authorization.md § User Role Assignment Guardrails): granting the Admin
-   * role at invite time requires the caller to already hold it.
+   * role at invite time requires the caller to hold `roles:grant:admin`.
    */
   private async resolveInviteRoles(
     user: AuthenticatedUser,
@@ -674,8 +689,13 @@ export class UsersService {
       throw new BadRequestException(`Unknown or archived role id(s): ${missingIds.join(', ')}`)
     }
 
-    if (roles.some((role) => role.name === 'Admin') && !user.roles.includes('Admin')) {
-      throw new ForbiddenException('Only an existing Admin can grant the Admin role')
+    if (
+      roles.some((role) => role.name === 'Admin') &&
+      !user.permissions.includes(GRANT_ADMIN_ROLE_PERMISSION)
+    ) {
+      throw new ForbiddenException(
+        'Only a caller holding roles:grant:admin can grant the Admin role',
+      )
     }
 
     return roles
@@ -820,13 +840,5 @@ export class UsersService {
         domain: rolePermission.permission.domain,
       })),
     }
-  }
-
-  private encodeCursor(id: string): string {
-    return Buffer.from(id, 'utf8').toString('base64')
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf8')
   }
 }

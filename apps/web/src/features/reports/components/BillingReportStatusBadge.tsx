@@ -1,5 +1,5 @@
 import { BillingReportStatus } from '@lib/graphql/__generated__/graphql'
-import { Badge, type BadgeVariant } from '@shared/components'
+import { type BadgeVariant, createStatusBadge } from '@shared/components'
 
 // Covers every BillingReportStatus value the schema exposes
 // (docs/domain-model.md § Billing Report lifecycle: GENERATED -> FINALIZED ->
@@ -20,6 +20,4 @@ export interface BillingReportStatusBadgeProps {
   status: BillingReportStatus
 }
 
-export function BillingReportStatusBadge({ status }: BillingReportStatusBadgeProps) {
-  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
-}
+export const BillingReportStatusBadge = createStatusBadge(STATUS_VARIANT, STATUS_LABEL)
